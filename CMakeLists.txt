@@ -12,6 +12,14 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(Qt_PREFIX_PATH "D:/Programs/Qt/6.8.0/msvc2022_64")
 set(VCPKG_PREFIX_PATH "D:/Programs/vcpkg/installed/x64-windows/share")
 
+option(OPENXLSX_CREATE_DOCS "Build library documentation (requires Doxygen and Graphviz/Dot to be installed)" OFF)
+option(OPENXLSX_BUILD_SAMPLES "Build sample programs" OFF)
+option(OPENXLSX_BUILD_TESTS "Build unit tests" OFF)
+
+# 添加OpenXLSX子目录
+add_subdirectory(third_party/OpenXLSX)
+
+add_subdirectory(third_party/nodeeditor)
 
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
@@ -27,14 +35,7 @@ endif()
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets Core OpenGL)
 
-option(OPENXLSX_CREATE_DOCS "Build library documentation (requires Doxygen and Graphviz/Dot to be installed)" OFF)
-option(OPENXLSX_BUILD_SAMPLES "Build sample programs" OFF)
-option(OPENXLSX_BUILD_TESTS "Build unit tests" OFF)
 
-# 添加OpenXLSX子目录
-add_subdirectory(third_party/OpenXLSX)
-
-add_subdirectory(third_party/nodeeditor)
 
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
         ${PROJECT_SOURCE_DIR}/src/*.cpp

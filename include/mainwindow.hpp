@@ -1,7 +1,8 @@
-#ifndef MAINWINDOW_HPP
-#define MAINWINDOW_HPP
+#pragma once
+
 
 #include <QMainWindow>
+#include <QtNodes/NodeDelegateModelRegistry>
 
 namespace Ui {
 class MainWindow;
@@ -16,7 +17,12 @@ public:
     ~MainWindow();
 
 private:
+
+    void setupNodeEditor();
+
+    static std::shared_ptr<QtNodes::NodeDelegateModelRegistry> registerDataModels();
+
+    static  void setStyle();
+    
     Ui::MainWindow *ui;
 };
-
-#endif // MAINWINDOW_HPP
