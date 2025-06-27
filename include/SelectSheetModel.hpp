@@ -170,6 +170,14 @@ private:
                         qDebug() << "SelectSheetModel: Restored selected sheet:" << selectedSheetName;
                     }
                 }
+                else if (sheetNames.size() > 0)
+                {
+                    // 如果没有之前的选择，自动选择第一个工作表
+                    m_comboBox->setCurrentIndex(0);
+                    qDebug() << "SelectSheetModel: Auto-selected first sheet";
+                    // 手动触发选择事件
+                    onIndexChanged(0);
+                }
 
                 // 启用ComboBox
                 m_comboBox->setEnabled(true);
