@@ -9,7 +9,7 @@
 class CellData : public QtNodes::NodeData
 {
 public:
-    CellData();
+    CellData() = default;
 
     explicit CellData(OpenXLSX::XLCell cell) : m_cell(std::make_shared<OpenXLSX::XLCell>(cell))
     {

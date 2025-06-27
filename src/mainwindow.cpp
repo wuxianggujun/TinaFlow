@@ -2,9 +2,10 @@
 #include "ui_mainwindow.h"
 
 #include "OpenExcelModel.hpp"
+#include "SelectSheetModel.hpp"
+#include "ReadCellModel.hpp"
 #include <QtNodes/ConnectionStyle>
 #include <QtNodes/DataFlowGraphicsScene>
-
 
 
 MainWindow::MainWindow(QWidget* parent)
@@ -44,6 +45,8 @@ std::shared_ptr<QtNodes::NodeDelegateModelRegistry> MainWindow::registerDataMode
 {
     auto ret = std::make_shared<QtNodes::NodeDelegateModelRegistry>();
     ret->registerModel<OpenExcelModel>("Excel操作");
+    ret->registerModel<SelectSheetModel>("选择Sheet");
+    ret->registerModel<ReadCellModel>("读取单元格");
     return ret;
 }
 
