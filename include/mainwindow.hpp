@@ -3,6 +3,8 @@
 
 #include <QMainWindow>
 #include <QtNodes/NodeDelegateModelRegistry>
+#include <QtNodes/GraphicsView>
+#include <QtNodes/DataFlowGraphModel>
 
 namespace Ui {
 class MainWindow;
@@ -25,4 +27,6 @@ private:
     static  void setStyle();
     
     Ui::MainWindow *ui;
+
+    std::unique_ptr<QtNodes::DataFlowGraphModel> m_graphModel;
 };

@@ -5,7 +5,7 @@
 #include <QtNodes/ConnectionStyle>
 #include <QtNodes/DataFlowGraphicsScene>
 
-#include "QtNodes/internal/GraphicsView.hpp"
+
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -25,11 +25,11 @@ void MainWindow::setupNodeEditor()
     // 注册自定义节点
     std::shared_ptr<QtNodes::NodeDelegateModelRegistry> modelRegistry = registerDataModels();
 
-    QtNodes::DataFlowGraphModel dataFlowGraphModel(modelRegistry);
-    QtNodes::DataFlowGraphicsScene * dataFlowGraphicsScene = new QtNodes::DataFlowGraphicsScene(
-        dataFlowGraphModel, this);
+    m_graphModel = std::make_unique<QtNodes::DataFlowGraphModel>(modelRegistry);
+    auto * dataFlowGraphicsScene = new QtNodes::DataFlowGraphicsScene(
+        *m_graphModel, this);
 
-    QtNodes::GraphicsView * graphicsView = new QtNodes::GraphicsView(dataFlowGraphicsScene);
+    auto * graphicsView = new QtNodes::GraphicsView(dataFlowGraphicsScene);
     
     QLayout* containerLayout = ui->nodeEditorHost->layout();
     if (!containerLayout) {
