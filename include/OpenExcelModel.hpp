@@ -3,6 +3,7 @@
 //
 
 #pragma once
+#include <QtEvents>
 #include <string>
 #include <QWidget>
 #include <QPushButton>
@@ -15,8 +16,41 @@
 #include "XLDocument.hpp"
 #include "data/WorkbookData.hpp"
 
+class ClickableLineEdit : public QLineEdit
+{
+    Q_OBJECT
+
+public:
+    explicit ClickableLineEdit(QWidget* parent = nullptr): QLineEdit(parent)
+    {
+        setReadOnly(true);
+        setPlaceholderText("未选择Excel文件");
+        setFrame(true);
+        setProperty("class", "node-path");
+    }
+
+protected:
+    void mousePressEvent(QMouseEvent* event) override
+    {
+        if (event->button() == Qt::LeftButton)
+        {
+            emit clicked();
+        }
+        else if (event->button() == Qt::RightButton)
+        {
+            clear();
+        }
+        QLineEdit::mousePressEvent(event);
+    }
+
+signals:
+    void clicked();
+};
+
+
 class OpenExcelModel : public QtNodes::NodeDelegateModel
 {
+    
 public:
     OpenExcelModel()
     {
@@ -25,29 +59,21 @@ public:
         layout->setContentsMargins(4, 4, 4, 4);
         layout->setSpacing(0);
 
-        m_lineEdit = new QLineEdit();
-        m_lineEdit->setReadOnly(true);
-        m_lineEdit->setPlaceholderText("未选择Excel文件");
+        m_lineEdit = new ClickableLineEdit();
         m_lineEdit->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-
-        m_button = new QPushButton("打开");
-        m_button->setFixedWidth(28);
-        m_button->setToolTip("选择Excel文件");
-
         layout->addWidget(m_lineEdit);
-        layout->addWidget(m_button);
-
-        connect(m_button, &QPushButton::clicked, this,&OpenExcelModel::chooseFile);
+        
+        connect(m_lineEdit, &ClickableLineEdit::clicked, this, &OpenExcelModel::chooseFile);
     }
 
-    QString caption() const override
+    [[nodiscard]] QString caption() const override
     {
         return "打开Excel文件";
     }
 
-    QString name() const override
+    [[nodiscard]] QString name() const override
     {
-        return QString("OpenExcel");
+        return {"OpenExcel"};
     }
 
 
@@ -117,21 +143,21 @@ private:
             );
         }
     }
-
-
+    
     void chooseFile()
     {
         const QString path = QFileDialog::getOpenFileName(nullptr, "打开 Excel File", {}, "Excel Files (*.xlsx)");
         if (path.isEmpty())
             return;
-        m_lineEdit->setText(path);
         m_filePath = path.toStdString();
+        m_lineEdit->setToolTip(path);
+        m_lineEdit->setText(QFileInfo(path).fileName());
+
         compute();
     }
-
+    
     QWidget* m_widget;
-    QPushButton* m_button;
-    QLineEdit* m_lineEdit;
+    ClickableLineEdit* m_lineEdit;
     std::string m_filePath;
     std::shared_ptr<WorkbookData> m_workbookData;
 };
