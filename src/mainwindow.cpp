@@ -5,6 +5,8 @@
 #include "SelectSheetModel.hpp"
 #include "ReadCellModel.hpp"
 #include "DisplayCellModel.hpp"
+#include "ReadRangeModel.hpp"
+#include "DisplayRangeModel.hpp"
 #include <QtNodes/ConnectionStyle>
 #include <QtNodes/DataFlowGraphicsScene>
 
@@ -49,6 +51,8 @@ std::shared_ptr<QtNodes::NodeDelegateModelRegistry> MainWindow::registerDataMode
     ret->registerModel<SelectSheetModel>("选择Sheet");
     ret->registerModel<ReadCellModel>("读取单元格");
     ret->registerModel<DisplayCellModel>("显示单元格");
+    ret->registerModel<ReadRangeModel>("读取范围");
+    ret->registerModel<DisplayRangeModel>("显示范围");
     return ret;
 }
 
