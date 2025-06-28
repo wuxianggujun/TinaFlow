@@ -171,7 +171,7 @@ private:
                 info = QString("行: %1/%2 (%.1f%%)")
                     .arg(m_rowData->rowIndex() + 1)
                     .arg(m_rowData->totalRows())
-                    .arg(progress);
+                    .arg(progress, 0, 'f', 1);
             } else {
                 info = QString("行: %1").arg(m_rowData->rowIndex() + 1);
             }

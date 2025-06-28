@@ -401,38 +401,40 @@ void MainWindow::clearPropertyPanel()
 void MainWindow::addForEachRowProperties(QVBoxLayout* layout, QtNodes::NodeId nodeId)
 {
     // ForEachRow节点的属性编辑器
-    QLabel* descLabel = new QLabel(tr("ForEach循环节点属性："));
+    QLabel* descLabel = new QLabel(tr("行提取器属性："));
     descLabel->setStyleSheet("font-weight: bold; margin-top: 10px;");
     layout->addWidget(descLabel);
 
-    // 循环模式选择
-    QLabel* modeLabel = new QLabel(tr("循环模式："));
-    layout->addWidget(modeLabel);
+    // 获取节点实例
+    auto* forEachModel = m_graphModel->delegateModel<ForEachRowModel>(nodeId);
+    if (!forEachModel) {
+        QLabel* errorLabel = new QLabel(tr("无法获取节点实例"));
+        errorLabel->setStyleSheet("color: red;");
+        layout->addWidget(errorLabel);
+        return;
+    }
 
-    QComboBox* modeCombo = new QComboBox();
-    modeCombo->addItem(tr("逐行处理"), "row_by_row");
-    modeCombo->addItem(tr("批量处理"), "batch");
-    layout->addWidget(modeCombo);
+    // 当前行号设置
+    QLabel* rowLabel = new QLabel(tr("要提取的行号："));
+    layout->addWidget(rowLabel);
 
-    // 延迟设置
-    QLabel* delayLabel = new QLabel(tr("处理间隔 (毫秒)："));
-    layout->addWidget(delayLabel);
+    QSpinBox* rowSpinBox = new QSpinBox();
+    rowSpinBox->setRange(1, qMax(1, forEachModel->getTotalRows()));
+    rowSpinBox->setValue(forEachModel->getCurrentRowIndex() + 1); // 显示1基索引
+    rowSpinBox->setSuffix(QString(" / %1").arg(forEachModel->getTotalRows()));
+    layout->addWidget(rowSpinBox);
 
-    QSpinBox* delaySpinBox = new QSpinBox();
-    delaySpinBox->setRange(0, 5000);
-    delaySpinBox->setValue(100);
-    delaySpinBox->setSuffix(" ms");
-    layout->addWidget(delaySpinBox);
+    // 连接信号，当用户改变值时更新节点
+    connect(rowSpinBox, QOverload<int>::of(&QSpinBox::valueChanged),
+            [forEachModel](int value) {
+                forEachModel->setCurrentRowIndex(value - 1); // 转换为0基索引
+            });
 
-    // 最大行数限制
-    QLabel* maxRowsLabel = new QLabel(tr("最大处理行数："));
-    layout->addWidget(maxRowsLabel);
-
-    QSpinBox* maxRowsSpinBox = new QSpinBox();
-    maxRowsSpinBox->setRange(0, 100000);
-    maxRowsSpinBox->setValue(0);
-    maxRowsSpinBox->setSpecialValueText(tr("无限制"));
-    layout->addWidget(maxRowsSpinBox);
+    // 说明文本
+    QLabel* helpLabel = new QLabel(tr("提示：修改行号会立即更新输出数据"));
+    helpLabel->setStyleSheet("color: #666666; font-size: 10px; font-style: italic;");
+    helpLabel->setWordWrap(true);
+    layout->addWidget(helpLabel);
 
     qDebug() << "MainWindow: Added ForEachRow properties for node" << nodeId;
 }
@@ -490,6 +492,21 @@ void MainWindow::triggerDataFlow()
         auto nodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(nodeId);
         if (!nodeDelegate) continue;
 
+        QString nodeName = nodeDelegate->name();
+
+        // 启动所有ForEach循环节点
+        if (nodeName == "ForEachRow") {
+            auto* forEachModel = m_graphModel->delegateModel<ForEachRowModel>(nodeId);
+            if (forEachModel) {
+                // 检查是否有数据输入
+                auto connections = m_graphModel->connections(nodeId, QtNodes::PortType::In, 0);
+                if (!connections.empty()) {
+                    qDebug() << "MainWindow: Starting ForEachRowModel";
+                    forEachModel->startLoop(); // 直接启动，不延迟
+                }
+            }
+        }
+
         // 检查是否为源节点（没有输入端口或输入端口没有连接）
         bool isSourceNode = true;
         unsigned int inputPorts = nodeDelegate->nPorts(QtNodes::PortType::In);
@@ -503,7 +520,6 @@ void MainWindow::triggerDataFlow()
         }
 
         if (isSourceNode) {
-            QString nodeName = nodeDelegate->name();
             qDebug() << "MainWindow: Found source node:" << nodeName;
 
             // 根据节点类型调用特定的触发方法
