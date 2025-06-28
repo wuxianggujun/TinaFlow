@@ -54,6 +54,73 @@
            <attribute name="title">
             <string>Properties</string>
            </attribute>
+           <layout class="QVBoxLayout" name="propertiesLayout">
+            <item>
+             <widget class="QLabel" name="nodeTitle">
+              <property name="text">
+               <string>未选择节点</string>
+              </property>
+              <property name="styleSheet">
+               <string>QLabel {
+    font-weight: bold;
+    font-size: 14px;
+    color: #2E86AB;
+    padding: 6px;
+    background-color: #f0f0f0;
+    border-radius: 4px;
+}</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignCenter</set>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QScrollArea" name="propertyScrollArea">
+              <property name="widgetResizable">
+               <bool>true</bool>
+              </property>
+              <widget class="QWidget" name="scrollAreaWidgetContents">
+               <property name="geometry">
+                <rect>
+                 <x>0</x>
+                 <y>0</y>
+                 <width>69</width>
+                 <height>69</height>
+                </rect>
+               </property>
+               <layout class="QVBoxLayout" name="propertyContentLayout">
+                <item>
+                 <widget class="QLabel" name="defaultLabel">
+                  <property name="text">
+                   <string>点击节点查看和编辑属性</string>
+                  </property>
+                  <property name="styleSheet">
+                   <string>color: #666666; padding: 20px;</string>
+                  </property>
+                  <property name="alignment">
+                   <set>Qt::AlignCenter</set>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <spacer name="verticalSpacer">
+                  <property name="orientation">
+                   <enum>Qt::Vertical</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>20</width>
+                    <height>40</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+               </layout>
+              </widget>
+             </widget>
+            </item>
+           </layout>
           </widget>
           <widget class="QWidget" name="tab_log">
            <attribute name="title">
