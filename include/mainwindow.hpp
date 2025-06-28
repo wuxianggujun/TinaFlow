@@ -18,13 +18,20 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
-private:
+private slots:
+    void onActionNew();
+    void onActionOpen();
+    void onActionSave();
+    void onActionExit();
 
+private:
     void setupNodeEditor();
+    void connectMenuActions();
+    void saveToFile(const QString& fileName);
+    void loadFromFile(const QString& fileName);
 
     static std::shared_ptr<QtNodes::NodeDelegateModelRegistry> registerDataModels();
-
-    static  void setStyle();
+    static void setStyle();
     
     Ui::MainWindow *ui;
 

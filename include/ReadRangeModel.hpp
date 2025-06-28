@@ -113,9 +113,9 @@ public:
 
     QJsonObject save() const override
     {
-        return {
-            {"range", m_rangeEdit->text()}
-        };
+        QJsonObject modelJson = NodeDelegateModel::save(); // 调用基类方法保存model-name
+        modelJson["range"] = m_rangeEdit->text();
+        return modelJson;
     }
 
     void load(QJsonObject const& json) override

@@ -95,11 +95,9 @@ public:
 
     [[nodiscard]] QJsonObject save() const override
     {
-        return {
-            {
-                "sheet", QString::fromStdString(m_selectedSheet)
-            }
-        };
+        QJsonObject modelJson = NodeDelegateModel::save(); // 调用基类方法保存model-name
+        modelJson["sheet"] = QString::fromStdString(m_selectedSheet);
+        return modelJson;
     }
 
     void load(QJsonObject const& json) override

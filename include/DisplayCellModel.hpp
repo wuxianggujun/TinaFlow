@@ -127,7 +127,7 @@ public:
 
     QJsonObject save() const override
     {
-        return QJsonObject(); // 显示节点不需要保存状态
+        return NodeDelegateModel::save(); // 调用基类方法保存model-name
     }
 
     void load(QJsonObject const& json) override

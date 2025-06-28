@@ -113,9 +113,9 @@ public:
 
     QJsonObject save() const override
     {
-        return {
-            {"cellAddress", m_cellAddressEdit->text()}
-        };
+        QJsonObject modelJson = NodeDelegateModel::save(); // 调用基类方法保存model-name
+        modelJson["cellAddress"] = m_cellAddressEdit->text();
+        return modelJson;
     }
 
     void load(QJsonObject const& json) override

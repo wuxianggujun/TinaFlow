@@ -103,7 +103,7 @@ public:
 
     QJsonObject save() const override
     {
-        QJsonObject modelJson;
+        QJsonObject modelJson = NodeDelegateModel::save(); // 调用基类方法保存model-name
         modelJson["file"] = QString::fromStdString(m_filePath);
         return modelJson;
     }
