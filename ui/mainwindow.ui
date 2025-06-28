@@ -110,7 +110,6 @@
    <addaction name="actionNew"/>
    <addaction name="actionOpen"/>
    <addaction name="actionSave"/>
-   <addaction name="actionRun"/>
   </widget>
   <!-- ********** STATUSBAR ********** -->
   <widget class="QStatusBar" name="statusbar">
@@ -145,14 +144,6 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+S</string>
-   </property>
-  </action>
-  <action name="actionRun">
-   <property name="text">
-    <string>&amp;Run</string>
-   </property>
-   <property name="shortcut">
-    <string>F5</string>
    </property>
   </action>
   <action name="actionExit">

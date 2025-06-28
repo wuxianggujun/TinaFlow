@@ -177,6 +177,15 @@ private:
                     onIndexChanged(0);
                 }
 
+                // 重要：如果有恢复的选择，也要手动触发数据创建
+                if (!m_selectedSheet.empty()) {
+                    int currentIndex = m_comboBox->currentIndex();
+                    if (currentIndex >= 0) {
+                        qDebug() << "SelectSheetModel: Manually triggering data creation for restored sheet";
+                        onIndexChanged(currentIndex);
+                    }
+                }
+
                 // 启用ComboBox
                 m_comboBox->setEnabled(true);
                 qDebug() << "SelectSheetModel: ComboBox enabled with" << m_comboBox->count() << "items";

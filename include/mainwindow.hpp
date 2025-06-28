@@ -23,15 +23,27 @@ private slots:
     void onActionOpen();
     void onActionSave();
     void onActionExit();
+    void onRunClicked();
+    void onPauseClicked();
+    void onStopClicked();
 
 private:
     void setupNodeEditor();
+    void setupToolbar();
     void connectMenuActions();
     void saveToFile(const QString& fileName);
     void loadFromFile(const QString& fileName);
+    void setGlobalExecutionState(bool running);
+    void triggerDataFlow();
 
     static std::shared_ptr<QtNodes::NodeDelegateModelRegistry> registerDataModels();
     static void setStyle();
+
+public:
+    static bool isGlobalExecutionEnabled() { return s_globalExecutionEnabled; }
+
+private:
+    static bool s_globalExecutionEnabled;
     
     Ui::MainWindow *ui;
 

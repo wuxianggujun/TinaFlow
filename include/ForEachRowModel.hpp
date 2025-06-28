@@ -9,6 +9,7 @@
 #include "data/BooleanData.hpp"
 
 #include <QPushButton>
+#include <QCheckBox>
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -59,7 +60,7 @@ public:
 
         // 控制按钮
         auto* buttonLayout = new QHBoxLayout();
-        
+
         m_startButton = new QPushButton("开始");
         m_startButton->setEnabled(false);
         buttonLayout->addWidget(m_startButton);
@@ -73,6 +74,14 @@ public:
         buttonLayout->addWidget(m_stopButton);
 
         layout->addLayout(buttonLayout);
+
+        // 自动开始选项
+        auto* optionLayout = new QHBoxLayout();
+        m_autoStartCheckBox = new QCheckBox("自动开始");
+        m_autoStartCheckBox->setChecked(true); // 默认启用自动开始
+        optionLayout->addWidget(m_autoStartCheckBox);
+        optionLayout->addStretch();
+        layout->addLayout(optionLayout);
 
         // 设置定时器用于控制循环速度
         m_timer = new QTimer(this);
@@ -157,13 +166,27 @@ public:
         
         m_rangeData = std::dynamic_pointer_cast<RangeData>(nodeData);
         if (m_rangeData) {
-            qDebug() << "ForEachRowModel: Successfully received RangeData with" 
+            qDebug() << "ForEachRowModel: Successfully received RangeData with"
                      << m_rangeData->rowCount() << "rows";
             resetLoop();
+
+            // 自动输出第一行数据，让用户可以立即看到效果
+            if (m_rangeData->rowCount() > 0) {
+                auto firstRowData = m_rangeData->rowData(0);
+                m_currentRowData = std::make_shared<RowData>(0, firstRowData, m_rangeData->rowCount());
+                emit dataUpdated(0);
+                qDebug() << "ForEachRowModel: Auto-output first row for preview";
+
+                // 如果启用了自动开始，则自动开始循环
+                if (m_autoStartCheckBox->isChecked()) {
+                    QTimer::singleShot(500, this, &ForEachRowModel::startLoop); // 延迟500ms开始
+                    qDebug() << "ForEachRowModel: Auto-start enabled, will begin loop in 500ms";
+                }
+            }
         } else {
             qDebug() << "ForEachRowModel: Failed to cast to RangeData";
         }
-        
+
         updateUI();
     }
 
@@ -324,6 +347,7 @@ private:
     QPushButton* m_startButton;
     QPushButton* m_pauseButton;
     QPushButton* m_stopButton;
+    QCheckBox* m_autoStartCheckBox;
     QTimer* m_timer;
     
     std::shared_ptr<RangeData> m_rangeData;

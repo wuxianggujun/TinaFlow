@@ -115,15 +115,37 @@ public:
         // 只显示文件名，不显示完整路径
         QString fileName = QFileInfo(QString::fromStdString(m_filePath)).fileName();
         m_lineEdit->setText(fileName);
+
+        // 加载时不自动执行，等待用户点击运行按钮
+        qDebug() << "OpenExcelModel: File path loaded, waiting for execution trigger";
+    }
+
+public:
+    // 添加公共方法供外部触发执行
+    void triggerExecution()
+    {
+        qDebug() << "OpenExcelModel: Execution triggered";
         compute();
     }
 
 private:
+    bool shouldExecute() const
+    {
+        // 检查全局执行状态（需要包含MainWindow头文件）
+        // 暂时返回true，后续可以添加更复杂的逻辑
+        return true;
+    }
+
     void compute()
     {
         if (m_filePath.empty())
         {
             m_workbookData = nullptr;
+            return;
+        }
+
+        if (!shouldExecute()) {
+            qDebug() << "OpenExcelModel: Execution not allowed, skipping";
             return;
         }
 

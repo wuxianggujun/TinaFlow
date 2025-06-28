@@ -14,12 +14,19 @@
 #include <QtNodes/ConnectionStyle>
 #include <QtNodes/DataFlowGraphicsScene>
 
+// 需要包含具体的节点模型以便调用特定方法
+#include "OpenExcelModel.hpp"
+
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QStandardPaths>
+#include <QToolBar>
+#include <QAction>
 
+// 静态成员变量定义
+bool MainWindow::s_globalExecutionEnabled = false;
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -27,6 +34,7 @@ MainWindow::MainWindow(QWidget* parent)
 {
     ui->setupUi(this);
     setupNodeEditor();
+    setupToolbar();
     connectMenuActions();
 }
 
@@ -71,6 +79,36 @@ std::shared_ptr<QtNodes::NodeDelegateModelRegistry> MainWindow::registerDataMode
     return ret;
 }
 
+void MainWindow::setupToolbar()
+{
+    // 创建工具栏
+    QToolBar* toolbar = addToolBar(tr("执行控制"));
+    toolbar->setObjectName("ExecutionToolbar");
+
+    // 运行按钮
+    QAction* runAction = toolbar->addAction(tr("▶ 运行"));
+    runAction->setToolTip(tr("开始执行流程 (F5)\n加载文件后点击此按钮开始处理数据"));
+    runAction->setShortcut(QKeySequence("F5"));
+    connect(runAction, &QAction::triggered, this, &MainWindow::onRunClicked);
+
+    // 暂停按钮
+    QAction* pauseAction = toolbar->addAction(tr("⏸ 暂停"));
+    pauseAction->setToolTip(tr("暂停执行"));
+    pauseAction->setEnabled(false);
+    connect(pauseAction, &QAction::triggered, this, &MainWindow::onPauseClicked);
+
+    // 停止按钮
+    QAction* stopAction = toolbar->addAction(tr("⏹ 停止"));
+    stopAction->setToolTip(tr("停止执行"));
+    stopAction->setEnabled(false);
+    connect(stopAction, &QAction::triggered, this, &MainWindow::onStopClicked);
+
+    // 保存按钮引用以便后续控制
+    runAction->setObjectName("runAction");
+    pauseAction->setObjectName("pauseAction");
+    stopAction->setObjectName("stopAction");
+}
+
 void MainWindow::connectMenuActions()
 {
     // 连接菜单动作
@@ -90,6 +128,7 @@ void MainWindow::onActionNew()
         }
     }
     setWindowTitle("TinaFlow - 新建");
+    ui->statusbar->showMessage(tr("新建流程，拖拽节点开始设计"), 0);
 }
 
 void MainWindow::onActionOpen()
@@ -181,12 +220,114 @@ void MainWindow::loadFromFile(const QString& fileName)
             m_graphModel->load(jsonDocument.object());
 
             setWindowTitle(QString("TinaFlow - %1").arg(QFileInfo(fileName).baseName()));
-            ui->statusbar->showMessage(tr("文件已加载: %1").arg(fileName), 3000);
+            ui->statusbar->showMessage(tr("流程已加载，点击运行按钮(F5)开始执行"), 0);
         } else {
             QMessageBox::critical(this, tr("错误"), tr("无法打开文件: %1").arg(fileName));
         }
     } catch (const std::exception& e) {
         QMessageBox::critical(this, tr("错误"), tr("加载文件时发生错误: %1").arg(e.what()));
+    }
+}
+
+void MainWindow::onRunClicked()
+{
+    qDebug() << "MainWindow: Run button clicked";
+    setGlobalExecutionState(true);
+
+    // 更新工具栏按钮状态
+    findChild<QAction*>("runAction")->setEnabled(false);
+    findChild<QAction*>("pauseAction")->setEnabled(true);
+    findChild<QAction*>("stopAction")->setEnabled(true);
+
+    // 重新触发数据流处理
+    triggerDataFlow();
+
+    ui->statusbar->showMessage(tr("流程正在运行..."), 0);
+}
+
+void MainWindow::onPauseClicked()
+{
+    qDebug() << "MainWindow: Pause button clicked";
+    setGlobalExecutionState(false);
+
+    // 更新工具栏按钮状态
+    findChild<QAction*>("runAction")->setEnabled(true);
+    findChild<QAction*>("pauseAction")->setEnabled(false);
+    findChild<QAction*>("stopAction")->setEnabled(true);
+
+    ui->statusbar->showMessage(tr("流程已暂停"), 3000);
+}
+
+void MainWindow::onStopClicked()
+{
+    qDebug() << "MainWindow: Stop button clicked";
+    setGlobalExecutionState(false);
+
+    // 更新工具栏按钮状态
+    findChild<QAction*>("runAction")->setEnabled(true);
+    findChild<QAction*>("pauseAction")->setEnabled(false);
+    findChild<QAction*>("stopAction")->setEnabled(false);
+
+    ui->statusbar->showMessage(tr("流程已停止"), 3000);
+}
+
+void MainWindow::setGlobalExecutionState(bool running)
+{
+    s_globalExecutionEnabled = running;
+    qDebug() << "MainWindow: Global execution state set to:" << running;
+
+    // 这里可以添加通知所有节点状态变化的逻辑
+    // 例如通过信号通知所有节点更新执行状态
+}
+
+void MainWindow::triggerDataFlow()
+{
+    qDebug() << "MainWindow: Triggering data flow";
+
+    if (!m_graphModel) {
+        qDebug() << "MainWindow: No graph model available";
+        return;
+    }
+
+    // 获取所有节点ID
+    auto nodeIds = m_graphModel->allNodeIds();
+    qDebug() << "MainWindow: Found" << nodeIds.size() << "nodes";
+
+    // 遍历所有节点，找到源节点（没有输入连接的节点）并触发它们
+    for (const auto& nodeId : nodeIds) {
+        auto nodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(nodeId);
+        if (!nodeDelegate) continue;
+
+        // 检查是否为源节点（没有输入端口或输入端口没有连接）
+        bool isSourceNode = true;
+        unsigned int inputPorts = nodeDelegate->nPorts(QtNodes::PortType::In);
+
+        for (unsigned int portIndex = 0; portIndex < inputPorts; ++portIndex) {
+            auto connections = m_graphModel->connections(nodeId, QtNodes::PortType::In, portIndex);
+            if (!connections.empty()) {
+                isSourceNode = false;
+                break;
+            }
+        }
+
+        if (isSourceNode) {
+            QString nodeName = nodeDelegate->name();
+            qDebug() << "MainWindow: Found source node:" << nodeName;
+
+            // 根据节点类型调用特定的触发方法
+            if (nodeName == "OpenExcel") {
+                auto* openExcelModel = m_graphModel->delegateModel<OpenExcelModel>(nodeId);
+                if (openExcelModel) {
+                    qDebug() << "MainWindow: Triggering OpenExcelModel execution";
+                    openExcelModel->triggerExecution();
+                }
+            }
+
+            // 触发源节点的数据更新
+            for (unsigned int portIndex = 0; portIndex < nodeDelegate->nPorts(QtNodes::PortType::Out); ++portIndex) {
+                emit nodeDelegate->dataUpdated(portIndex);
+            }
+        }
     }
 }
 
