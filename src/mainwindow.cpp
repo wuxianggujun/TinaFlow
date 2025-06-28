@@ -9,6 +9,8 @@
 #include "DisplayRangeModel.hpp"
 #include "StringCompareModel.hpp"
 #include "DisplayBooleanModel.hpp"
+#include "ForEachRowModel.hpp"
+#include "DisplayRowModel.hpp"
 #include <QtNodes/ConnectionStyle>
 #include <QtNodes/DataFlowGraphicsScene>
 
@@ -64,6 +66,8 @@ std::shared_ptr<QtNodes::NodeDelegateModelRegistry> MainWindow::registerDataMode
     ret->registerModel<DisplayRangeModel>("显示范围");
     ret->registerModel<StringCompareModel>("条件判断");
     ret->registerModel<DisplayBooleanModel>("显示布尔值");
+    ret->registerModel<ForEachRowModel>("遍历行");
+    ret->registerModel<DisplayRowModel>("显示行");
     return ret;
 }
 

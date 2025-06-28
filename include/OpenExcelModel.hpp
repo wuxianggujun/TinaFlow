@@ -10,6 +10,7 @@
 #include <QLineEdit>
 #include <QHBoxLayout>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QMessageBox>
 #include <QtNodes/NodeDelegateModel>
 
@@ -111,7 +112,9 @@ public:
     void load(QJsonObject const& json) override
     {
         m_filePath = json["file"].toString().toStdString();
-        m_lineEdit->setText(QString::fromStdString(m_filePath));
+        // 只显示文件名，不显示完整路径
+        QString fileName = QFileInfo(QString::fromStdString(m_filePath)).fileName();
+        m_lineEdit->setText(fileName);
         compute();
     }
 
