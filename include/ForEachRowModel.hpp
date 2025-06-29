@@ -111,7 +111,7 @@ public:
 
     unsigned int nPorts(QtNodes::PortType portType) const override
     {
-        if (portType == QtNodes::PortType::In) return 1;  // 输入：RangeData
+        if (portType == QtNodes::PortType::In) return 2;  // 输入：RangeData + 可选条件
         if (portType == QtNodes::PortType::Out) return 3; // 输出：当前行数据 + 当前单元格 + 循环状态
         return 0;
     }
@@ -120,7 +120,11 @@ public:
     {
         if (portType == QtNodes::PortType::In)
         {
-            return RangeData().type();
+            if (portIndex == 0) {
+                return RangeData().type();   // 数据源
+            } else {
+                return BooleanData().type(); // 可选条件（true=继续，false=停止）
+            }
         }
         else if (portType == QtNodes::PortType::Out)
         {
@@ -150,26 +154,65 @@ public:
     void setInData(std::shared_ptr<QtNodes::NodeData> nodeData, QtNodes::PortIndex const portIndex) override
     {
         qDebug() << "ForEachRowModel::setInData called, portIndex:" << portIndex;
-        
-        if (!nodeData) {
-            qDebug() << "ForEachRowModel: Received null nodeData";
-            m_rangeData.reset();
-            updateDisplay();
-            return;
-        }
-        
-        m_rangeData = std::dynamic_pointer_cast<RangeData>(nodeData);
-        if (m_rangeData) {
-            qDebug() << "ForEachRowModel: Successfully received RangeData with"
-                     << m_rangeData->rowCount() << "rows";
-            // 不自动启动，只输出第一行作为预览
-            if (!m_isRunning) {
-                m_currentRowIndex = 0;
-                updateCurrentRow();
-                qDebug() << "ForEachRowModel: Data received, showing first row as preview";
+
+        if (portIndex == 0) {
+            // 端口0：RangeData输入
+            if (!nodeData) {
+                qDebug() << "ForEachRowModel: Received null RangeData";
+                m_rangeData.reset();
+                updateDisplay();
+                return;
             }
-        } else {
-            qDebug() << "ForEachRowModel: Failed to cast to RangeData";
+
+            m_rangeData = std::dynamic_pointer_cast<RangeData>(nodeData);
+            if (m_rangeData) {
+                qDebug() << "ForEachRowModel: Successfully received RangeData with"
+                         << m_rangeData->rowCount() << "rows";
+                // 不自动启动，只输出第一行作为预览
+                if (!m_isRunning) {
+                    m_currentRowIndex = 0;
+                    updateCurrentRow();
+                    qDebug() << "ForEachRowModel: Data received, showing first row as preview";
+                }
+            } else {
+                qDebug() << "ForEachRowModel: Failed to cast to RangeData";
+            }
+
+        } else if (portIndex == 1) {
+            // 端口1：BooleanData条件输入
+            if (!nodeData) {
+                qDebug() << "ForEachRowModel: Received null condition data";
+                m_conditionData.reset();
+                return;
+            }
+
+            m_conditionData = std::dynamic_pointer_cast<BooleanData>(nodeData);
+            if (m_conditionData) {
+                bool conditionValue = m_conditionData->value();
+                qDebug() << "ForEachRowModel: Received condition:" << conditionValue;
+
+                // 根据条件决定是否继续循环
+                if (m_isRunning) {
+                    if (!conditionValue) {
+                        qDebug() << "ForEachRowModel: Condition is false, stopping loop";
+                        stopLoop();
+                    } else {
+                        qDebug() << "ForEachRowModel: Condition is true, continuing to next row";
+                        // 移动到下一行并继续
+                        m_currentRowIndex++;
+                        updateDisplay();
+
+                        if (m_currentRowIndex < m_rangeData->rowCount()) {
+                            QTimer::singleShot(m_timer->interval(), this, &ForEachRowModel::processNextRow);
+                        } else {
+                            // 自然结束
+                            stopLoop();
+                        }
+                    }
+                }
+            } else {
+                qDebug() << "ForEachRowModel: Failed to cast to BooleanData";
+            }
         }
 
         updateDisplay();
@@ -232,6 +275,14 @@ public:
         return m_targetColumnIndex;
     }
 
+private:
+    bool hasConditionConnection() const
+    {
+        // 简单的方法：检查是否接收过条件数据
+        // 在实际应用中，可以通过检查图模型的连接来判断
+        return m_conditionData != nullptr;
+    }
+
 public slots:
     void startLoop()
     {
@@ -265,7 +316,7 @@ private slots:
 
         // 发送循环结束信号
         m_loopStatus = std::make_shared<BooleanData>(false, "Loop stopped");
-        emit dataUpdated(1);
+        emit dataUpdated(2);
 
         updateDisplay();
     }
@@ -283,7 +334,7 @@ private slots:
 
             // 发送循环完成信号
             m_loopStatus = std::make_shared<BooleanData>(false, "Loop completed");
-            emit dataUpdated(1);
+            emit dataUpdated(2);
 
             updateDisplay();
             return;
@@ -294,19 +345,25 @@ private slots:
 
         // 发送循环继续信号
         m_loopStatus = std::make_shared<BooleanData>(true, QString("Processing row %1").arg(m_currentRowIndex + 1));
-        emit dataUpdated(1);
+        emit dataUpdated(2); // 循环状态端口
 
-        // 移动到下一行
-        m_currentRowIndex++;
+        // 检查是否有条件输入连接
+        bool hasConditionInput = hasConditionConnection();
 
-        updateDisplay();
+        if (hasConditionInput) {
+            // 有条件输入，等待条件反馈，不自动继续
+            qDebug() << "ForEachRowModel: Waiting for condition feedback";
+        } else {
+            // 没有条件输入，自动继续下一行
+            m_currentRowIndex++;
+            updateDisplay();
 
-        // 继续下一次循环
-        if (m_isRunning && m_currentRowIndex < m_rangeData->rowCount()) {
-            m_timer->start();
-        } else if (m_currentRowIndex >= m_rangeData->rowCount()) {
-            // 自然结束
-            stopLoop();
+            if (m_isRunning && m_currentRowIndex < m_rangeData->rowCount()) {
+                m_timer->start();
+            } else if (m_currentRowIndex >= m_rangeData->rowCount()) {
+                // 自然结束
+                stopLoop();
+            }
         }
     }
 
@@ -382,6 +439,7 @@ private:
     std::shared_ptr<RowData> m_currentRowData;
     std::shared_ptr<CellData> m_currentCellData;
     std::shared_ptr<BooleanData> m_loopStatus;
+    std::shared_ptr<BooleanData> m_conditionData;
 
     int m_currentRowIndex;
     int m_targetColumnIndex; // 要提取的列索引（用于StringCompare）

@@ -103,8 +103,8 @@ public:
 
     unsigned int nPorts(QtNodes::PortType portType) const override
     {
-        if (portType == QtNodes::PortType::In) return 1;
-        if (portType == QtNodes::PortType::Out) return 2; // True和False两个输出端口
+        if (portType == QtNodes::PortType::In) return 1;  // 输入：CellData
+        if (portType == QtNodes::PortType::Out) return 1; // 输出：BooleanData（true/false）
         return 0;
     }
 
@@ -125,9 +125,7 @@ public:
     std::shared_ptr<QtNodes::NodeData> outData(QtNodes::PortIndex const port) override
     {
         if (port == 0) {
-            return m_trueResult;  // 第一个端口：True结果
-        } else if (port == 1) {
-            return m_falseResult; // 第二个端口：False结果
+            return m_result; // 唯一输出：比较结果（true/false）
         }
         return nullptr;
     }
@@ -192,31 +190,36 @@ private:
         qDebug() << "StringCompareModel::updateComparison called";
         
         // 重置结果
-        m_trueResult.reset();
-        m_falseResult.reset();
-        
+        m_result.reset();
+
         if (!m_cellData || !m_cellData->isValid()) {
             qDebug() << "StringCompareModel: No valid cell data";
             emit dataUpdated(0);
-            emit dataUpdated(1);
             return;
         }
 
         try {
-            // 获取单元格值
-            auto cell = m_cellData->cell();
+            // 获取单元格值 - 使用新的CellData API
             QString cellValue;
-            
-            if (cell->value().type() == OpenXLSX::XLValueType::String) {
-                cellValue = QString::fromUtf8(cell->value().get<std::string>().c_str());
-            } else if (cell->value().type() == OpenXLSX::XLValueType::Integer) {
-                cellValue = QString::number(cell->value().get<int64_t>());
-            } else if (cell->value().type() == OpenXLSX::XLValueType::Float) {
-                cellValue = QString::number(cell->value().get<double>());
-            } else if (cell->value().type() == OpenXLSX::XLValueType::Boolean) {
-                cellValue = cell->value().get<bool>() ? "TRUE" : "FALSE";
+
+            if (m_cellData->cell()) {
+                // 真实的OpenXLSX单元格
+                auto cell = m_cellData->cell();
+                if (cell->value().type() == OpenXLSX::XLValueType::String) {
+                    cellValue = QString::fromUtf8(cell->value().get<std::string>().c_str());
+                } else if (cell->value().type() == OpenXLSX::XLValueType::Integer) {
+                    cellValue = QString::number(cell->value().get<int64_t>());
+                } else if (cell->value().type() == OpenXLSX::XLValueType::Float) {
+                    cellValue = QString::number(cell->value().get<double>());
+                } else if (cell->value().type() == OpenXLSX::XLValueType::Boolean) {
+                    cellValue = cell->value().get<bool>() ? "TRUE" : "FALSE";
+                } else {
+                    cellValue = "";
+                }
             } else {
-                cellValue = "";
+                // 虚拟单元格，直接使用value()方法
+                QVariant value = m_cellData->value();
+                cellValue = value.toString();
             }
             
             // 获取比较参数
@@ -236,21 +239,14 @@ private:
             // 两个端口都始终有输出，但内容不同
             // 第一个端口(0)：True端口 - 只有当结果为true时才输出数据
             // 第二个端口(1)：False端口 - 只有当结果为false时才输出数据
-            if (result) {
-                m_trueResult = std::make_shared<BooleanData>(true, description);
-                m_falseResult.reset(); // False端口输出null
-            } else {
-                m_trueResult.reset(); // True端口输出null
-                m_falseResult = std::make_shared<BooleanData>(false, description);
-            }
+            // 创建统一的比较结果
+            m_result = std::make_shared<BooleanData>(result, description);
 
-            emit dataUpdated(0); // True端口
-            emit dataUpdated(1); // False端口
+            emit dataUpdated(0); // 输出比较结果
             
         } catch (const std::exception& e) {
             qDebug() << "StringCompareModel: Error in comparison:" << e.what();
             emit dataUpdated(0);
-            emit dataUpdated(1);
         }
     }
 
@@ -283,6 +279,5 @@ private:
     QLineEdit* m_valueEdit;
     
     std::shared_ptr<CellData> m_cellData;
-    std::shared_ptr<BooleanData> m_trueResult;
-    std::shared_ptr<BooleanData> m_falseResult;
+    std::shared_ptr<BooleanData> m_result;
 };
