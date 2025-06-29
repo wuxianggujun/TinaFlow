@@ -12,6 +12,8 @@
 #include "ForEachRowModel.hpp"
 #include "DisplayRowModel.hpp"
 #include "RangeInfoModel.hpp"
+#include "RangeIteratorModel.hpp"
+#include "ColumnSelectorModel.hpp"
 #include <QtNodes/ConnectionStyle>
 #include <QtNodes/NodeStyle>
 #include <QtNodes/DataFlowGraphicsScene>
@@ -92,17 +94,20 @@ void MainWindow::setupNodeEditor()
 std::shared_ptr<QtNodes::NodeDelegateModelRegistry> MainWindow::registerDataModels()
 {
     auto ret = std::make_shared<QtNodes::NodeDelegateModelRegistry>();
-    ret->registerModel<OpenExcelModel>("Excel操作");
-    ret->registerModel<SelectSheetModel>("选择Sheet");
-    ret->registerModel<ReadCellModel>("读取单元格");
-    ret->registerModel<DisplayCellModel>("显示单元格");
-    ret->registerModel<ReadRangeModel>("读取范围");
-    ret->registerModel<DisplayRangeModel>("显示范围");
-    ret->registerModel<StringCompareModel>("条件判断");
-    ret->registerModel<DisplayBooleanModel>("显示布尔值");
-    ret->registerModel<ForEachRowModel>("遍历行");
-    ret->registerModel<DisplayRowModel>("显示行");
-    ret->registerModel<RangeInfoModel>("范围信息");
+    // 使用英文名称注册（与节点的name()方法返回值一致）
+    ret->registerModel<OpenExcelModel>("OpenExcel");
+    ret->registerModel<SelectSheetModel>("SelectSheet");
+    ret->registerModel<ReadCellModel>("ReadCell");
+    ret->registerModel<DisplayCellModel>("DisplayCell");
+    ret->registerModel<ReadRangeModel>("ReadRange");
+    ret->registerModel<DisplayRangeModel>("DisplayRange");
+    ret->registerModel<StringCompareModel>("StringCompare");
+    ret->registerModel<DisplayBooleanModel>("DisplayBoolean");
+    ret->registerModel<ForEachRowModel>("ForEachRow");
+    ret->registerModel<RangeIteratorModel>("RangeIterator");
+    ret->registerModel<ColumnSelectorModel>("ColumnSelector");
+    ret->registerModel<DisplayRowModel>("DisplayRow");
+    ret->registerModel<RangeInfoModel>("RangeInfo");
     return ret;
 }
 
@@ -686,9 +691,21 @@ void MainWindow::showSceneContextMenu(const QPointF& pos)
 
     // 处理节点
     QMenu* processMenu = addNodeMenu->addMenu("数据处理");
-    QAction* addForEachAction = processMenu->addAction("遍历行");
+    QAction* addForEachAction = processMenu->addAction("遍历行(旧版)");
     connect(addForEachAction, &QAction::triggered, [this, pos]() {
         auto nodeId = m_graphModel->addNode("ForEachRow");
+        m_graphModel->setNodeData(nodeId, QtNodes::NodeRole::Position, pos);
+    });
+
+    QAction* addRangeIteratorAction = processMenu->addAction("范围迭代器");
+    connect(addRangeIteratorAction, &QAction::triggered, [this, pos]() {
+        auto nodeId = m_graphModel->addNode("RangeIterator");
+        m_graphModel->setNodeData(nodeId, QtNodes::NodeRole::Position, pos);
+    });
+
+    QAction* addColumnSelectorAction = processMenu->addAction("列选择器");
+    connect(addColumnSelectorAction, &QAction::triggered, [this, pos]() {
+        auto nodeId = m_graphModel->addNode("ColumnSelector");
         m_graphModel->setNodeData(nodeId, QtNodes::NodeRole::Position, pos);
     });
 
