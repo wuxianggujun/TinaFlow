@@ -7,8 +7,10 @@
 #include <QLabel>
 #include <QScrollArea>
 #include <QtNodes/NodeDelegateModelRegistry>
-#include <QtNodes/GraphicsView>
 #include <QtNodes/DataFlowGraphModel>
+#include <QtNodes/DataFlowGraphicsScene>
+#include <QtNodes/ConnectionIdUtils>
+#include "TinaFlowGraphicsView.hpp"
 
 namespace Ui {
 class MainWindow;
@@ -33,10 +35,21 @@ private slots:
     void onNodeSelected(QtNodes::NodeId nodeId);
     void onNodeDeselected();
 
+    // 右键菜单相关
+    void showNodeContextMenu(QtNodes::NodeId nodeId, const QPointF& pos);
+    void showConnectionContextMenu(QtNodes::ConnectionId connectionId, const QPointF& pos);
+    void showSceneContextMenu(const QPointF& pos);
+    void deleteSelectedNode();
+    void deleteSelectedConnection();
+    void showAllConnectionsForDeletion();
+    void duplicateSelectedNode();
+    QString getPortTypeDescription(QtNodes::NodeDelegateModel* nodeModel, QtNodes::PortType portType, QtNodes::PortIndex portIndex);
+
 private:
     void setupNodeEditor();
     void setupToolbar();
     void setupPropertyPanel();
+    void setupCustomStyles();
     void connectMenuActions();
     void saveToFile(const QString& fileName);
     void loadFromFile(const QString& fileName);
@@ -61,7 +74,13 @@ private:
     Ui::MainWindow *ui;
 
     std::unique_ptr<QtNodes::DataFlowGraphModel> m_graphModel;
+    TinaFlowGraphicsView* m_graphicsView;
+    QtNodes::DataFlowGraphicsScene* m_graphicsScene;
 
     // 属性面板相关（使用UI中现有的tab_properties）
     QWidget* m_currentPropertyWidget;
+
+    // 右键菜单相关
+    QtNodes::NodeId m_selectedNodeId;
+    QtNodes::ConnectionId m_selectedConnectionId;
 };

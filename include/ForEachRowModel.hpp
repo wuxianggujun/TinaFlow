@@ -151,6 +151,26 @@ public:
         return nullptr;
     }
 
+    QString portCaption(QtNodes::PortType portType, QtNodes::PortIndex portIndex) const override
+    {
+        if (portType == QtNodes::PortType::In) {
+            if (portIndex == 0) {
+                return "范围数据";
+            } else if (portIndex == 1) {
+                return "循环条件";
+            }
+        } else if (portType == QtNodes::PortType::Out) {
+            if (portIndex == 0) {
+                return "当前行";
+            } else if (portIndex == 1) {
+                return "当前单元格";
+            } else if (portIndex == 2) {
+                return "循环状态";
+            }
+        }
+        return "";
+    }
+
     void setInData(std::shared_ptr<QtNodes::NodeData> nodeData, QtNodes::PortIndex const portIndex) override
     {
         qDebug() << "ForEachRowModel::setInData called, portIndex:" << portIndex;

@@ -13,6 +13,7 @@
 #include "DisplayRowModel.hpp"
 #include "RangeInfoModel.hpp"
 #include <QtNodes/ConnectionStyle>
+#include <QtNodes/NodeStyle>
 #include <QtNodes/DataFlowGraphicsScene>
 
 // 需要包含具体的节点模型以便调用特定方法
@@ -21,6 +22,10 @@
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QJsonDocument>
+#include <QMenu>
+#include <QAction>
+#include <QInputDialog>
+#include <limits>
 #include <QJsonObject>
 #include <QStandardPaths>
 #include <QToolBar>
@@ -55,23 +60,32 @@ void MainWindow::setupNodeEditor()
     std::shared_ptr<QtNodes::NodeDelegateModelRegistry> modelRegistry = registerDataModels();
 
     m_graphModel = std::make_unique<QtNodes::DataFlowGraphModel>(modelRegistry);
-    auto * dataFlowGraphicsScene = new QtNodes::DataFlowGraphicsScene(
-        *m_graphModel, this);
+    m_graphicsScene = new QtNodes::DataFlowGraphicsScene(*m_graphModel, this);
+    m_graphicsView = new TinaFlowGraphicsView(m_graphicsScene, this);
 
-    auto * graphicsView = new QtNodes::GraphicsView(dataFlowGraphicsScene);
+    // 应用自定义样式
+    setupCustomStyles();
 
     // 连接节点选择事件
-    connect(dataFlowGraphicsScene, &QtNodes::DataFlowGraphicsScene::nodeSelected,
+    connect(m_graphicsScene, &QtNodes::DataFlowGraphicsScene::nodeSelected,
             this, &MainWindow::onNodeSelected);
-    connect(dataFlowGraphicsScene, &QtNodes::DataFlowGraphicsScene::nodeClicked,
+    connect(m_graphicsScene, &QtNodes::DataFlowGraphicsScene::nodeClicked,
             this, &MainWindow::onNodeSelected);
+
+    // 连接右键菜单事件
+    connect(m_graphicsView, &TinaFlowGraphicsView::nodeContextMenuRequested,
+            this, &MainWindow::showNodeContextMenu);
+    connect(m_graphicsView, &TinaFlowGraphicsView::connectionContextMenuRequested,
+            this, &MainWindow::showConnectionContextMenu);
+    connect(m_graphicsView, &TinaFlowGraphicsView::sceneContextMenuRequested,
+            this, &MainWindow::showSceneContextMenu);
     
     QLayout* containerLayout = ui->nodeEditorHost->layout();
     if (!containerLayout) {
         containerLayout = new QVBoxLayout(ui->nodeEditorHost);
         containerLayout->setContentsMargins(0, 0, 0, 0);
     }
-    containerLayout->addWidget(graphicsView);
+    containerLayout->addWidget(m_graphicsView);
     
 }
 
@@ -500,6 +514,353 @@ void MainWindow::addStringCompareProperties(QVBoxLayout* layout, QtNodes::NodeId
     layout->addWidget(caseSensitiveCheck);
 
     qDebug() << "MainWindow: Added StringCompare properties for node" << nodeId;
+}
+
+void MainWindow::setupCustomStyles()
+{
+    // 自定义节点样式JSON
+    QString nodeStyleJson = R"({
+        "NodeStyle": {
+            "NormalBoundaryColor": [255, 255, 255],
+            "SelectedBoundaryColor": [255, 165, 0],
+            "GradientColor0": [240, 240, 240],
+            "GradientColor1": [220, 220, 220],
+            "GradientColor2": [200, 200, 200],
+            "GradientColor3": [180, 180, 180],
+            "ShadowColor": [20, 20, 20],
+            "FontColor": [10, 10, 10],
+            "FontColorFaded": [100, 100, 100],
+            "ConnectionPointColor": [70, 130, 180],
+            "FilledConnectionPointColor": [34, 139, 34],
+            "WarningColor": [128, 128, 0],
+            "ErrorColor": [255, 50, 50],
+            "PenWidth": 2.0,
+            "HoveredPenWidth": 2.5,
+            "ConnectionPointDiameter": 10.0,
+            "Opacity": 1.0
+        }
+    })";
+
+    // 自定义连接线样式JSON
+    QString connectionStyleJson = R"({
+        "ConnectionStyle": {
+            "ConstructionColor": [169, 169, 169],
+            "NormalColor": [100, 100, 100],
+            "SelectedColor": [255, 165, 0],
+            "SelectedHaloColor": [255, 165, 0, 50],
+            "HoveredColor": [136, 136, 136],
+            "LineWidth": 3.0,
+            "ConstructionLineWidth": 2.0,
+            "PointDiameter": 10.0,
+            "UseDataDefinedColors": true
+        }
+    })";
+
+    // 应用样式
+    QtNodes::ConnectionStyle::setConnectionStyle(connectionStyleJson);
+    QtNodes::NodeStyle::setNodeStyle(nodeStyleJson);
+
+    qDebug() << "MainWindow: Custom styles applied";
+}
+
+QString MainWindow::getPortTypeDescription(QtNodes::NodeDelegateModel* nodeModel, QtNodes::PortType portType, QtNodes::PortIndex portIndex)
+{
+    if (!nodeModel) return "Unknown";
+
+    auto dataType = nodeModel->dataType(portType, portIndex);
+    QString typeName = dataType.name;
+
+    // 将数据类型转换为更友好的显示名称
+    static QMap<QString, QString> typeDescriptions = {
+        {"WorkbookData", "工作簿"},
+        {"SheetData", "工作表"},
+        {"RangeData", "范围数据"},
+        {"RowData", "行数据"},
+        {"CellData", "单元格"},
+        {"BooleanData", "布尔值"}
+    };
+
+    return typeDescriptions.value(typeName, typeName);
+}
+
+// 右键菜单实现
+void MainWindow::showNodeContextMenu(QtNodes::NodeId nodeId, const QPointF& pos)
+{
+    m_selectedNodeId = nodeId;
+
+    QMenu contextMenu(this);
+
+    QAction* deleteAction = contextMenu.addAction("删除节点");
+    deleteAction->setIcon(QIcon(":/icons/delete.png"));
+    connect(deleteAction, &QAction::triggered, this, &MainWindow::deleteSelectedNode);
+
+    QAction* duplicateAction = contextMenu.addAction("复制节点");
+    duplicateAction->setIcon(QIcon(":/icons/copy.png"));
+    connect(duplicateAction, &QAction::triggered, this, &MainWindow::duplicateSelectedNode);
+
+    contextMenu.addSeparator();
+
+    // 获取节点信息
+    auto nodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(nodeId);
+    if (nodeDelegate) {
+        QAction* infoAction = contextMenu.addAction(QString("节点: %1").arg(nodeDelegate->name()));
+        infoAction->setEnabled(false);
+    }
+
+    // 转换坐标并显示菜单
+    QPoint globalPos = m_graphicsView->mapToGlobal(m_graphicsView->mapFromScene(pos));
+    contextMenu.exec(globalPos);
+}
+
+void MainWindow::showConnectionContextMenu(QtNodes::ConnectionId connectionId, const QPointF& pos)
+{
+    m_selectedConnectionId = connectionId;
+
+    QMenu contextMenu(this);
+
+    // 获取连接信息
+    auto outNodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(connectionId.outNodeId);
+    auto inNodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(connectionId.inNodeId);
+
+    if (outNodeDelegate && inNodeDelegate) {
+        QString outPortType = getPortTypeDescription(outNodeDelegate, QtNodes::PortType::Out, connectionId.outPortIndex);
+        QString inPortType = getPortTypeDescription(inNodeDelegate, QtNodes::PortType::In, connectionId.inPortIndex);
+
+        QString description = QString("%1[%2:%3] → %4[%5:%6]")
+            .arg(outNodeDelegate->name())
+            .arg(connectionId.outPortIndex)
+            .arg(outPortType)
+            .arg(inNodeDelegate->name())
+            .arg(connectionId.inPortIndex)
+            .arg(inPortType);
+
+        QAction* infoAction = contextMenu.addAction(QString("连接: %1").arg(description));
+        infoAction->setEnabled(false);
+        contextMenu.addSeparator();
+    }
+
+    QAction* deleteAction = contextMenu.addAction("删除连接");
+    deleteAction->setIcon(QIcon(":/icons/disconnect.png"));
+    connect(deleteAction, &QAction::triggered, this, &MainWindow::deleteSelectedConnection);
+
+    // 转换坐标并显示菜单
+    QPoint globalPos = m_graphicsView->mapToGlobal(m_graphicsView->mapFromScene(pos));
+    contextMenu.exec(globalPos);
+}
+
+// 删除了不稳定的位置查找方法
+
+void MainWindow::showSceneContextMenu(const QPointF& pos)
+{
+    QMenu contextMenu(this);
+
+    // 添加节点子菜单
+    QMenu* addNodeMenu = contextMenu.addMenu("添加节点");
+    addNodeMenu->setIcon(QIcon(":/icons/add.png"));
+
+    // 数据源节点
+    QMenu* dataSourceMenu = addNodeMenu->addMenu("数据源");
+    QAction* addExcelAction = dataSourceMenu->addAction("Excel文件");
+    connect(addExcelAction, &QAction::triggered, [this, pos]() {
+        auto nodeId = m_graphModel->addNode("OpenExcel");
+        m_graphModel->setNodeData(nodeId, QtNodes::NodeRole::Position, pos);
+    });
+
+    QAction* addSelectSheetAction = dataSourceMenu->addAction("选择工作表");
+    connect(addSelectSheetAction, &QAction::triggered, [this, pos]() {
+        auto nodeId = m_graphModel->addNode("SelectSheet");
+        m_graphModel->setNodeData(nodeId, QtNodes::NodeRole::Position, pos);
+    });
+
+    QAction* addReadRangeAction = dataSourceMenu->addAction("读取范围");
+    connect(addReadRangeAction, &QAction::triggered, [this, pos]() {
+        auto nodeId = m_graphModel->addNode("ReadRange");
+        m_graphModel->setNodeData(nodeId, QtNodes::NodeRole::Position, pos);
+    });
+
+    QAction* addReadCellAction = dataSourceMenu->addAction("读取单元格");
+    connect(addReadCellAction, &QAction::triggered, [this, pos]() {
+        auto nodeId = m_graphModel->addNode("ReadCell");
+        m_graphModel->setNodeData(nodeId, QtNodes::NodeRole::Position, pos);
+    });
+
+    // 处理节点
+    QMenu* processMenu = addNodeMenu->addMenu("数据处理");
+    QAction* addForEachAction = processMenu->addAction("遍历行");
+    connect(addForEachAction, &QAction::triggered, [this, pos]() {
+        auto nodeId = m_graphModel->addNode("ForEachRow");
+        m_graphModel->setNodeData(nodeId, QtNodes::NodeRole::Position, pos);
+    });
+
+    QAction* addStringCompareAction = processMenu->addAction("字符串比较");
+    connect(addStringCompareAction, &QAction::triggered, [this, pos]() {
+        auto nodeId = m_graphModel->addNode("StringCompare");
+        m_graphModel->setNodeData(nodeId, QtNodes::NodeRole::Position, pos);
+    });
+
+    // 显示节点
+    QMenu* displayMenu = addNodeMenu->addMenu("显示");
+    QAction* addDisplayRowAction = displayMenu->addAction("显示行");
+    connect(addDisplayRowAction, &QAction::triggered, [this, pos]() {
+        auto nodeId = m_graphModel->addNode("DisplayRow");
+        m_graphModel->setNodeData(nodeId, QtNodes::NodeRole::Position, pos);
+    });
+
+    QAction* addDisplayBooleanAction = displayMenu->addAction("显示布尔值");
+    connect(addDisplayBooleanAction, &QAction::triggered, [this, pos]() {
+        auto nodeId = m_graphModel->addNode("DisplayBoolean");
+        m_graphModel->setNodeData(nodeId, QtNodes::NodeRole::Position, pos);
+    });
+
+    QAction* addDisplayCellAction = displayMenu->addAction("显示单元格");
+    connect(addDisplayCellAction, &QAction::triggered, [this, pos]() {
+        auto nodeId = m_graphModel->addNode("DisplayCell");
+        m_graphModel->setNodeData(nodeId, QtNodes::NodeRole::Position, pos);
+    });
+
+    QAction* addDisplayRangeAction = displayMenu->addAction("显示范围");
+    connect(addDisplayRangeAction, &QAction::triggered, [this, pos]() {
+        auto nodeId = m_graphModel->addNode("DisplayRange");
+        m_graphModel->setNodeData(nodeId, QtNodes::NodeRole::Position, pos);
+    });
+
+    QAction* addRangeInfoAction = displayMenu->addAction("范围信息");
+    connect(addRangeInfoAction, &QAction::triggered, [this, pos]() {
+        auto nodeId = m_graphModel->addNode("RangeInfo");
+        m_graphModel->setNodeData(nodeId, QtNodes::NodeRole::Position, pos);
+    });
+
+    contextMenu.addSeparator();
+
+    // 画布操作
+    QAction* clearAllAction = contextMenu.addAction("清空画布");
+    clearAllAction->setIcon(QIcon(":/icons/clear.png"));
+    connect(clearAllAction, &QAction::triggered, [this]() {
+        if (QMessageBox::question(this, "确认", "确定要清空所有节点吗？") == QMessageBox::Yes) {
+            // 删除所有节点
+            auto nodeIds = m_graphModel->allNodeIds();
+            for (auto nodeId : nodeIds) {
+                m_graphModel->deleteNode(nodeId);
+            }
+        }
+    });
+
+    // 转换坐标并显示菜单
+    QPoint globalPos = m_graphicsView->mapToGlobal(m_graphicsView->mapFromScene(pos));
+    contextMenu.exec(globalPos);
+}
+
+void MainWindow::deleteSelectedNode()
+{
+    if (m_selectedNodeId != QtNodes::InvalidNodeId) {
+        m_graphModel->deleteNode(m_selectedNodeId);
+        m_selectedNodeId = QtNodes::InvalidNodeId;
+
+        // 清空属性面板
+        clearPropertyPanel();
+    }
+}
+
+void MainWindow::deleteSelectedConnection()
+{
+    // 检查是否有有效的连接被选中
+    if (m_selectedConnectionId.outNodeId == QtNodes::InvalidNodeId ||
+        m_selectedConnectionId.inNodeId == QtNodes::InvalidNodeId) {
+        QMessageBox::information(this, "提示", "没有选中有效的连接");
+        return;
+    }
+
+    // 直接删除连接，不需要确认（因为用户已经明确右键点击了特定连接）
+    m_graphModel->deleteConnection(m_selectedConnectionId);
+
+    // 获取连接信息用于日志
+    auto outNodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(m_selectedConnectionId.outNodeId);
+    auto inNodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(m_selectedConnectionId.inNodeId);
+
+    if (outNodeDelegate && inNodeDelegate) {
+        QString outPortType = getPortTypeDescription(outNodeDelegate, QtNodes::PortType::Out, m_selectedConnectionId.outPortIndex);
+        QString inPortType = getPortTypeDescription(inNodeDelegate, QtNodes::PortType::In, m_selectedConnectionId.inPortIndex);
+
+        QString description = QString("%1[%2:%3] → %4[%5:%6]")
+            .arg(outNodeDelegate->name())
+            .arg(m_selectedConnectionId.outPortIndex)
+            .arg(outPortType)
+            .arg(inNodeDelegate->name())
+            .arg(m_selectedConnectionId.inPortIndex)
+            .arg(inPortType);
+
+        qDebug() << "MainWindow: Deleted connection:" << description;
+    }
+
+    // 重置选中的连接
+    m_selectedConnectionId = {QtNodes::InvalidNodeId, QtNodes::InvalidPortIndex,
+                             QtNodes::InvalidNodeId, QtNodes::InvalidPortIndex};
+}
+
+void MainWindow::showAllConnectionsForDeletion()
+{
+    auto allNodes = m_graphModel->allNodeIds();
+    QStringList connectionList;
+    QList<QtNodes::ConnectionId> connections;
+
+    for (auto nodeId : allNodes) {
+        auto nodeConnections = m_graphModel->allConnectionIds(nodeId);
+        for (auto connectionId : nodeConnections) {
+            auto outNodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(connectionId.outNodeId);
+            auto inNodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(connectionId.inNodeId);
+
+            if (outNodeDelegate && inNodeDelegate) {
+                QString outPortType = getPortTypeDescription(outNodeDelegate, QtNodes::PortType::Out, connectionId.outPortIndex);
+                QString inPortType = getPortTypeDescription(inNodeDelegate, QtNodes::PortType::In, connectionId.inPortIndex);
+
+                QString description = QString("%1[%2:%3] → %4[%5:%6]")
+                    .arg(outNodeDelegate->name())
+                    .arg(connectionId.outPortIndex)
+                    .arg(outPortType)
+                    .arg(inNodeDelegate->name())
+                    .arg(connectionId.inPortIndex)
+                    .arg(inPortType);
+                connectionList.append(description);
+                connections.append(connectionId);
+            }
+        }
+    }
+
+    if (connections.isEmpty()) {
+        QMessageBox::information(this, "提示", "没有找到可删除的连接");
+        return;
+    }
+
+    bool ok;
+    QString selectedConnection = QInputDialog::getItem(this, "删除连接",
+        "选择要删除的连接:", connectionList, 0, false, &ok);
+
+    if (ok && !selectedConnection.isEmpty()) {
+        int index = connectionList.indexOf(selectedConnection);
+        if (index >= 0 && index < connections.size()) {
+            m_graphModel->deleteConnection(connections[index]);
+            qDebug() << "MainWindow: Deleted connection:" << selectedConnection;
+        }
+    }
+}
+
+void MainWindow::duplicateSelectedNode()
+{
+    if (m_selectedNodeId != QtNodes::InvalidNodeId) {
+        auto nodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(m_selectedNodeId);
+        if (nodeDelegate) {
+            // 创建新节点
+            auto newNodeId = m_graphModel->addNode(nodeDelegate->name());
+
+            // 获取原节点位置并偏移
+            QVariant posVariant = m_graphModel->nodeData(m_selectedNodeId, QtNodes::NodeRole::Position);
+            QPointF originalPos = posVariant.toPointF();
+            QPointF newPos = originalPos + QPointF(50, 50); // 偏移50像素
+            m_graphModel->setNodeData(newNodeId, QtNodes::NodeRole::Position, newPos);
+
+            // TODO: 复制节点的属性设置
+        }
+    }
 }
 
 void MainWindow::triggerDataFlow()
