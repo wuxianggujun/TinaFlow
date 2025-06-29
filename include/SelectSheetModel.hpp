@@ -78,6 +78,7 @@ public:
         if (!nodeData) {
             qDebug() << "SelectSheetModel: Received null nodeData";
             m_workbook.reset();
+            m_dataAlreadyCreated = false; // 重置标记
             refreshCombo();
             return;
         }
@@ -86,6 +87,7 @@ public:
         if (m_workbook) {
             qDebug() << "SelectSheetModel: Successfully received WorkbookData";
             qDebug() << "SelectSheetModel: WorkbookData is valid:" << m_workbook->isValid();
+            m_dataAlreadyCreated = false; // 重置标记，允许重新创建数据
         } else {
             qDebug() << "SelectSheetModel: Failed to cast to WorkbookData";
         }
@@ -178,10 +180,11 @@ private:
                 }
 
                 // 重要：如果有恢复的选择，也要手动触发数据创建
-                if (!m_selectedSheet.empty()) {
+                if (!m_selectedSheet.empty() && !m_dataAlreadyCreated) {
                     int currentIndex = m_comboBox->currentIndex();
                     if (currentIndex >= 0) {
                         qDebug() << "SelectSheetModel: Manually triggering data creation for restored sheet";
+                        m_dataAlreadyCreated = true; // 标记已经创建过数据
                         onIndexChanged(currentIndex);
                     }
                 }
@@ -210,4 +213,5 @@ private:
     std::shared_ptr<WorkbookData> m_workbook;
     std::shared_ptr<SheetData> m_sheetData;
     std::string m_selectedSheet;
+    bool m_dataAlreadyCreated = false;
 };

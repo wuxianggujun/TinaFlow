@@ -7,6 +7,7 @@
 #include "data/RangeData.hpp"
 #include "data/RowData.hpp"
 #include "data/BooleanData.hpp"
+#include "data/CellData.hpp"
 
 #include <QLabel>
 #include <QPushButton>
@@ -84,6 +85,7 @@ public:
 
         // 初始状态
         m_currentRowIndex = 0;
+        m_targetColumnIndex = 0; // 默认提取第一列（A列）
         m_isRunning = false;
     }
 
@@ -110,7 +112,7 @@ public:
     unsigned int nPorts(QtNodes::PortType portType) const override
     {
         if (portType == QtNodes::PortType::In) return 1;  // 输入：RangeData
-        if (portType == QtNodes::PortType::Out) return 2; // 输出：当前行数据 + 循环状态
+        if (portType == QtNodes::PortType::Out) return 3; // 输出：当前行数据 + 当前单元格 + 循环状态
         return 0;
     }
 
@@ -124,6 +126,8 @@ public:
         {
             if (portIndex == 0) {
                 return RowData().type();     // 当前行数据
+            } else if (portIndex == 1) {
+                return CellData().type();    // 当前单元格数据（用于StringCompare）
             } else {
                 return BooleanData().type(); // 循环状态（true=继续，false=结束）
             }
@@ -136,6 +140,8 @@ public:
         if (port == 0) {
             return m_currentRowData;  // 当前行数据
         } else if (port == 1) {
+            return m_currentCellData; // 当前单元格数据
+        } else if (port == 2) {
             return m_loopStatus;      // 循环状态
         }
         return nullptr;
@@ -202,6 +208,28 @@ public:
     int getTotalRows() const
     {
         return m_rangeData ? m_rangeData->rowCount() : 0;
+    }
+
+    int getTotalColumns() const
+    {
+        if (!m_rangeData || m_rangeData->isEmpty()) {
+            return 0;
+        }
+        return m_rangeData->columnCount();
+    }
+
+    void setTargetColumn(int columnIndex)
+    {
+        m_targetColumnIndex = columnIndex;
+        if (!m_isRunning && m_rangeData) {
+            // 如果不在运行中，立即更新当前行的单元格数据
+            updateCurrentRow();
+        }
+    }
+
+    int getTargetColumn() const
+    {
+        return m_targetColumnIndex;
     }
 
 public slots:
@@ -298,11 +326,24 @@ private:
             m_rangeData->rowCount()
         );
 
-        qDebug() << "ForEachRowModel: Updated to row" << (m_currentRowIndex + 1)
-                 << "of" << m_rangeData->rowCount();
+        // 获取指定列的单元格数据
+        if (m_targetColumnIndex >= 0 && m_targetColumnIndex < static_cast<int>(rowData.size())) {
+            QVariant cellValue = rowData[m_targetColumnIndex];
+            QString cellAddress = QString("%1%2")
+                .arg(QChar('A' + m_targetColumnIndex))
+                .arg(m_currentRowIndex + 1);
+            m_currentCellData = std::make_shared<CellData>(cellAddress, cellValue);
+        } else {
+            m_currentCellData.reset();
+        }
 
-        // 输出当前行数据
-        emit dataUpdated(0);
+        qDebug() << "ForEachRowModel: Updated to row" << (m_currentRowIndex + 1)
+                 << "of" << m_rangeData->rowCount()
+                 << "column" << QChar('A' + m_targetColumnIndex);
+
+        // 输出当前行数据和单元格数据
+        emit dataUpdated(0); // 行数据
+        emit dataUpdated(1); // 单元格数据
     }
 
     void updateDisplay()
@@ -339,8 +380,10 @@ private:
 
     std::shared_ptr<RangeData> m_rangeData;
     std::shared_ptr<RowData> m_currentRowData;
+    std::shared_ptr<CellData> m_currentCellData;
     std::shared_ptr<BooleanData> m_loopStatus;
 
     int m_currentRowIndex;
+    int m_targetColumnIndex; // 要提取的列索引（用于StringCompare）
     bool m_isRunning;
 };

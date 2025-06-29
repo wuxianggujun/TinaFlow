@@ -11,6 +11,7 @@
 #include "DisplayBooleanModel.hpp"
 #include "ForEachRowModel.hpp"
 #include "DisplayRowModel.hpp"
+#include "RangeInfoModel.hpp"
 #include <QtNodes/ConnectionStyle>
 #include <QtNodes/DataFlowGraphicsScene>
 
@@ -87,6 +88,7 @@ std::shared_ptr<QtNodes::NodeDelegateModelRegistry> MainWindow::registerDataMode
     ret->registerModel<DisplayBooleanModel>("显示布尔值");
     ret->registerModel<ForEachRowModel>("遍历行");
     ret->registerModel<DisplayRowModel>("显示行");
+    ret->registerModel<RangeInfoModel>("范围信息");
     return ret;
 }
 
@@ -430,8 +432,34 @@ void MainWindow::addForEachRowProperties(QVBoxLayout* layout, QtNodes::NodeId no
                 forEachModel->setCurrentRowIndex(value - 1); // 转换为0基索引
             });
 
+    // 目标列设置
+    QLabel* columnLabel = new QLabel(tr("要提取的列："));
+    layout->addWidget(columnLabel);
+
+    QComboBox* columnCombo = new QComboBox();
+
+    // 动态获取列数
+    int totalColumns = forEachModel->getTotalColumns();
+    if (totalColumns > 0) {
+        for (int i = 0; i < totalColumns; ++i) {
+            QString columnName = QString("%1列").arg(QChar('A' + i));
+            columnCombo->addItem(columnName, i);
+        }
+        columnCombo->setCurrentIndex(forEachModel->getTargetColumn());
+    } else {
+        columnCombo->addItem("等待数据...", -1);
+        columnCombo->setEnabled(false);
+    }
+    layout->addWidget(columnCombo);
+
+    // 连接信号，当用户改变列时更新节点
+    connect(columnCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            [forEachModel](int index) {
+                forEachModel->setTargetColumn(index);
+            });
+
     // 说明文本
-    QLabel* helpLabel = new QLabel(tr("提示：修改行号会立即更新输出数据"));
+    QLabel* helpLabel = new QLabel(tr("提示：修改行号和列会立即更新输出数据\n第二个输出端口提供单元格数据，可连接到StringCompare"));
     helpLabel->setStyleSheet("color: #666666; font-size: 10px; font-style: italic;");
     helpLabel->setWordWrap(true);
     layout->addWidget(helpLabel);
