@@ -12,8 +12,8 @@
 #include "ForEachRowModel.hpp"
 #include "DisplayRowModel.hpp"
 #include "RangeInfoModel.hpp"
-#include "RangeIteratorModel.hpp"
-#include "ColumnSelectorModel.hpp"
+#include "SmartLoopProcessorModel.hpp"
+#include "DisplayCellListModel.hpp"
 #include <QtNodes/ConnectionStyle>
 #include <QtNodes/NodeStyle>
 #include <QtNodes/DataFlowGraphicsScene>
@@ -104,8 +104,8 @@ std::shared_ptr<QtNodes::NodeDelegateModelRegistry> MainWindow::registerDataMode
     ret->registerModel<StringCompareModel>("StringCompare");
     ret->registerModel<DisplayBooleanModel>("DisplayBoolean");
     ret->registerModel<ForEachRowModel>("ForEachRow");
-    ret->registerModel<RangeIteratorModel>("RangeIterator");
-    ret->registerModel<ColumnSelectorModel>("ColumnSelector");
+    ret->registerModel<SmartLoopProcessorModel>("SmartLoopProcessor");
+    ret->registerModel<DisplayCellListModel>("DisplayCellList");
     ret->registerModel<DisplayRowModel>("DisplayRow");
     ret->registerModel<RangeInfoModel>("RangeInfo");
     return ret;
@@ -691,21 +691,15 @@ void MainWindow::showSceneContextMenu(const QPointF& pos)
 
     // 处理节点
     QMenu* processMenu = addNodeMenu->addMenu("数据处理");
+    QAction* addSmartLoopAction = processMenu->addAction("智能循环处理器");
+    connect(addSmartLoopAction, &QAction::triggered, [this, pos]() {
+        auto nodeId = m_graphModel->addNode("SmartLoopProcessor");
+        m_graphModel->setNodeData(nodeId, QtNodes::NodeRole::Position, pos);
+    });
+
     QAction* addForEachAction = processMenu->addAction("遍历行(旧版)");
     connect(addForEachAction, &QAction::triggered, [this, pos]() {
         auto nodeId = m_graphModel->addNode("ForEachRow");
-        m_graphModel->setNodeData(nodeId, QtNodes::NodeRole::Position, pos);
-    });
-
-    QAction* addRangeIteratorAction = processMenu->addAction("范围迭代器");
-    connect(addRangeIteratorAction, &QAction::triggered, [this, pos]() {
-        auto nodeId = m_graphModel->addNode("RangeIterator");
-        m_graphModel->setNodeData(nodeId, QtNodes::NodeRole::Position, pos);
-    });
-
-    QAction* addColumnSelectorAction = processMenu->addAction("列选择器");
-    connect(addColumnSelectorAction, &QAction::triggered, [this, pos]() {
-        auto nodeId = m_graphModel->addNode("ColumnSelector");
         m_graphModel->setNodeData(nodeId, QtNodes::NodeRole::Position, pos);
     });
 
@@ -732,6 +726,12 @@ void MainWindow::showSceneContextMenu(const QPointF& pos)
     QAction* addDisplayCellAction = displayMenu->addAction("显示单元格");
     connect(addDisplayCellAction, &QAction::triggered, [this, pos]() {
         auto nodeId = m_graphModel->addNode("DisplayCell");
+        m_graphModel->setNodeData(nodeId, QtNodes::NodeRole::Position, pos);
+    });
+
+    QAction* addDisplayCellListAction = displayMenu->addAction("显示单元格列表");
+    connect(addDisplayCellListAction, &QAction::triggered, [this, pos]() {
+        auto nodeId = m_graphModel->addNode("DisplayCellList");
         m_graphModel->setNodeData(nodeId, QtNodes::NodeRole::Position, pos);
     });
 

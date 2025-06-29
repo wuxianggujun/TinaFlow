@@ -9,7 +9,7 @@
 /**
  * @brief 整数数据类型
  * 
- * 用于在节点之间传递整数值，如行索引、计数器等
+ * 用于在节点之间传递整数值，如计数、索引等
  */
 class IntegerData : public QtNodes::NodeData
 {
