@@ -12,6 +12,7 @@
 #include <QtNodes/ConnectionIdUtils>
 #include "TinaFlowGraphicsView.hpp"
 #include "CommandHistoryWidget.hpp"
+#include "ModernToolBar.hpp"
 
 namespace Ui {
 class MainWindow;
@@ -26,10 +27,12 @@ public:
     ~MainWindow();
 
 private slots:
-    void onActionNew();
-    void onActionOpen();
-    void onActionSave();
-    void onActionExit();
+    // 文件操作
+    void onNewFile();
+    void onOpenFile();
+    void onSaveFile();
+    
+    // 执行控制
     void onRunClicked();
     void onPauseClicked();
     void onStopClicked();
@@ -50,10 +53,9 @@ private slots:
 
 private:
     void setupNodeEditor();
-    void setupToolbar();
+    void setupModernToolbar();
     void setupPropertyPanel();
     void setupCustomStyles();
-    void connectMenuActions();
     void saveToFile(const QString& fileName);
     void loadFromFile(const QString& fileName);
     void setGlobalExecutionState(bool running);
@@ -85,6 +87,9 @@ private:
     
     // 命令历史面板
     CommandHistoryWidget* m_commandHistoryWidget;
+    
+    // 现代化工具栏
+    ModernToolBar* m_modernToolBar;
 
     // 右键菜单相关
     QtNodes::NodeId m_selectedNodeId;

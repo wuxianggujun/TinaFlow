@@ -5,6 +5,7 @@
 #pragma once
 
 #include "Command.hpp"
+#include "CompositeCommand.hpp"
 #include <QObject>
 #include <QTimer>
 #include <QMutex>
@@ -112,7 +113,7 @@ public:
     /**
      * @brief 检查是否在宏命令中
      */
-    bool isInMacro() const { return m_currentMacro != nullptr; }
+    bool isInMacro() const { return static_cast<bool>(m_currentMacro); }
     
     /**
      * @brief 启用/禁用命令合并
@@ -165,6 +166,11 @@ signals:
      */
     void canUndoChanged(bool canUndo);
     void canRedoChanged(bool canRedo);
+    
+    /**
+     * @brief 撤销/重做状态统一改变信号（避免重入问题）
+     */
+    void undoRedoStateChanged(bool canUndo, bool canRedo);
     
     /**
      * @brief 撤销/重做文本改变

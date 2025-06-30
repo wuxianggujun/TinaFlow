@@ -66,7 +66,33 @@ bool CreateNodeCommand::undo()
 
         // 保存所有相关连接的详细信息
         m_connectionDetails.clear();
-        auto allConnections = graphModel.allConnectionIds(m_nodeId);
+        
+        // 获取该节点的所有连接 - 转换为正确的类型
+        std::unordered_set<QtNodes::ConnectionId> allConnections;
+        auto* dataFlowModel = dynamic_cast<QtNodes::DataFlowGraphModel*>(&graphModel);
+        if (dataFlowModel) {
+            auto nodeDelegate = dataFlowModel->delegateModel<QtNodes::NodeDelegateModel>(m_nodeId);
+            if (nodeDelegate) {
+                // 检查所有输出端口的连接
+                unsigned int outputPorts = nodeDelegate->nPorts(QtNodes::PortType::Out);
+                for (unsigned int portIndex = 0; portIndex < outputPorts; ++portIndex) {
+                    auto connections = graphModel.connections(m_nodeId, QtNodes::PortType::Out, portIndex);
+                    for (const auto& conn : connections) {
+                        allConnections.insert(conn);
+                    }
+                }
+                
+                // 检查所有输入端口的连接
+                unsigned int inputPorts = nodeDelegate->nPorts(QtNodes::PortType::In);
+                for (unsigned int portIndex = 0; portIndex < inputPorts; ++portIndex) {
+                    auto connections = graphModel.connections(m_nodeId, QtNodes::PortType::In, portIndex);
+                    for (const auto& conn : connections) {
+                        allConnections.insert(conn);
+                    }
+                }
+            }
+        }
+        
         for (const auto& connectionId : allConnections) {
             // 保存连接的详细信息
             ConnectionDetail detail;
@@ -243,7 +269,32 @@ bool DeleteNodeCommand::execute()
         m_connections.clear();
         m_connectionDetails.clear();
         
-        auto allConnections = graphModel.allConnectionIds(m_nodeId);
+        // 获取该节点的所有连接 - 转换为正确的类型
+        std::unordered_set<QtNodes::ConnectionId> allConnections;
+        auto* dataFlowModel = dynamic_cast<QtNodes::DataFlowGraphModel*>(&graphModel);
+        if (dataFlowModel) {
+            auto nodeDelegate = dataFlowModel->delegateModel<QtNodes::NodeDelegateModel>(m_nodeId);
+            if (nodeDelegate) {
+                // 检查所有输出端口的连接
+                unsigned int outputPorts = nodeDelegate->nPorts(QtNodes::PortType::Out);
+                for (unsigned int portIndex = 0; portIndex < outputPorts; ++portIndex) {
+                    auto connections = graphModel.connections(m_nodeId, QtNodes::PortType::Out, portIndex);
+                    for (const auto& conn : connections) {
+                        allConnections.insert(conn);
+                    }
+                }
+                
+                // 检查所有输入端口的连接
+                unsigned int inputPorts = nodeDelegate->nPorts(QtNodes::PortType::In);
+                for (unsigned int portIndex = 0; portIndex < inputPorts; ++portIndex) {
+                    auto connections = graphModel.connections(m_nodeId, QtNodes::PortType::In, portIndex);
+                    for (const auto& conn : connections) {
+                        allConnections.insert(conn);
+                    }
+                }
+            }
+        }
+        
         for (const auto& connectionId : allConnections) {
             m_connections.append(connectionId);
             
@@ -312,7 +363,7 @@ bool DeleteNodeCommand::undo()
             qDebug() << "DeleteNodeCommand: Restored node with ID" << m_nodeId;
         } else {
             // 如果没有保存的数据，重新创建（简化方法）
-            QtNodes::NodeId newNodeId = graphModel.addNode(m_nodeType);
+        QtNodes::NodeId newNodeId = graphModel.addNode(m_nodeType);
             if (newNodeId == QtNodes::NodeId{}) {
                 qWarning() << "DeleteNodeCommand: Failed to restore node";
                 return false;

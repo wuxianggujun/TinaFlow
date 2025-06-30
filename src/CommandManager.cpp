@@ -1,4 +1,5 @@
 #include "CommandManager.hpp"
+#include "CompositeCommand.hpp"
 #include <QDebug>
 #include <QMutexLocker>
 #include <deque>
@@ -363,8 +364,8 @@ void CommandManager::updateSignals()
         redoText = QString("重做 %1").arg(m_redoStack.top()->getDescription());
     }
 
-    emit canUndoChanged(canUndoNow);
-    emit canRedoChanged(canRedoNow);
+    // 发出统一的状态改变信号（避免重入问题）
+    emit undoRedoStateChanged(canUndoNow, canRedoNow);
     emit undoTextChanged(undoText);
     emit redoTextChanged(redoText);
 }

@@ -90,16 +90,11 @@ void CommandHistoryWidget::setupUI()
 
 void CommandHistoryWidget::connectSignals()
 {
-    // 暂时禁用自动信号连接，避免循环问题
-    /*
     // 连接命令管理器信号
     connect(m_commandManager, &CommandManager::historyChanged,
             this, &CommandHistoryWidget::updateHistory);
-    connect(m_commandManager, &CommandManager::canUndoChanged,
-            this, &CommandHistoryWidget::updateHistory);
-    connect(m_commandManager, &CommandManager::canRedoChanged,
-            this, &CommandHistoryWidget::updateHistory);
-    */
+    connect(m_commandManager, &CommandManager::undoRedoStateChanged,
+            this, [this](bool, bool){ updateHistory(); });
 
     // 连接列表点击事件
     connect(m_undoList, &QListWidget::itemClicked,

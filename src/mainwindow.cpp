@@ -1,43 +1,49 @@
 #include "mainwindow.hpp"
 #include "ui_mainwindow.h"
 
+// 核心节点模型
 #include "OpenExcelModel.hpp"
 #include "SelectSheetModel.hpp"
 #include "ReadCellModel.hpp"
-#include "DisplayCellModel.hpp"
 #include "ReadRangeModel.hpp"
-#include "DisplayRangeModel.hpp"
-#include "StringCompareModel.hpp"
-#include "DisplayBooleanModel.hpp"
-
-#include "DisplayRowModel.hpp"
-#include "RangeInfoModel.hpp"
-#include "SmartLoopProcessorModel.hpp"
-#include "DisplayCellListModel.hpp"
 #include "SaveExcelModel.hpp"
+#include "SmartLoopProcessorModel.hpp"
+#include "StringCompareModel.hpp"
+
+// 显示节点模型
+#include "DisplayCellModel.hpp"
+#include "DisplayRangeModel.hpp"
+#include "DisplayBooleanModel.hpp"
+#include "DisplayRowModel.hpp"
+#include "DisplayCellListModel.hpp"
+#include "RangeInfoModel.hpp"
+
+// 系统组件
 #include "IPropertyProvider.hpp"
 #include "PropertyWidget.hpp"
 #include "ErrorHandler.hpp"
 #include "DataValidator.hpp"
 #include "CommandManager.hpp"
 #include "NodeCommands.hpp"
+#include "ModernToolBar.hpp"
+
+// QtNodes
 #include <QtNodes/ConnectionStyle>
 #include <QtNodes/NodeStyle>
 #include <QtNodes/DataFlowGraphicsScene>
 
-
-
+// Qt核心
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QJsonDocument>
-#include <QMenu>
-#include <QAction>
-#include <QInputDialog>
-#include <limits>
 #include <QJsonObject>
 #include <QStandardPaths>
-#include <QToolBar>
+#include <QInputDialog>
+
+// Qt界面
+#include <QMenu>
 #include <QAction>
+#include <QToolBar>
 #include <QSpinBox>
 #include <QComboBox>
 #include <QCheckBox>
@@ -53,10 +59,10 @@ MainWindow::MainWindow(QWidget* parent)
       , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    
     setupNodeEditor();
-    setupToolbar();
+    setupModernToolbar();
     setupPropertyPanel();
-    connectMenuActions();
 }
 
 MainWindow::~MainWindow()
@@ -108,6 +114,8 @@ void MainWindow::setupNodeEditor()
                 }
             });
     
+
+    
     QLayout* containerLayout = ui->nodeEditorHost->layout();
     if (!containerLayout) {
         containerLayout = new QVBoxLayout(ui->nodeEditorHost);
@@ -138,72 +146,58 @@ std::shared_ptr<QtNodes::NodeDelegateModelRegistry> MainWindow::registerDataMode
     return ret;
 }
 
-void MainWindow::setupToolbar()
+void MainWindow::setupModernToolbar()
 {
-    // 创建工具栏
-    QToolBar* toolbar = addToolBar(tr("执行控制"));
-    toolbar->setObjectName("ExecutionToolbar");
+    // 创建现代化工具栏
+    m_modernToolBar = new ModernToolBar(this);
+    
+    // 将工具栏添加到主窗口
+    addToolBar(Qt::TopToolBarArea, m_modernToolBar);
+    
+    // 连接文件操作信号
+    connect(m_modernToolBar, &ModernToolBar::newFileRequested, this, &MainWindow::onNewFile);
+    connect(m_modernToolBar, &ModernToolBar::openFileRequested, this, &MainWindow::onOpenFile);
+    connect(m_modernToolBar, &ModernToolBar::saveFileRequested, this, &MainWindow::onSaveFile);
+    
+    // 连接编辑操作信号
+    connect(m_modernToolBar, &ModernToolBar::undoRequested, this, &MainWindow::onUndoClicked);
+    connect(m_modernToolBar, &ModernToolBar::redoRequested, this, &MainWindow::onRedoClicked);
+    
+    // 连接执行控制信号
+    connect(m_modernToolBar, &ModernToolBar::runRequested, this, &MainWindow::onRunClicked);
+    connect(m_modernToolBar, &ModernToolBar::pauseRequested, this, &MainWindow::onPauseClicked);
+    connect(m_modernToolBar, &ModernToolBar::stopRequested, this, &MainWindow::onStopClicked);
 
-    // 运行按钮
-    QAction* runAction = toolbar->addAction(tr("▶ 运行"));
-    runAction->setToolTip(tr("开始执行流程 (F5)\n加载文件后点击此按钮开始处理数据"));
-    runAction->setShortcut(QKeySequence("F5"));
-    connect(runAction, &QAction::triggered, this, &MainWindow::onRunClicked);
-
-    // 暂停按钮
-    QAction* pauseAction = toolbar->addAction(tr("⏸ 暂停"));
-    pauseAction->setToolTip(tr("暂停执行"));
-    pauseAction->setEnabled(false);
-    connect(pauseAction, &QAction::triggered, this, &MainWindow::onPauseClicked);
-
-    // 停止按钮
-    QAction* stopAction = toolbar->addAction(tr("⏹ 停止"));
-    stopAction->setToolTip(tr("停止执行"));
-    stopAction->setEnabled(false);
-    connect(stopAction, &QAction::triggered, this, &MainWindow::onStopClicked);
-
-    // 分隔符
-    toolbar->addSeparator();
-
-    // 撤销按钮
-    QAction* undoAction = toolbar->addAction(tr("↶ 撤销"));
-    undoAction->setToolTip(tr("撤销上一个操作 (Ctrl+Z)"));
-    undoAction->setShortcut(QKeySequence::Undo);
-    undoAction->setEnabled(false);
-    connect(undoAction, &QAction::triggered, this, &MainWindow::onUndoClicked);
-
-    // 重做按钮
-    QAction* redoAction = toolbar->addAction(tr("↷ 重做"));
-    redoAction->setToolTip(tr("重做下一个操作 (Ctrl+Y)"));
-    redoAction->setShortcut(QKeySequence::Redo);
-    redoAction->setEnabled(false);
-    connect(redoAction, &QAction::triggered, this, &MainWindow::onRedoClicked);
-
-    // 连接命令管理器信号
-    auto& commandManager = CommandManager::instance();
-    connect(&commandManager, &CommandManager::canUndoChanged, undoAction, &QAction::setEnabled);
-    connect(&commandManager, &CommandManager::canRedoChanged, redoAction, &QAction::setEnabled);
-    connect(&commandManager, &CommandManager::undoTextChanged, [undoAction](const QString& text) {
-        if (text.isEmpty()) {
-            undoAction->setToolTip(tr("撤销 (Ctrl+Z)"));
-        } else {
-            undoAction->setToolTip(text + tr(" (Ctrl+Z)"));
+    
+    // 连接视图控制信号
+    connect(m_modernToolBar, &ModernToolBar::zoomFitRequested, this, [this](){
+        if (m_graphicsView) {
+            m_graphicsView->fitInView(m_graphicsScene->itemsBoundingRect(), Qt::KeepAspectRatio);
         }
     });
-    connect(&commandManager, &CommandManager::redoTextChanged, [redoAction](const QString& text) {
-        if (text.isEmpty()) {
-            redoAction->setToolTip(tr("重做 (Ctrl+Y)"));
-        } else {
-            redoAction->setToolTip(text + tr(" (Ctrl+Y)"));
+    connect(m_modernToolBar, &ModernToolBar::zoomInRequested, this, [this](){
+        if (m_graphicsView) {
+            m_graphicsView->scale(1.2, 1.2);
+        }
+    });
+    connect(m_modernToolBar, &ModernToolBar::zoomOutRequested, this, [this](){
+        if (m_graphicsView) {
+            m_graphicsView->scale(0.8, 0.8);
+        }
+    });
+
+    
+    // 连接命令管理器信号到工具栏（使用统一信号避免重入问题）
+    auto& commandManager = CommandManager::instance();
+    connect(&commandManager, &CommandManager::undoRedoStateChanged, [this](bool canUndo, bool canRedo){
+        if (m_modernToolBar) {
+            m_modernToolBar->updateUndoRedoState(canUndo, canRedo);
         }
     });
     
-    // 保存按钮引用以便后续控制
-    runAction->setObjectName("runAction");
-    pauseAction->setObjectName("pauseAction");
-    stopAction->setObjectName("stopAction");
-    undoAction->setObjectName("undoAction");
-    redoAction->setObjectName("redoAction");
+    // 初始化状态
+    m_modernToolBar->updateExecutionState(false);
+    m_modernToolBar->updateUndoRedoState(false, false);
 }
 
 void MainWindow::setupPropertyPanel()
@@ -218,39 +212,9 @@ void MainWindow::setupPropertyPanel()
     qDebug() << "MainWindow: Property panel setup completed using UI design";
 }
 
-void MainWindow::connectMenuActions()
-{
-    // 连接菜单动作
-    connect(ui->actionNew, &QAction::triggered, this, &MainWindow::onActionNew);
-    connect(ui->actionOpen, &QAction::triggered, this, &MainWindow::onActionOpen);
-    connect(ui->actionSave, &QAction::triggered, this, &MainWindow::onActionSave);
-    connect(ui->actionExit, &QAction::triggered, this, &MainWindow::onActionExit);
-    
-    // 连接撤销重做菜单项
-    connect(ui->actionUndo, &QAction::triggered, this, &MainWindow::onUndoClicked);
-    connect(ui->actionRedo, &QAction::triggered, this, &MainWindow::onRedoClicked);
-    
-    // 连接命令管理器信号到菜单项
-    auto& commandManager = CommandManager::instance();
-    connect(&commandManager, &CommandManager::canUndoChanged, ui->actionUndo, &QAction::setEnabled);
-    connect(&commandManager, &CommandManager::canRedoChanged, ui->actionRedo, &QAction::setEnabled);
-    connect(&commandManager, &CommandManager::undoTextChanged, [this](const QString& text) {
-        if (text.isEmpty()) {
-            ui->actionUndo->setText(tr("撤销(&U)"));
-        } else {
-            ui->actionUndo->setText(text);
-        }
-    });
-    connect(&commandManager, &CommandManager::redoTextChanged, [this](const QString& text) {
-        if (text.isEmpty()) {
-            ui->actionRedo->setText(tr("重做(&R)"));
-        } else {
-            ui->actionRedo->setText(text);
-        }
-    });
-}
 
-void MainWindow::onActionNew()
+
+void MainWindow::onNewFile()
 {
     // 清空当前图形 - 删除所有节点
     if (m_graphModel) {
@@ -263,7 +227,7 @@ void MainWindow::onActionNew()
     ui->statusbar->showMessage(tr("新建流程，拖拽节点开始设计"), 0);
 }
 
-void MainWindow::onActionOpen()
+void MainWindow::onOpenFile()
 {
     QString fileName = QFileDialog::getOpenFileName(
         this,
@@ -277,7 +241,7 @@ void MainWindow::onActionOpen()
     }
 }
 
-void MainWindow::onActionSave()
+void MainWindow::onSaveFile()
 {
     QString fileName = QFileDialog::getSaveFileName(
         this,
@@ -289,11 +253,6 @@ void MainWindow::onActionSave()
     if (!fileName.isEmpty()) {
         saveToFile(fileName);
     }
-}
-
-void MainWindow::onActionExit()
-{
-    close();
 }
 
 void MainWindow::saveToFile(const QString& fileName)
@@ -366,10 +325,10 @@ void MainWindow::onRunClicked()
     qDebug() << "MainWindow: Run button clicked";
     setGlobalExecutionState(true);
 
-    // 更新工具栏按钮状态
-    findChild<QAction*>("runAction")->setEnabled(false);
-    findChild<QAction*>("pauseAction")->setEnabled(true);
-    findChild<QAction*>("stopAction")->setEnabled(true);
+    // 更新现代化工具栏状态
+    if (m_modernToolBar) {
+        m_modernToolBar->updateExecutionState(true);
+    }
 
     // 重新触发数据流处理
     triggerDataFlow();
@@ -382,10 +341,10 @@ void MainWindow::onPauseClicked()
     qDebug() << "MainWindow: Pause button clicked";
     setGlobalExecutionState(false);
 
-    // 更新工具栏按钮状态
-    findChild<QAction*>("runAction")->setEnabled(true);
-    findChild<QAction*>("pauseAction")->setEnabled(false);
-    findChild<QAction*>("stopAction")->setEnabled(true);
+    // 更新现代化工具栏状态
+    if (m_modernToolBar) {
+        m_modernToolBar->updateExecutionState(false);
+    }
 
     ui->statusbar->showMessage(tr("流程已暂停"), 3000);
 }
@@ -395,10 +354,10 @@ void MainWindow::onStopClicked()
     qDebug() << "MainWindow: Stop button clicked";
     setGlobalExecutionState(false);
 
-    // 更新工具栏按钮状态
-    findChild<QAction*>("runAction")->setEnabled(true);
-    findChild<QAction*>("pauseAction")->setEnabled(false);
-    findChild<QAction*>("stopAction")->setEnabled(false);
+    // 更新现代化工具栏状态
+    if (m_modernToolBar) {
+        m_modernToolBar->updateExecutionState(false);
+    }
 
     ui->statusbar->showMessage(tr("流程已停止"), 3000);
 }
@@ -571,6 +530,8 @@ void MainWindow::createNodeWithCommand(const QString& nodeType, const QPointF& p
         ui->statusbar->showMessage(tr("创建节点失败"), 2000);
     }
 }
+
+
 
 
 
@@ -889,24 +850,31 @@ void MainWindow::showAllConnectionsForDeletion()
     QList<QtNodes::ConnectionId> connections;
 
     for (auto nodeId : allNodes) {
-        auto nodeConnections = m_graphModel->allConnectionIds(nodeId);
-        for (auto connectionId : nodeConnections) {
-            auto outNodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(connectionId.outNodeId);
-            auto inNodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(connectionId.inNodeId);
+        auto nodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(nodeId);
+        if (!nodeDelegate) continue;
+        
+        // 检查所有输出端口的连接
+        unsigned int outputPorts = nodeDelegate->nPorts(QtNodes::PortType::Out);
+        for (unsigned int portIndex = 0; portIndex < outputPorts; ++portIndex) {
+            auto nodeConnections = m_graphModel->connections(nodeId, QtNodes::PortType::Out, portIndex);
+            for (auto connectionId : nodeConnections) {
+                auto outNodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(connectionId.outNodeId);
+                auto inNodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(connectionId.inNodeId);
 
-            if (outNodeDelegate && inNodeDelegate) {
-                QString outPortType = getPortTypeDescription(outNodeDelegate, QtNodes::PortType::Out, connectionId.outPortIndex);
-                QString inPortType = getPortTypeDescription(inNodeDelegate, QtNodes::PortType::In, connectionId.inPortIndex);
+                if (outNodeDelegate && inNodeDelegate) {
+                    QString outPortType = getPortTypeDescription(outNodeDelegate, QtNodes::PortType::Out, connectionId.outPortIndex);
+                    QString inPortType = getPortTypeDescription(inNodeDelegate, QtNodes::PortType::In, connectionId.inPortIndex);
 
-                QString description = QString("%1[%2:%3] → %4[%5:%6]")
-                    .arg(outNodeDelegate->name())
-                    .arg(connectionId.outPortIndex)
-                    .arg(outPortType)
-                    .arg(inNodeDelegate->name())
-                    .arg(connectionId.inPortIndex)
-                    .arg(inPortType);
-                connectionList.append(description);
-                connections.append(connectionId);
+                    QString description = QString("%1[%2:%3] → %4[%5:%6]")
+                        .arg(outNodeDelegate->name())
+                        .arg(connectionId.outPortIndex)
+                        .arg(outPortType)
+                        .arg(inNodeDelegate->name())
+                        .arg(connectionId.inPortIndex)
+                        .arg(inPortType);
+                    connectionList.append(description);
+                    connections.append(connectionId);
+                }
             }
         }
     }
