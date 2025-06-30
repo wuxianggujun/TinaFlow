@@ -74,11 +74,17 @@ bool CommandManager::executeCommand(std::unique_ptr<Command> command)
         m_mergeTimer->start(m_mergeTimeout);
     }
 
+    // 重新启用信号，但优化发射顺序避免循环
     updateSignals();
 
+    // 只发射必要的信号
     emit commandExecuted(commandDescription);
-    emit historyChanged();
     emit saveStateChanged(m_hasUnsavedChanges);
+    
+    // historyChanged信号单独发射，避免与其他信号冲突
+    QMetaObject::invokeMethod(this, [this]() {
+        emit historyChanged();
+    }, Qt::QueuedConnection);
     
     return true;
 }

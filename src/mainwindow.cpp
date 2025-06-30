@@ -39,6 +39,7 @@
 #include <QJsonObject>
 #include <QStandardPaths>
 #include <QInputDialog>
+#include <limits>
 
 // Qt界面
 #include <QMenu>
@@ -50,6 +51,7 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QFrame>
+#include <QShortcut>
 
 // 静态成员变量定义
 bool MainWindow::s_globalExecutionEnabled = false;
@@ -63,6 +65,7 @@ MainWindow::MainWindow(QWidget* parent)
     setupNodeEditor();
     setupModernToolbar();
     setupPropertyPanel();
+    setupKeyboardShortcuts();
 }
 
 MainWindow::~MainWindow()
@@ -82,11 +85,11 @@ void MainWindow::setupNodeEditor()
     // 应用自定义样式
     setupCustomStyles();
 
-    // 连接节点选择事件
+    // 重新启用节点选择事件，使用队列连接避免循环调用
     connect(m_graphicsScene, &QtNodes::DataFlowGraphicsScene::nodeSelected,
-            this, &MainWindow::onNodeSelected);
+            this, &MainWindow::onNodeSelected, Qt::QueuedConnection);
     connect(m_graphicsScene, &QtNodes::DataFlowGraphicsScene::nodeClicked,
-            this, &MainWindow::onNodeSelected);
+            this, &MainWindow::onNodeSelected, Qt::QueuedConnection);
 
     // 连接右键菜单事件
     connect(m_graphicsView, &TinaFlowGraphicsView::nodeContextMenuRequested,
@@ -96,23 +99,39 @@ void MainWindow::setupNodeEditor()
     connect(m_graphicsView, &TinaFlowGraphicsView::sceneContextMenuRequested,
             this, &MainWindow::showSceneContextMenu);
 
-    // 连接数据更新事件，用于刷新属性面板
+    // 重新启用数据更新事件，使用队列连接并添加防护逻辑
     connect(m_graphModel.get(), &QtNodes::DataFlowGraphModel::inPortDataWasSet,
             this, [this](QtNodes::NodeId nodeId, QtNodes::PortType, QtNodes::PortIndex) {
-                // 如果更新的节点是当前选中的节点，刷新属性面板
+                // 如果更新的节点是当前选中的节点，延迟刷新属性面板
                 if (nodeId == m_selectedNodeId) {
-                    refreshCurrentPropertyPanel();
+                    QMetaObject::invokeMethod(this, [this, nodeId]() {
+                        // 再次检查节点是否仍然选中，避免无效刷新
+                        if (nodeId == m_selectedNodeId) {
+                            refreshCurrentPropertyPanel();
+                        }
+                    }, Qt::QueuedConnection);
                 }
-            });
+            }, Qt::QueuedConnection);
 
-    // 连接节点更新事件
+    // 重新启用节点更新事件，但只处理真正需要刷新的情况
     connect(m_graphModel.get(), &QtNodes::DataFlowGraphModel::nodeUpdated,
             this, [this](QtNodes::NodeId nodeId) {
-                // 如果更新的节点是当前选中的节点，刷新属性面板
-                if (nodeId == m_selectedNodeId) {
-                    refreshCurrentPropertyPanel();
+                // 只有当节点已经选中一段时间后才刷新，避免创建时的频繁更新
+                if (nodeId == m_selectedNodeId && m_selectedNodeId != QtNodes::NodeId{}) {
+                    static QDateTime lastUpdate;
+                    QDateTime now = QDateTime::currentDateTime();
+                    // 限制刷新频率，避免过于频繁的更新
+                    if (lastUpdate.isNull() || lastUpdate.msecsTo(now) > 100) {
+                        lastUpdate = now;
+                        QMetaObject::invokeMethod(this, [this, nodeId]() {
+                            // 再次检查节点是否仍然选中
+                            if (nodeId == m_selectedNodeId) {
+                                refreshCurrentPropertyPanel();
+                            }
+                        }, Qt::QueuedConnection);
+                    }
                 }
-            });
+            }, Qt::QueuedConnection);
     
 
     
@@ -173,16 +192,45 @@ void MainWindow::setupModernToolbar()
     connect(m_modernToolBar, &ModernToolBar::zoomFitRequested, this, [this](){
         if (m_graphicsView) {
             m_graphicsView->fitInView(m_graphicsScene->itemsBoundingRect(), Qt::KeepAspectRatio);
+            ui->statusbar->showMessage(tr("视图已适应窗口"), 1000);
         }
     });
     connect(m_modernToolBar, &ModernToolBar::zoomInRequested, this, [this](){
         if (m_graphicsView) {
-            m_graphicsView->scale(1.2, 1.2);
+            // 获取当前变换矩阵
+            QTransform transform = m_graphicsView->transform();
+            double currentScale = transform.m11(); // 获取X轴缩放比例
+            
+            // 设置最大缩放比例为5.0（500%）
+            const double maxScale = 5.0;
+            const double zoomFactor = 1.2;
+            
+            if (currentScale * zoomFactor <= maxScale) {
+                m_graphicsView->scale(zoomFactor, zoomFactor);
+                double newScale = currentScale * zoomFactor;
+                ui->statusbar->showMessage(tr("缩放: %1%").arg(qRound(newScale * 100)), 1000);
+            } else {
+                ui->statusbar->showMessage(tr("已达到最大缩放比例 (500%)"), 2000);
+            }
         }
     });
     connect(m_modernToolBar, &ModernToolBar::zoomOutRequested, this, [this](){
         if (m_graphicsView) {
-            m_graphicsView->scale(0.8, 0.8);
+            // 获取当前变换矩阵
+            QTransform transform = m_graphicsView->transform();
+            double currentScale = transform.m11(); // 获取X轴缩放比例
+            
+            // 设置最小缩放比例为0.1（10%）
+            const double minScale = 0.1;
+            const double zoomFactor = 0.8;
+            
+            if (currentScale * zoomFactor >= minScale) {
+                m_graphicsView->scale(zoomFactor, zoomFactor);
+                double newScale = currentScale * zoomFactor;
+                ui->statusbar->showMessage(tr("缩放: %1%").arg(qRound(newScale * 100)), 1000);
+            } else {
+                ui->statusbar->showMessage(tr("已达到最小缩放比例 (10%)"), 2000);
+            }
         }
     });
 
@@ -223,8 +271,24 @@ void MainWindow::onNewFile()
             m_graphModel->deleteNode(nodeId);
         }
     }
+    
+    // 清空命令历史 - 新文件不应该有撤销重做历史
+    auto& commandManager = CommandManager::instance();
+    commandManager.clear();
+    
+    // 清空属性面板 - 没有选中的节点
+    clearPropertyPanel();
+    m_selectedNodeId = QtNodes::NodeId{};
+    
+    // 重置视图缩放
+    if (m_graphicsView) {
+        m_graphicsView->resetTransform();
+    }
+    
     setWindowTitle("TinaFlow - 新建");
     ui->statusbar->showMessage(tr("新建流程，拖拽节点开始设计"), 0);
+    
+    qDebug() << "MainWindow: New file created, cleared all history";
 }
 
 void MainWindow::onOpenFile()
@@ -309,6 +373,17 @@ void MainWindow::loadFromFile(const QString& fileName)
 
             // 加载新数据
             m_graphModel->load(jsonDocument.object());
+            
+            // 重置视图缩放并适应内容
+            if (m_graphicsView) {
+                m_graphicsView->resetTransform();
+                // 延迟适应视图，确保节点已完全加载
+                QMetaObject::invokeMethod(this, [this]() {
+                    if (m_graphicsView && m_graphicsScene) {
+                        m_graphicsView->fitInView(m_graphicsScene->itemsBoundingRect(), Qt::KeepAspectRatio);
+                    }
+                }, Qt::QueuedConnection);
+            }
 
             setWindowTitle(QString("TinaFlow - %1").arg(QFileInfo(fileName).baseName()));
             ui->statusbar->showMessage(tr("流程已加载，点击运行按钮(F5)开始执行"), 0);
@@ -900,21 +975,62 @@ void MainWindow::showAllConnectionsForDeletion()
 void MainWindow::duplicateSelectedNode()
 {
     if (m_selectedNodeId != QtNodes::NodeId{}) {
-        // 简化的复制实现
-        // 实际应用中需要获取节点类型和属性
+        // 获取原节点的信息
+        auto nodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(m_selectedNodeId);
+        if (!nodeDelegate) {
+            ui->statusbar->showMessage(tr("复制节点失败：无法获取节点信息"), 2000);
+            return;
+        }
 
-            // 获取原节点位置并偏移
-            QVariant posVariant = m_graphModel->nodeData(m_selectedNodeId, QtNodes::NodeRole::Position);
-            QPointF originalPos = posVariant.toPointF();
-            QPointF newPos = originalPos + QPointF(50, 50); // 偏移50像素
+        // 获取节点的真实类型
+        QString nodeType = nodeDelegate->name();
         
-        // 使用命令系统创建新节点（暂时使用固定类型）
-        auto command = std::make_unique<CreateNodeCommand>(m_graphicsScene, "DisplayCell", newPos);
+        // 获取原节点位置并偏移
+        QVariant posVariant = m_graphModel->nodeData(m_selectedNodeId, QtNodes::NodeRole::Position);
+        QPointF originalPos = posVariant.toPointF();
+        QPointF newPos = originalPos + QPointF(50, 50); // 偏移50像素
+        
+        qDebug() << "MainWindow: Duplicating node of type:" << nodeType << "at position:" << newPos;
+        
+        // 使用命令系统创建相同类型的新节点
+        auto command = std::make_unique<CreateNodeCommand>(m_graphicsScene, nodeType, newPos);
         auto& commandManager = CommandManager::instance();
         
+        // 保存原节点的完整数据（包括属性）
+        QJsonObject originalNodeData = m_graphModel->saveNode(m_selectedNodeId);
+        
         if (commandManager.executeCommand(std::move(command))) {
-            ui->statusbar->showMessage(tr("节点已复制"), 2000);
-            // TODO: 复制节点的属性设置
+            // 获取新创建的节点ID（应该是最后一个创建的）
+            auto allNodeIds = m_graphModel->allNodeIds();
+            QtNodes::NodeId newNodeId;
+            
+            // 找到新创建的节点（位置最接近newPos的节点）
+            double minDistance = std::numeric_limits<double>::max();
+            for (const auto& nodeId : allNodeIds) {
+                QVariant posVar = m_graphModel->nodeData(nodeId, QtNodes::NodeRole::Position);
+                QPointF nodePos = posVar.toPointF();
+                double distance = QPointF(nodePos - newPos).manhattanLength();
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    newNodeId = nodeId;
+                }
+            }
+            
+            // 恢复节点属性（除了位置）
+            if (newNodeId != QtNodes::NodeId{} && !originalNodeData.isEmpty()) {
+                // 创建一个新的数据对象，保留新位置
+                QJsonObject newNodeData = originalNodeData;
+                newNodeData.remove("position"); // 移除位置信息，保持新位置
+                
+                // 应用属性到新节点
+                auto newNodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(newNodeId);
+                if (newNodeDelegate) {
+                    newNodeDelegate->load(newNodeData);
+                    qDebug() << "MainWindow: Copied properties to new node" << newNodeId;
+                }
+            }
+            
+            ui->statusbar->showMessage(tr("已复制 %1 节点（包含属性）").arg(nodeDelegate->caption()), 2000);
         } else {
             ui->statusbar->showMessage(tr("复制节点失败"), 2000);
         }
@@ -995,4 +1111,40 @@ void MainWindow::setStyle()
     }
   }
   )");
+}
+
+void MainWindow::setupKeyboardShortcuts()
+{
+    // 缩放快捷键
+    QShortcut* zoomInShortcut = new QShortcut(QKeySequence("Ctrl++"), this);
+    connect(zoomInShortcut, &QShortcut::activated, this, [this](){
+        if (m_modernToolBar) {
+            emit m_modernToolBar->zoomInRequested();
+        }
+    });
+    
+    QShortcut* zoomOutShortcut = new QShortcut(QKeySequence("Ctrl+-"), this);
+    connect(zoomOutShortcut, &QShortcut::activated, this, [this](){
+        if (m_modernToolBar) {
+            emit m_modernToolBar->zoomOutRequested();
+        }
+    });
+    
+    QShortcut* zoomFitShortcut = new QShortcut(QKeySequence("Ctrl+0"), this);
+    connect(zoomFitShortcut, &QShortcut::activated, this, [this](){
+        if (m_modernToolBar) {
+            emit m_modernToolBar->zoomFitRequested();
+        }
+    });
+    
+    // 重置缩放快捷键
+    QShortcut* resetZoomShortcut = new QShortcut(QKeySequence("Ctrl+1"), this);
+    connect(resetZoomShortcut, &QShortcut::activated, this, [this](){
+        if (m_graphicsView) {
+            m_graphicsView->resetTransform();
+            ui->statusbar->showMessage(tr("缩放已重置为 100%"), 1000);
+        }
+    });
+    
+    qDebug() << "MainWindow: Keyboard shortcuts setup completed";
 }

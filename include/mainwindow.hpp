@@ -55,6 +55,7 @@ private:
     void setupNodeEditor();
     void setupModernToolbar();
     void setupPropertyPanel();
+    void setupKeyboardShortcuts();
     void setupCustomStyles();
     void saveToFile(const QString& fileName);
     void loadFromFile(const QString& fileName);

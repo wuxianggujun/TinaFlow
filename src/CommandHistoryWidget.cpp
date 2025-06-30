@@ -5,7 +5,6 @@
 #include <QMessageBox>
 #include <QListWidgetItem>
 #include <QIcon>
-#include <QTimer>
 
 CommandHistoryWidget::CommandHistoryWidget(QWidget* parent)
     : QWidget(parent)
@@ -13,8 +12,8 @@ CommandHistoryWidget::CommandHistoryWidget(QWidget* parent)
 {
     setupUI();
     connectSignals();
-    // 延迟更新历史，避免在构造时触发信号
-    QTimer::singleShot(0, this, &CommandHistoryWidget::updateHistory);
+    // 直接更新历史，不使用QTimer::singleShot避免卡死
+    updateHistory();
 }
 
 void CommandHistoryWidget::setupUI()
@@ -90,11 +89,16 @@ void CommandHistoryWidget::setupUI()
 
 void CommandHistoryWidget::connectSignals()
 {
-    // 连接命令管理器信号
+    // 重新启用命令管理器信号，使用队列连接避免循环调用
     connect(m_commandManager, &CommandManager::historyChanged,
-            this, &CommandHistoryWidget::updateHistory);
+            this, &CommandHistoryWidget::updateHistory, Qt::QueuedConnection);
     connect(m_commandManager, &CommandManager::undoRedoStateChanged,
-            this, [this](bool, bool){ updateHistory(); });
+            this, [this](bool, bool){ 
+                // 延迟更新，避免频繁调用
+                QMetaObject::invokeMethod(this, [this](){
+                    updateHistory();
+                }, Qt::QueuedConnection);
+            });
 
     // 连接列表点击事件
     connect(m_undoList, &QListWidget::itemClicked,
@@ -153,6 +157,12 @@ void CommandHistoryWidget::updateHistory()
 
 void CommandHistoryWidget::onHistoryItemClicked(int index)
 {
+    // 临时断开信号连接，避免在批量操作时反复更新UI
+    disconnect(m_commandManager, &CommandManager::historyChanged,
+               this, &CommandHistoryWidget::updateHistory);
+    disconnect(m_commandManager, &CommandManager::undoRedoStateChanged,
+               this, nullptr);
+    
     if (index >= 0) {
         // 撤销到指定状态
         for (int i = 0; i < index; ++i) {
@@ -170,7 +180,13 @@ void CommandHistoryWidget::onHistoryItemClicked(int index)
         }
     }
     
-    // 手动更新一次
+    // 重新连接信号
+    connect(m_commandManager, &CommandManager::historyChanged,
+            this, &CommandHistoryWidget::updateHistory);
+    connect(m_commandManager, &CommandManager::undoRedoStateChanged,
+            this, [this](bool, bool){ updateHistory(); });
+    
+    // 最后更新一次UI
     updateHistory();
 }
 

@@ -8,7 +8,6 @@
 #include <QObject>
 #include <QMessageBox>
 #include <QWidget>
-#include <QTimer>
 #include <QQueue>
 #include <QMutex>
 #include <QDateTime>

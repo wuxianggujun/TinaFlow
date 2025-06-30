@@ -13,7 +13,6 @@
 #include <QComboBox>
 #include <qgraphicsproxywidget.h>
 #include <QHBoxLayout>
-#include <QTimer>
 
 #include "QtNodes/internal/ConnectionGraphicsObject.hpp"
 

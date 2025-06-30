@@ -14,7 +14,6 @@
 #include <QLineEdit>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QTimer>
 #include <QDebug>
 
 /**

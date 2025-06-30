@@ -10,7 +10,6 @@
 #include <QActionGroup>
 #include <QToolButton>
 #include <QButtonGroup>
-#include <QTimer>
 #include <QMenu>
 
 class MainWindow;

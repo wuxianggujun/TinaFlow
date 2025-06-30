@@ -251,8 +251,8 @@ protected:
                     m_filePath = newPath.toStdString();
                     m_lineEdit->setText(QFileInfo(newPath).fileName());
                     m_lineEdit->setToolTip(newPath);
-                    compute(); // 重新计算数据
-                    qDebug() << "OpenExcelModel: File path changed to" << newPath;
+                    // 不在属性面板创建时调用compute()，避免循环调用导致卡死
+                    qDebug() << "OpenExcelModel: File path changed to" << newPath << "(no auto execution)";
                 }
             });
 
@@ -286,10 +286,8 @@ protected:
                 m_lineEdit->setText(QFileInfo(newPath).fileName());
                 m_lineEdit->setToolTip(newPath);
 
-                // 重新计算数据
-                compute();
-
-                qDebug() << "OpenExcelModel: File path changed to" << newPath;
+                // 不自动执行compute()，避免在属性面板操作时导致意外的文件加载
+                qDebug() << "OpenExcelModel: File path changed to" << newPath << "(no auto execution)";
             }
         }
     }
