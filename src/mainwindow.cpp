@@ -410,17 +410,10 @@ void MainWindow::updatePropertyPanel(QtNodes::NodeId nodeId)
     if (nodeModel) {
         auto* propertyProvider = dynamic_cast<IPropertyProvider*>(nodeModel);
         if (propertyProvider) {
-            // 尝试使用新的PropertyWidget系统
+            // 使用新的PropertyWidget系统
             auto* propertyWidget = PropertyPanelManager::createPropertyPanel(contentLayout);
-            if (propertyProvider->createPropertyPanel(propertyWidget)) {
-                hasProperties = true;
-                qDebug() << "MainWindow: Used new PropertyWidget system for node" << nodeId;
-            } else {
-                // 回退到旧系统
-                propertyWidget->deleteLater();
-                hasProperties = propertyProvider->createPropertyWidget(contentLayout, false);
-                qDebug() << "MainWindow: Used legacy property system for node" << nodeId;
-            }
+            hasProperties = propertyProvider->createPropertyPanel(propertyWidget);
+            qDebug() << "MainWindow: Used PropertyWidget system for node" << nodeId;
         }
     }
 

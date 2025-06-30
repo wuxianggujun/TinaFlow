@@ -7,6 +7,7 @@
 #include "BaseNodeModel.hpp"
 #include "data/CellData.hpp"
 #include "data/BooleanData.hpp"
+#include "PropertyWidget.hpp"
 
 #include <QLineEdit>
 #include <QComboBox>
@@ -176,72 +177,7 @@ protected:
         }
     }
 
-    // 实现IPropertyProvider接口
-    bool createPropertyWidget(QVBoxLayout* parent, bool editable = false) override
-    {
-        addTitle(parent, "字符串比较设置");
-        addDescription(parent, "设置比较操作和目标值，输出True/False结果");
 
-        if (editable) {
-            // 可编辑模式
-            QStringList operations = {"等于", "不等于", "包含", "不包含", "开始于", "结束于"};
-            addEditableComboBox(parent, "比较操作:", operations,
-                m_operationCombo->currentIndex(), "operation", this);
-
-            addEditableLineEdit(parent, "比较值:", m_valueEdit->text(), "compareValue", this);
-
-            addEditableCheckBox(parent, "区分大小写", m_caseSensitive, "caseSensitive", this);
-
-        } else {
-            // 只读模式
-            addLabeledWidget(parent, "比较操作:", new QLabel(
-                m_operationCombo->currentText()
-            ));
-
-            addLabeledWidget(parent, "比较值:", new QLabel(
-                m_valueEdit->text().isEmpty() ? "未设置" : m_valueEdit->text()
-            ));
-
-            addLabeledWidget(parent, "区分大小写:", new QLabel(
-                m_caseSensitive ? "是" : "否"
-            ));
-        }
-
-        // 当前输入数据
-        if (m_cellData && m_cellData->isValid()) {
-            addSeparator(parent);
-            addTitle(parent, "输入数据");
-
-            try {
-                QString address = m_cellData->address();
-                QVariant value = m_cellData->value();
-                auto* inputInfo = new QLabel(QString("单元格: %1\n值: %2")
-                    .arg(address)
-                    .arg(value.toString()));
-                inputInfo->setStyleSheet("color: #666;");
-                inputInfo->setWordWrap(true);
-                parent->addWidget(inputInfo);
-            } catch (...) {
-                auto* errorInfo = new QLabel("无法读取输入数据");
-                errorInfo->setStyleSheet("color: #999;");
-                parent->addWidget(errorInfo);
-            }
-        }
-
-        // 比较结果
-        if (m_result) {
-            addSeparator(parent);
-            addTitle(parent, "比较结果");
-
-            auto* resultInfo = new QLabel(QString("结果: %1")
-                .arg(m_result->value() ? "True" : "False"));
-            resultInfo->setStyleSheet(QString("color: %1; font-weight: bold;")
-                .arg(m_result->value() ? "#28a745" : "#dc3545"));
-            parent->addWidget(resultInfo);
-        }
-
-        return true;
-    }
 
     QString getDisplayName() const override
     {
@@ -251,6 +187,73 @@ protected:
     QString getDescription() const override
     {
         return "比较单元格值与指定字符串，输出布尔结果";
+    }
+
+    // 新的属性面板实现
+    bool createPropertyPanel(PropertyWidget* propertyWidget) override
+    {
+        propertyWidget->addTitle("字符串比较设置");
+        propertyWidget->addDescription("设置比较操作和目标值，输出True/False结果");
+
+        // 添加模式切换按钮
+        propertyWidget->addModeToggleButtons();
+
+        // 比较操作
+        QStringList operations = {"等于", "不等于", "包含", "不包含", "开始于", "结束于", "为空", "不为空"};
+        propertyWidget->addComboProperty("比较操作", operations,
+            m_operationCombo->currentIndex(), "operation",
+            [this](int index) {
+                if (index >= 0 && index < m_operationCombo->count()) {
+                    m_operationCombo->setCurrentIndex(index);
+                    updateComparison();
+                    qDebug() << "StringCompareModel: Operation changed to" << index;
+                }
+            });
+
+        // 比较值
+        propertyWidget->addTextProperty("比较值", m_valueEdit->text(),
+            "compareValue", "输入要比较的值",
+            [this](const QString& newValue) {
+                m_valueEdit->setText(newValue);
+                updateComparison();
+                qDebug() << "StringCompareModel: Compare value changed to" << newValue;
+            });
+
+        // 大小写敏感
+        propertyWidget->addCheckBoxProperty("区分大小写", m_caseSensitive,
+            "caseSensitive",
+            [this](bool checked) {
+                m_caseSensitive = checked;
+                updateComparison();
+                qDebug() << "StringCompareModel: Case sensitive changed to" << checked;
+            });
+
+        // 当前输入数据
+        if (m_cellData && m_cellData->isValid()) {
+            propertyWidget->addSeparator();
+            propertyWidget->addTitle("输入数据");
+
+            try {
+                QString address = m_cellData->address();
+                QVariant value = m_cellData->value();
+                propertyWidget->addInfoProperty("单元格地址", address, "color: #666;");
+                propertyWidget->addInfoProperty("单元格值", value.toString(), "color: #333; font-weight: bold;");
+            } catch (...) {
+                propertyWidget->addInfoProperty("输入数据", "无法读取", "color: #999;");
+            }
+        }
+
+        // 比较结果
+        if (m_result) {
+            propertyWidget->addSeparator();
+            propertyWidget->addTitle("比较结果");
+
+            bool resultValue = m_result->value();
+            QString resultColor = resultValue ? "color: #28a745; font-weight: bold;" : "color: #dc3545; font-weight: bold;";
+            propertyWidget->addInfoProperty("结果", resultValue ? "True" : "False", resultColor);
+        }
+
+        return true;
     }
 
     void onPropertyChanged(const QString& propertyName, const QVariant& value) override
@@ -376,6 +379,7 @@ private:
         }
     }
 
+private:
     QWidget* m_widget;
     QComboBox* m_operationCombo;
     QLineEdit* m_valueEdit;

@@ -163,6 +163,56 @@ protected:
         }
     }
 
+protected:
+    // 重写基类方法，添加单元格特定的属性
+    void addDataSpecificProperties(PropertyWidget* propertyWidget) override
+    {
+        if (!hasValidData()) return;
+
+        try {
+            auto cellData = getData();
+            QString address = cellData->address();
+            QVariant value = cellData->value();
+            QString type = cellData->type().name;
+
+            propertyWidget->addSeparator();
+            propertyWidget->addTitle("单元格信息");
+
+            propertyWidget->addInfoProperty("单元格地址", address, "color: #2E86AB; font-weight: bold;");
+            propertyWidget->addInfoProperty("单元格值", value.toString(), "color: #333; font-weight: bold;");
+            propertyWidget->addInfoProperty("数据类型", type, "color: #666;");
+
+            // 值的详细信息
+            if (!value.toString().isEmpty()) {
+                propertyWidget->addSeparator();
+                propertyWidget->addTitle("值详情");
+
+                QString valueLength = QString("长度: %1 字符").arg(value.toString().length());
+                propertyWidget->addInfoProperty("字符统计", valueLength, "color: #666; font-size: 11px;");
+
+                // 如果是数字，显示数字信息
+                bool isNumber;
+                double numValue = value.toDouble(&isNumber);
+                if (isNumber) {
+                    propertyWidget->addInfoProperty("数值", QString::number(numValue, 'f', 6), "color: #007acc;");
+                }
+            }
+
+        } catch (const std::exception& e) {
+            propertyWidget->addInfoProperty("错误", QString("无法读取数据: %1").arg(e.what()), "color: #dc3545;");
+        }
+    }
+
+    QString getDisplayName() const override
+    {
+        return "显示单元格";
+    }
+
+    QString getDescription() const override
+    {
+        return "显示Excel单元格的地址、值和类型信息";
+    }
+
 private:
     QWidget* m_widget;
     QLabel* m_addressLabel;

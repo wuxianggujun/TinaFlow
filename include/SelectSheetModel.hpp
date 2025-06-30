@@ -5,18 +5,19 @@
 #pragma once
 
 
+#include "BaseNodeModel.hpp"
 #include "data/SheetData.hpp"
 #include "data/WorkbookData.hpp"
+#include "PropertyWidget.hpp"
 
 #include <QComboBox>
 #include <qgraphicsproxywidget.h>
 #include <QHBoxLayout>
 #include <QTimer>
-#include <QtNodes/NodeDelegateModel>
 
 #include "QtNodes/internal/ConnectionGraphicsObject.hpp"
 
-class SelectSheetModel : public QtNodes::NodeDelegateModel
+class SelectSheetModel : public BaseNodeModel
 {
     Q_OBJECT
 
@@ -208,6 +209,78 @@ private:
         m_comboBox->blockSignals(false);
     }
 
+protected:
+    // 实现BaseNodeModel的虚函数
+    QString getNodeTypeName() const override
+    {
+        return "SelectSheetModel";
+    }
+
+    // 实现IPropertyProvider接口
+    bool createPropertyPanel(PropertyWidget* propertyWidget) override
+    {
+        propertyWidget->addTitle("工作表选择");
+        propertyWidget->addDescription("从Excel工作簿中选择要操作的工作表");
+
+        // 工作表选择节点只需要显示信息，不需要编辑模式
+
+        // 当前选择的工作表
+        QString currentSheet = m_comboBox->currentText();
+        if (currentSheet.isEmpty() || currentSheet == "请选择工作表") {
+            currentSheet = "未选择";
+        }
+
+        propertyWidget->addInfoProperty("当前工作表", currentSheet,
+            currentSheet == "未选择" ? "color: #999; font-style: italic;" : "color: #333; font-weight: bold;");
+
+        // 可用工作表列表
+        if (m_comboBox->count() > 0 && m_comboBox->isEnabled()) {
+            propertyWidget->addSeparator();
+            propertyWidget->addTitle("可用工作表");
+
+            for (int i = 0; i < m_comboBox->count(); ++i) {
+                QString sheetName = m_comboBox->itemText(i);
+                QString style = (i == m_comboBox->currentIndex()) ?
+                    "color: #007acc; font-weight: bold;" : "color: #666;";
+                propertyWidget->addInfoProperty(QString("工作表 %1").arg(i + 1), sheetName, style);
+            }
+        }
+
+        // 工作簿信息
+        if (m_workbook && m_workbook->isValid()) {
+            propertyWidget->addSeparator();
+            propertyWidget->addTitle("工作簿信息");
+
+            try {
+                auto workbook = m_workbook->workbook();
+                if (workbook) {
+                    int totalSheets = workbook->worksheetCount();
+                    propertyWidget->addInfoProperty("总工作表数", QString::number(totalSheets), "color: #666;");
+                }
+            } catch (...) {
+                propertyWidget->addInfoProperty("工作簿状态", "读取失败", "color: #999;");
+            }
+        } else {
+            propertyWidget->addSeparator();
+            propertyWidget->addInfoProperty("工作簿状态", "未连接Excel文件", "color: #999; font-style: italic;");
+        }
+
+        return true;
+    }
+
+    QString getDisplayName() const override
+    {
+        return "选择工作表";
+    }
+
+    QString getDescription() const override
+    {
+        return "从Excel工作簿中选择要操作的工作表";
+    }
+
+
+
+private:
     QComboBox* m_comboBox;
 
     std::shared_ptr<WorkbookData> m_workbook;

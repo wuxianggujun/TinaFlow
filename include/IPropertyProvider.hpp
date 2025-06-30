@@ -30,19 +30,11 @@ public:
     virtual ~IPropertyProvider() = default;
 
     /**
-     * @brief 创建属性编辑界面（旧版本，保持兼容性）
-     * @param parent 父布局，属性控件将被添加到这个布局中
-     * @param editable 是否创建可编辑的属性界面
-     * @return 是否成功创建了属性界面
-     */
-    virtual bool createPropertyWidget(QVBoxLayout* parent, bool editable = false) = 0;
-
-    /**
-     * @brief 创建新的属性界面（推荐使用）
+     * @brief 创建属性界面
      * @param propertyWidget 属性控件，用于添加属性项
      * @return 是否成功创建了属性界面
      */
-    virtual bool createPropertyPanel(PropertyWidget* propertyWidget) { return false; }
+    virtual bool createPropertyPanel(PropertyWidget* propertyWidget) = 0;
 
     /**
      * @brief 获取节点的显示名称（用于属性面板标题）

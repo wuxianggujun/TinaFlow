@@ -187,6 +187,56 @@ protected:
         }
     }
 
+protected:
+    // 重写基类方法，添加布尔值特定的属性
+    void addDataSpecificProperties(PropertyWidget* propertyWidget) override
+    {
+        if (!hasValidData()) return;
+
+        try {
+            auto booleanData = getData();
+            bool value = booleanData->value();
+            QString description = booleanData->description();
+
+            propertyWidget->addSeparator();
+            propertyWidget->addTitle("布尔值信息");
+
+            // 布尔值显示（带颜色）
+            QString valueColor = value ? "color: #28a745; font-weight: bold;" : "color: #dc3545; font-weight: bold;";
+            QString valueText = value ? "✓ TRUE" : "✗ FALSE";
+            propertyWidget->addInfoProperty("布尔值", valueText, valueColor);
+
+            // 本地化字符串
+            propertyWidget->addInfoProperty("本地化显示", booleanData->localizedString(), "color: #666;");
+
+            // 描述信息
+            if (!description.isEmpty()) {
+                propertyWidget->addInfoProperty("描述", description, "color: #333;");
+            }
+
+            // 统计信息
+            propertyWidget->addSeparator();
+            propertyWidget->addTitle("统计信息");
+
+            QString statusText = value ? "条件满足" : "条件不满足";
+            QString statusColor = value ? "color: #28a745;" : "color: #dc3545;";
+            propertyWidget->addInfoProperty("状态", statusText, statusColor);
+
+        } catch (const std::exception& e) {
+            propertyWidget->addInfoProperty("错误", QString("无法读取数据: %1").arg(e.what()), "color: #dc3545;");
+        }
+    }
+
+    QString getDisplayName() const override
+    {
+        return "显示布尔值";
+    }
+
+    QString getDescription() const override
+    {
+        return "显示布尔值结果，用于条件判断和逻辑运算的可视化";
+    }
+
 private:
     QWidget* m_widget;
     QFrame* m_frame;

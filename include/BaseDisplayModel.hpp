@@ -4,7 +4,8 @@
 
 #pragma once
 
-#include <QtNodes/NodeDelegateModel>
+#include "BaseNodeModel.hpp"
+#include "PropertyWidget.hpp"
 #include <QDebug>
 #include <memory>
 
@@ -22,7 +23,7 @@
  * 3. 重写getDataTypeName()和getNodeTypeName()
  */
 template<typename DataType>
-class BaseDisplayModel : public QtNodes::NodeDelegateModel
+class BaseDisplayModel : public BaseNodeModel
 {
 public:
     BaseDisplayModel() = default;
@@ -90,7 +91,6 @@ public:
 protected:
     // 子类需要实现的纯虚函数
     virtual void updateDisplay() = 0;
-    virtual QString getNodeTypeName() const = 0;
     virtual QString getDataTypeName() const = 0;
     
     // 可选的回调函数，子类可以重写
@@ -110,6 +110,58 @@ protected:
     virtual bool isDataValid(std::shared_ptr<DataType> data) const
     {
         return data != nullptr; // 默认只检查非空
+    }
+
+protected:
+    // 实现BaseNodeModel的虚函数
+    QString getNodeTypeName() const override
+    {
+        return QString("BaseDisplayModel<%1>").arg(DataType().type().name);
+    }
+
+    // 通用的属性面板实现
+    bool createPropertyPanel(PropertyWidget* propertyWidget) override
+    {
+        propertyWidget->addTitle(getDisplayName());
+        propertyWidget->addDescription(getDescription());
+
+        // 显示节点只需要查看模式，不需要模式切换按钮
+
+        // 数据状态信息
+        if (hasValidData()) {
+            propertyWidget->addInfoProperty("数据状态", "已连接", "color: #28a745; font-weight: bold;");
+
+            // 调用子类的具体数据显示
+            addDataSpecificProperties(propertyWidget);
+        } else {
+            propertyWidget->addInfoProperty("数据状态", "未连接", "color: #999; font-style: italic;");
+        }
+
+        // 数据类型信息
+        propertyWidget->addSeparator();
+        propertyWidget->addTitle("数据类型信息");
+        propertyWidget->addInfoProperty("输入类型", DataType().type().name, "color: #666;");
+
+        return true;
+    }
+
+    // 子类可以重写此方法来添加特定的数据属性
+    virtual void addDataSpecificProperties(PropertyWidget* propertyWidget)
+    {
+        Q_UNUSED(propertyWidget);
+        // 默认不添加额外属性
+    }
+
+
+
+    QString getDisplayName() const override
+    {
+        return QString("显示%1").arg(DataType().type().name);
+    }
+
+    QString getDescription() const override
+    {
+        return QString("显示%1类型的数据内容").arg(DataType().type().name);
     }
 
 private:
