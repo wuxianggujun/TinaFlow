@@ -51,7 +51,7 @@ protected:
         if (auto* nodeItem = findNodeItem(item)) {
             // 获取节点ID
             QtNodes::NodeId nodeId = getNodeIdFromItem(nodeItem);
-            if (nodeId != QtNodes::InvalidNodeId) {
+            if (nodeId != QtNodes::NodeId{}) {
                 emit nodeContextMenuRequested(nodeId, scenePos);
                 return;
             }
@@ -124,7 +124,7 @@ private:
             }
         }
         
-        return QtNodes::InvalidNodeId;
+        return QtNodes::NodeId{};
     }
     
     QtNodes::ConnectionId findConnectionIdByGraphicsObject(QtNodes::ConnectionGraphicsObject* connectionObject)
@@ -144,8 +144,7 @@ private:
         }
 
         // 如果没找到，返回无效的ConnectionId
-        return {QtNodes::InvalidNodeId, QtNodes::InvalidPortIndex,
-                QtNodes::InvalidNodeId, QtNodes::InvalidPortIndex};
+        return QtNodes::ConnectionId{};
     }
 
 signals:

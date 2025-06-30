@@ -1,6 +1,7 @@
 #include "CommandManager.hpp"
 #include <QDebug>
 #include <QMutexLocker>
+#include <deque>
 
 CommandManager::CommandManager(QObject* parent)
     : QObject(parent)
@@ -35,9 +36,15 @@ bool CommandManager::executeCommand(std::unique_ptr<Command> command)
     }
     
     // 尝试与上一个命令合并
-    if (m_mergeEnabled && !m_undoStack.empty() && tryMergeCommand(command.get())) {
-        qDebug() << "CommandManager: Command merged with previous command";
-        return true;
+    if (m_mergeEnabled && !m_undoStack.empty() && m_mergeTimer->remainingTime() > 0) {
+        if (tryMergeCommand(command.get())) {
+            qDebug() << "CommandManager: Command merged with previous command";
+            // 重新启动合并计时器
+            if (m_mergeTimeout > 0) {
+                m_mergeTimer->start(m_mergeTimeout);
+            }
+            return true;
+        }
     }
     
     // 执行命令
@@ -90,6 +97,7 @@ bool CommandManager::undo()
     qDebug() << "CommandManager: Undoing command:" << command->getDescription();
     
     if (command->undo()) {
+        QString description = command->getDescription();
         m_redoStack.push(std::move(command));
         
         // 检查是否回到保存点
@@ -101,7 +109,7 @@ bool CommandManager::undo()
 
         updateSignals();
 
-        emit commandUndone(m_redoStack.top()->getDescription());
+        emit commandUndone(description);
         emit historyChanged();
         emit saveStateChanged(m_hasUnsavedChanges);
         
@@ -128,12 +136,13 @@ bool CommandManager::redo()
     qDebug() << "CommandManager: Redoing command:" << command->getDescription();
     
     if (command->redo()) {
+        QString description = command->getDescription();
         m_undoStack.push(std::move(command));
         m_hasUnsavedChanges = true;
         
         updateSignals();
         
-        emit commandRedone(m_undoStack.top()->getDescription());
+        emit commandRedone(description);
         emit historyChanged();
         emit saveStateChanged(m_hasUnsavedChanges);
         
@@ -193,6 +202,9 @@ void CommandManager::clear()
     m_savePointIndex = 0;
     m_hasUnsavedChanges = false;
 
+    // 停止合并计时器
+    m_mergeTimer->stop();
+
     updateSignals();
 
     emit historyChanged();
@@ -250,6 +262,8 @@ void CommandManager::endMacro()
         // 清除重做栈
         clearRedoStack();
         
+        QString description = m_currentMacro->getDescription();
+        
         // 添加到撤销栈
         m_undoStack.push(std::move(m_currentMacro));
         
@@ -261,7 +275,7 @@ void CommandManager::endMacro()
         
         updateSignals();
         
-        emit commandExecuted(m_undoStack.top()->getDescription());
+        emit commandExecuted(description);
         emit historyChanged();
         emit saveStateChanged(m_hasUnsavedChanges);
     }
@@ -280,8 +294,8 @@ QStringList CommandManager::getUndoHistory(int maxCount) const
     QMutexLocker locker(&m_mutex);
 
     QStringList history;
-
-    // 简化实现：只返回最顶层的命令描述
+    
+    // 简化实现：只返回当前可撤销的命令描述
     if (!m_undoStack.empty() && maxCount > 0) {
         history.append(m_undoStack.top()->getDescription());
     }
@@ -294,8 +308,8 @@ QStringList CommandManager::getRedoHistory(int maxCount) const
     QMutexLocker locker(&m_mutex);
 
     QStringList history;
-
-    // 简化实现：只返回最顶层的命令描述
+    
+    // 简化实现：只返回当前可重做的命令描述
     if (!m_redoStack.empty() && maxCount > 0) {
         history.append(m_redoStack.top()->getDescription());
     }
@@ -336,55 +350,67 @@ void CommandManager::updateSignals()
 {
     bool canUndoNow = !m_undoStack.empty();
     bool canRedoNow = !m_redoStack.empty();
+    
+    // 直接计算文本，避免重复加锁
+    QString undoText;
+    QString redoText;
+    
+    if (!m_undoStack.empty()) {
+        undoText = QString("撤销 %1").arg(m_undoStack.top()->getDescription());
+    }
+    
+    if (!m_redoStack.empty()) {
+        redoText = QString("重做 %1").arg(m_redoStack.top()->getDescription());
+    }
 
     emit canUndoChanged(canUndoNow);
     emit canRedoChanged(canRedoNow);
-
-    emit undoTextChanged(getUndoText());
-    emit redoTextChanged(getRedoText());
+    emit undoTextChanged(undoText);
+    emit redoTextChanged(redoText);
 }
 
 void CommandManager::trimUndoStack()
 {
     if (m_undoLimit <= 0) return;
 
-    // 简化实现：如果超过限制，就清空一些旧命令
-    int excessCount = static_cast<int>(m_undoStack.size()) - m_undoLimit;
-    if (excessCount > 0) {
-        // 移除最旧的命令（从底部移除）
-        // 由于std::stack不支持从底部移除，我们简化处理
-        // 实际应用中可以考虑使用std::deque
+    int currentSize = static_cast<int>(m_undoStack.size());
+    if (currentSize <= m_undoLimit) return;
 
-        std::vector<std::unique_ptr<Command>> temp;
-
-        // 保存最新的m_undoLimit个命令
-        int keepCount = m_undoLimit;
-        while (!m_undoStack.empty() && keepCount > 0) {
-            temp.push_back(std::move(const_cast<std::unique_ptr<Command>&>(m_undoStack.top())));
-            m_undoStack.pop();
-            keepCount--;
-        }
-
-        // 清空剩余的命令
-        while (!m_undoStack.empty()) {
-            m_undoStack.pop();
-            if (m_savePointIndex > 0) {
-                m_savePointIndex--;
-            }
-        }
-
-        // 重新压入保留的命令
-        for (int i = static_cast<int>(temp.size()) - 1; i >= 0; --i) {
-            m_undoStack.push(std::move(temp[i]));
-        }
-
-        qDebug() << "CommandManager: Trimmed undo stack to" << m_undoStack.size() << "commands";
+    // 使用deque进行高效的操作
+    std::deque<std::unique_ptr<Command>> commands;
+    
+    // 将所有命令移动到deque中
+    while (!m_undoStack.empty()) {
+        commands.push_front(std::move(const_cast<std::unique_ptr<Command>&>(m_undoStack.top())));
+        m_undoStack.pop();
     }
+    
+    // 计算需要删除的命令数量
+    int toRemove = currentSize - m_undoLimit;
+    
+    // 从前面删除旧命令
+    for (int i = 0; i < toRemove; ++i) {
+        commands.pop_front();
+        // 调整保存点索引
+        if (m_savePointIndex > 0) {
+            m_savePointIndex--;
+        } else {
+            // 如果保存点被删除，标记为有未保存更改
+            m_hasUnsavedChanges = true;
+        }
+    }
+    
+    // 将剩余命令重新放回栈中
+    for (auto it = commands.rbegin(); it != commands.rend(); ++it) {
+        m_undoStack.push(std::move(*it));
+    }
+
+    qDebug() << "CommandManager: Trimmed undo stack from" << currentSize << "to" << m_undoStack.size() << "commands";
 }
 
 bool CommandManager::tryMergeCommand(Command* command)
 {
-    if (m_undoStack.empty() || m_mergeTimer->isActive() == false) {
+    if (m_undoStack.empty()) {
         return false;
     }
 

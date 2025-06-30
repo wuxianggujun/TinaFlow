@@ -11,6 +11,7 @@
 #include <QtNodes/DataFlowGraphicsScene>
 #include <QtNodes/ConnectionIdUtils>
 #include "TinaFlowGraphicsView.hpp"
+#include "CommandHistoryWidget.hpp"
 
 namespace Ui {
 class MainWindow;
@@ -60,6 +61,7 @@ private:
     void updatePropertyPanel(QtNodes::NodeId nodeId);
     void refreshCurrentPropertyPanel(); // 刷新当前选中节点的属性面板
     void clearPropertyPanel();
+    void createNodeWithCommand(const QString& nodeType, const QPointF& position);
 
 
 
@@ -80,6 +82,9 @@ private:
 
     // 属性面板相关（使用UI中现有的tab_properties）
     QWidget* m_currentPropertyWidget;
+    
+    // 命令历史面板
+    CommandHistoryWidget* m_commandHistoryWidget;
 
     // 右键菜单相关
     QtNodes::NodeId m_selectedNodeId;
