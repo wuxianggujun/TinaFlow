@@ -9,11 +9,18 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QFrame>
+#include <QLineEdit>
+#include <QComboBox>
+#include <QCheckBox>
 #include <QString>
+#include <QObject>
+
+// 前向声明
+class PropertyWidget;
 
 /**
  * @brief 属性提供者接口
- * 
+ *
  * 节点模型可以实现这个接口来提供自己的属性编辑界面。
  * 这样就不需要在MainWindow中为每个节点类型手动添加属性编辑方法。
  */
@@ -23,11 +30,19 @@ public:
     virtual ~IPropertyProvider() = default;
 
     /**
-     * @brief 创建属性编辑界面
+     * @brief 创建属性编辑界面（旧版本，保持兼容性）
      * @param parent 父布局，属性控件将被添加到这个布局中
+     * @param editable 是否创建可编辑的属性界面
      * @return 是否成功创建了属性界面
      */
-    virtual bool createPropertyWidget(QVBoxLayout* parent) = 0;
+    virtual bool createPropertyWidget(QVBoxLayout* parent, bool editable = false) = 0;
+
+    /**
+     * @brief 创建新的属性界面（推荐使用）
+     * @param propertyWidget 属性控件，用于添加属性项
+     * @return 是否成功创建了属性界面
+     */
+    virtual bool createPropertyPanel(PropertyWidget* propertyWidget) { return false; }
 
     /**
      * @brief 获取节点的显示名称（用于属性面板标题）
@@ -44,8 +59,14 @@ public:
     /**
      * @brief 属性值改变时的回调（可选）
      * 当用户在属性面板中修改值时会调用此方法
+     * @param propertyName 属性名称
+     * @param value 新的属性值
      */
-    virtual void onPropertyChanged() {}
+    virtual void onPropertyChanged(const QString& propertyName, const QVariant& value)
+    {
+        Q_UNUSED(propertyName);
+        Q_UNUSED(value);
+    }
 };
 
 /**
@@ -111,5 +132,65 @@ protected:
         auto* hLayout = new QHBoxLayout();
         layout->addLayout(hLayout);
         return hLayout;
+    }
+
+    /**
+     * @brief 添加可编辑的文本输入框
+     */
+    QLineEdit* addEditableLineEdit(QVBoxLayout* layout, const QString& label,
+                                   const QString& currentValue, const QString& propertyName,
+                                   IPropertyProvider* provider)
+    {
+        addLabeledWidget(layout, label, nullptr);
+        auto* lineEdit = new QLineEdit(currentValue);
+        layout->addWidget(lineEdit);
+
+        // 连接信号
+        QObject::connect(lineEdit, &QLineEdit::textChanged, [provider, propertyName](const QString& text) {
+            provider->onPropertyChanged(propertyName, text);
+        });
+
+        return lineEdit;
+    }
+
+    /**
+     * @brief 添加可编辑的下拉框
+     */
+    QComboBox* addEditableComboBox(QVBoxLayout* layout, const QString& label,
+                                   const QStringList& options, int currentIndex,
+                                   const QString& propertyName, IPropertyProvider* provider)
+    {
+        addLabeledWidget(layout, label, nullptr);
+        auto* comboBox = new QComboBox();
+        comboBox->addItems(options);
+        comboBox->setCurrentIndex(currentIndex);
+        layout->addWidget(comboBox);
+
+        // 连接信号
+        QObject::connect(comboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
+                        [provider, propertyName](int index) {
+            provider->onPropertyChanged(propertyName, index);
+        });
+
+        return comboBox;
+    }
+
+    /**
+     * @brief 添加可编辑的复选框
+     */
+    QCheckBox* addEditableCheckBox(QVBoxLayout* layout, const QString& label,
+                                   bool currentValue, const QString& propertyName,
+                                   IPropertyProvider* provider)
+    {
+        auto* checkBox = new QCheckBox(label);
+        checkBox->setChecked(currentValue);
+        layout->addWidget(checkBox);
+
+        // 连接信号
+        QObject::connect(checkBox, &QCheckBox::toggled, [provider, propertyName](bool checked) {
+            provider->onPropertyChanged(propertyName, checked);
+        });
+
+        return checkBox;
     }
 };

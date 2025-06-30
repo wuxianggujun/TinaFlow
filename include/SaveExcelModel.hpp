@@ -7,6 +7,7 @@
 #include "BaseNodeModel.hpp"
 #include "data/RangeData.hpp"
 #include "data/BooleanData.hpp"
+#include "PropertyWidget.hpp"
 
 #include <QWidget>
 #include <QVBoxLayout>
@@ -286,30 +287,59 @@ private:
     void saveDataToExcel(const QString& filePath, const QString& sheetName);
 
     // 实现IPropertyProvider接口
-    bool createPropertyWidget(QVBoxLayout* parent) override
+    bool createPropertyWidget(QVBoxLayout* parent, bool editable = false) override
     {
         addTitle(parent, "保存设置");
         addDescription(parent, "配置Excel文件保存参数，数据将自动保存");
 
-        // 文件路径
-        QString filePath = m_filePathEdit->text();
-        if (filePath.isEmpty()) {
-            auto* pathLabel = new QLabel("未设置");
-            pathLabel->setStyleSheet("color: #999; font-style: italic;");
-            addLabeledWidget(parent, "保存路径:", pathLabel);
-        } else {
-            auto* pathLabel = new QLabel(filePath);
-            pathLabel->setStyleSheet("color: #333;");
-            pathLabel->setWordWrap(true);
-            pathLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-            addLabeledWidget(parent, "保存路径:", pathLabel);
-        }
+        if (editable) {
+            // 可编辑模式
+            auto* pathEdit = addEditableLineEdit(parent, "保存路径:",
+                m_filePathEdit->text(), "filePath", this);
+            pathEdit->setPlaceholderText("输入保存路径或点击浏览...");
 
-        // Sheet名称
-        QString sheetName = m_sheetNameEdit->text();
-        auto* sheetLabel = new QLabel(sheetName.isEmpty() ? "未设置" : sheetName);
-        sheetLabel->setStyleSheet(sheetName.isEmpty() ? "color: #999; font-style: italic;" : "color: #333; font-weight: bold;");
-        addLabeledWidget(parent, "Sheet名称:", sheetLabel);
+            // 添加浏览按钮
+            auto* browseLayout = addHorizontalGroup(parent);
+            auto* browseButton = new QPushButton("浏览...");
+            browseLayout->addWidget(browseButton);
+            browseLayout->addStretch();
+
+            connect(browseButton, &QPushButton::clicked, [this, pathEdit]() {
+                QString fileName = QFileDialog::getSaveFileName(
+                    nullptr, "保存Excel文件", "", "Excel文件 (*.xlsx);;所有文件 (*)");
+                if (!fileName.isEmpty()) {
+                    if (!fileName.endsWith(".xlsx", Qt::CaseInsensitive)) {
+                        fileName += ".xlsx";
+                    }
+                    pathEdit->setText(fileName);
+                    onPropertyChanged("filePath", fileName);
+                }
+            });
+
+            // Sheet名称编辑
+            addEditableLineEdit(parent, "Sheet名称:", m_sheetNameEdit->text(), "sheetName", this);
+
+        } else {
+            // 只读模式
+            QString filePath = m_filePathEdit->text();
+            if (filePath.isEmpty()) {
+                auto* pathLabel = new QLabel("未设置");
+                pathLabel->setStyleSheet("color: #999; font-style: italic;");
+                addLabeledWidget(parent, "保存路径:", pathLabel);
+            } else {
+                auto* pathLabel = new QLabel(filePath);
+                pathLabel->setStyleSheet("color: #333;");
+                pathLabel->setWordWrap(true);
+                pathLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+                addLabeledWidget(parent, "保存路径:", pathLabel);
+            }
+
+            // Sheet名称
+            QString sheetName = m_sheetNameEdit->text();
+            auto* sheetLabel = new QLabel(sheetName.isEmpty() ? "未设置" : sheetName);
+            sheetLabel->setStyleSheet(sheetName.isEmpty() ? "color: #999; font-style: italic;" : "color: #333; font-weight: bold;");
+            addLabeledWidget(parent, "Sheet名称:", sheetLabel);
+        }
 
         // 数据信息
         if (m_rangeData && !m_rangeData->isEmpty()) {
@@ -360,6 +390,87 @@ private:
     QString getDescription() const override
     {
         return "将数据自动保存到Excel文件";
+    }
+
+    // 新的属性面板实现
+    bool createPropertyPanel(PropertyWidget* propertyWidget) override
+    {
+        propertyWidget->addTitle("保存设置");
+        propertyWidget->addDescription("配置Excel文件保存参数，数据将自动保存");
+
+        // 添加模式切换按钮
+        propertyWidget->addModeToggleButtons();
+
+        // 文件路径属性
+        propertyWidget->addFilePathProperty("保存路径", m_filePathEdit->text(),
+            "filePath", "Excel文件 (*.xlsx);;所有文件 (*)", true,
+            [this](const QString& newPath) {
+                if (!newPath.isEmpty()) {
+                    m_filePathEdit->setText(newPath);
+                    qDebug() << "SaveExcelModel: File path changed to" << newPath;
+                }
+            });
+
+        // Sheet名称属性
+        propertyWidget->addTextProperty("Sheet名称", m_sheetNameEdit->text(),
+            "sheetName", "输入工作表名称",
+            [this](const QString& newName) {
+                if (!newName.isEmpty()) {
+                    m_sheetNameEdit->setText(newName);
+                    qDebug() << "SaveExcelModel: Sheet name changed to" << newName;
+                }
+            });
+
+        // 数据信息
+        if (m_rangeData && !m_rangeData->isEmpty()) {
+            propertyWidget->addSeparator();
+            propertyWidget->addTitle("数据信息");
+
+            propertyWidget->addInfoProperty("数据大小",
+                QString("%1行 x %2列").arg(m_rangeData->rowCount()).arg(m_rangeData->columnCount()),
+                "color: #666;");
+        }
+
+        // 状态信息
+        propertyWidget->addSeparator();
+        propertyWidget->addTitle("当前状态");
+
+        // 按钮状态解析
+        QString statusText = m_saveButton->text();
+        QString statusColor = "#666;";
+        QString buttonStyle = m_saveButton->styleSheet();
+
+        if (buttonStyle.contains("#d4edda")) {
+            statusColor = "color: #155724; font-weight: bold;"; // 成功
+        } else if (buttonStyle.contains("#f8d7da")) {
+            statusColor = "color: #721c24; font-weight: bold;"; // 失败
+        } else if (buttonStyle.contains("#cce5ff")) {
+            statusColor = "color: #004085; font-weight: bold;"; // 进行中
+        } else if (buttonStyle.contains("#fff3cd")) {
+            statusColor = "color: #856404; font-weight: bold;"; // 警告
+        }
+
+        propertyWidget->addInfoProperty("状态", statusText, statusColor);
+        propertyWidget->addInfoProperty("详细信息", m_statusLabel->text(), "color: #666; font-size: 11px;");
+
+        return true;
+    }
+
+    void onPropertyChanged(const QString& propertyName, const QVariant& value) override
+    {
+        if (propertyName == "filePath") {
+            QString newPath = value.toString();
+            if (!newPath.isEmpty()) {
+                m_filePathEdit->setText(newPath);
+                qDebug() << "SaveExcelModel: File path changed to" << newPath;
+            }
+        } else if (propertyName == "sheetName") {
+            QString newSheetName = value.toString();
+            if (!newSheetName.isEmpty()) {
+                m_sheetNameEdit->setText(newSheetName);
+                qDebug() << "SaveExcelModel: Sheet name changed to" << newSheetName;
+            }
+        }
     }
 
 private:

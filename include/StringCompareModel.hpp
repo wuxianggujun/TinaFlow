@@ -177,20 +177,35 @@ protected:
     }
 
     // 实现IPropertyProvider接口
-    bool createPropertyWidget(QVBoxLayout* parent) override
+    bool createPropertyWidget(QVBoxLayout* parent, bool editable = false) override
     {
         addTitle(parent, "字符串比较设置");
         addDescription(parent, "设置比较操作和目标值，输出True/False结果");
 
-        // 比较操作
-        addLabeledWidget(parent, "比较操作:", new QLabel(
-            m_operationCombo->currentText()
-        ));
+        if (editable) {
+            // 可编辑模式
+            QStringList operations = {"等于", "不等于", "包含", "不包含", "开始于", "结束于"};
+            addEditableComboBox(parent, "比较操作:", operations,
+                m_operationCombo->currentIndex(), "operation", this);
 
-        // 比较值
-        addLabeledWidget(parent, "比较值:", new QLabel(
-            m_valueEdit->text().isEmpty() ? "未设置" : m_valueEdit->text()
-        ));
+            addEditableLineEdit(parent, "比较值:", m_valueEdit->text(), "compareValue", this);
+
+            addEditableCheckBox(parent, "区分大小写", m_caseSensitive, "caseSensitive", this);
+
+        } else {
+            // 只读模式
+            addLabeledWidget(parent, "比较操作:", new QLabel(
+                m_operationCombo->currentText()
+            ));
+
+            addLabeledWidget(parent, "比较值:", new QLabel(
+                m_valueEdit->text().isEmpty() ? "未设置" : m_valueEdit->text()
+            ));
+
+            addLabeledWidget(parent, "区分大小写:", new QLabel(
+                m_caseSensitive ? "是" : "否"
+            ));
+        }
 
         // 当前输入数据
         if (m_cellData && m_cellData->isValid()) {
@@ -236,6 +251,28 @@ protected:
     QString getDescription() const override
     {
         return "比较单元格值与指定字符串，输出布尔结果";
+    }
+
+    void onPropertyChanged(const QString& propertyName, const QVariant& value) override
+    {
+        if (propertyName == "operation") {
+            int newOperation = value.toInt();
+            if (newOperation >= 0 && newOperation < m_operationCombo->count()) {
+                m_operationCombo->setCurrentIndex(newOperation);
+                updateComparison();
+                qDebug() << "StringCompareModel: Operation changed to" << newOperation;
+            }
+        } else if (propertyName == "compareValue") {
+            QString newValue = value.toString();
+            m_valueEdit->setText(newValue);
+            updateComparison();
+            qDebug() << "StringCompareModel: Compare value changed to" << newValue;
+        } else if (propertyName == "caseSensitive") {
+            bool newCaseSensitive = value.toBool();
+            m_caseSensitive = newCaseSensitive;
+            updateComparison();
+            qDebug() << "StringCompareModel: Case sensitive changed to" << newCaseSensitive;
+        }
     }
 
 
@@ -315,19 +352,21 @@ private:
 
     bool performComparison(const QString& cellValue, const QString& compareValue, CompareOperation operation)
     {
+        Qt::CaseSensitivity caseSensitivity = m_caseSensitive ? Qt::CaseSensitive : Qt::CaseInsensitive;
+
         switch (operation) {
             case Equals:
-                return cellValue == compareValue;
+                return cellValue.compare(compareValue, caseSensitivity) == 0;
             case NotEquals:
-                return cellValue != compareValue;
+                return cellValue.compare(compareValue, caseSensitivity) != 0;
             case Contains:
-                return cellValue.contains(compareValue, Qt::CaseInsensitive);
+                return cellValue.contains(compareValue, caseSensitivity);
             case NotContains:
-                return !cellValue.contains(compareValue, Qt::CaseInsensitive);
+                return !cellValue.contains(compareValue, caseSensitivity);
             case StartsWith:
-                return cellValue.startsWith(compareValue, Qt::CaseInsensitive);
+                return cellValue.startsWith(compareValue, caseSensitivity);
             case EndsWith:
-                return cellValue.endsWith(compareValue, Qt::CaseInsensitive);
+                return cellValue.endsWith(compareValue, caseSensitivity);
             case IsEmpty:
                 return cellValue.isEmpty();
             case IsNotEmpty:
@@ -340,7 +379,8 @@ private:
     QWidget* m_widget;
     QComboBox* m_operationCombo;
     QLineEdit* m_valueEdit;
-    
+    bool m_caseSensitive = false; // 添加大小写敏感标志
+
     std::shared_ptr<CellData> m_cellData;
     std::shared_ptr<BooleanData> m_result;
 };

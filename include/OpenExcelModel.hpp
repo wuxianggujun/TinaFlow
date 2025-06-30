@@ -16,6 +16,7 @@
 
 #include "XLDocument.hpp"
 #include "data/WorkbookData.hpp"
+#include "PropertyWidget.hpp"
 
 class ClickableLineEdit : public QLineEdit
 {
@@ -192,15 +193,37 @@ protected:
     }
 
     // 实现IPropertyProvider接口
-    bool createPropertyWidget(QVBoxLayout* parent) override
+    bool createPropertyWidget(QVBoxLayout* parent, bool editable = false) override
     {
         addTitle(parent, "Excel文件设置");
         addDescription(parent, "选择要打开的Excel文件，支持.xlsx格式");
 
-        // 文件路径显示
-        auto* pathLabel = new QLabel("当前文件:");
-        pathLabel->setStyleSheet("font-weight: bold; margin-top: 5px;");
-        parent->addWidget(pathLabel);
+        if (editable) {
+            // 可编辑模式：添加文件路径编辑功能
+            auto* pathEdit = addEditableLineEdit(parent, "文件路径:",
+                QString::fromStdString(m_filePath), "filePath", this);
+            pathEdit->setPlaceholderText("输入Excel文件路径或点击浏览...");
+
+            // 添加浏览按钮
+            auto* browseLayout = addHorizontalGroup(parent);
+            auto* browseButton = new QPushButton("浏览...");
+            browseLayout->addWidget(browseButton);
+            browseLayout->addStretch();
+
+            connect(browseButton, &QPushButton::clicked, [this, pathEdit]() {
+                QString fileName = QFileDialog::getOpenFileName(
+                    nullptr, "选择Excel文件", "", "Excel文件 (*.xlsx);;所有文件 (*)");
+                if (!fileName.isEmpty()) {
+                    pathEdit->setText(fileName);
+                    onPropertyChanged("filePath", fileName);
+                }
+            });
+        } else {
+            // 只读模式：显示当前文件信息
+            auto* pathLabel = new QLabel("当前文件:");
+            pathLabel->setStyleSheet("font-weight: bold; margin-top: 5px;");
+            parent->addWidget(pathLabel);
+        }
 
         if (m_filePath.empty()) {
             auto* noFileLabel = new QLabel("未选择文件");
@@ -256,6 +279,66 @@ protected:
     QString getDescription() const override
     {
         return "打开Excel文件并读取工作簿数据";
+    }
+
+    // 新的属性面板实现
+    bool createPropertyPanel(PropertyWidget* propertyWidget) override
+    {
+        propertyWidget->addTitle("Excel文件设置");
+        propertyWidget->addDescription("选择要打开的Excel文件，支持.xlsx格式");
+
+        // 添加模式切换按钮
+        propertyWidget->addModeToggleButtons();
+
+        // 文件路径属性
+        propertyWidget->addFilePathProperty("文件路径", QString::fromStdString(m_filePath),
+            "filePath", "Excel文件 (*.xlsx);;所有文件 (*)", false,
+            [this](const QString& newPath) {
+                if (!newPath.isEmpty() && newPath != QString::fromStdString(m_filePath)) {
+                    m_filePath = newPath.toStdString();
+                    m_lineEdit->setText(QFileInfo(newPath).fileName());
+                    m_lineEdit->setToolTip(newPath);
+                    compute(); // 重新计算数据
+                    qDebug() << "OpenExcelModel: File path changed to" << newPath;
+                }
+            });
+
+        // 文件信息
+        if (!m_filePath.empty() && m_workbookData && m_workbookData->isValid()) {
+            propertyWidget->addSeparator();
+            propertyWidget->addTitle("文件信息");
+
+            try {
+                auto workbook = m_workbookData->workbook();
+                if (workbook) {
+                    int sheetCount = workbook->worksheetCount();
+                    propertyWidget->addInfoProperty("工作表数量", QString::number(sheetCount), "color: #666;");
+                } else {
+                    propertyWidget->addInfoProperty("工作表信息", "无法获取", "color: #999;");
+                }
+            } catch (...) {
+                propertyWidget->addInfoProperty("文件信息", "读取失败", "color: #999;");
+            }
+        }
+
+        return true;
+    }
+
+    void onPropertyChanged(const QString& propertyName, const QVariant& value) override
+    {
+        if (propertyName == "filePath") {
+            QString newPath = value.toString();
+            if (!newPath.isEmpty() && newPath != QString::fromStdString(m_filePath)) {
+                m_filePath = newPath.toStdString();
+                m_lineEdit->setText(QFileInfo(newPath).fileName());
+                m_lineEdit->setToolTip(newPath);
+
+                // 重新计算数据
+                compute();
+
+                qDebug() << "OpenExcelModel: File path changed to" << newPath;
+            }
+        }
     }
 
 private:

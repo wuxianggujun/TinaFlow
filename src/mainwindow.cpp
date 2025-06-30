@@ -16,6 +16,7 @@
 #include "DisplayCellListModel.hpp"
 #include "SaveExcelModel.hpp"
 #include "IPropertyProvider.hpp"
+#include "PropertyWidget.hpp"
 #include <QtNodes/ConnectionStyle>
 #include <QtNodes/NodeStyle>
 #include <QtNodes/DataFlowGraphicsScene>
@@ -37,6 +38,8 @@
 #include <QComboBox>
 #include <QCheckBox>
 #include <QLineEdit>
+#include <QPushButton>
+#include <QFrame>
 
 // 静态成员变量定义
 bool MainWindow::s_globalExecutionEnabled = false;
@@ -407,9 +410,17 @@ void MainWindow::updatePropertyPanel(QtNodes::NodeId nodeId)
     if (nodeModel) {
         auto* propertyProvider = dynamic_cast<IPropertyProvider*>(nodeModel);
         if (propertyProvider) {
-            // 使用节点自己的属性界面
-            hasProperties = propertyProvider->createPropertyWidget(contentLayout);
-            qDebug() << "MainWindow: Used property provider for node" << nodeId;
+            // 尝试使用新的PropertyWidget系统
+            auto* propertyWidget = PropertyPanelManager::createPropertyPanel(contentLayout);
+            if (propertyProvider->createPropertyPanel(propertyWidget)) {
+                hasProperties = true;
+                qDebug() << "MainWindow: Used new PropertyWidget system for node" << nodeId;
+            } else {
+                // 回退到旧系统
+                propertyWidget->deleteLater();
+                hasProperties = propertyProvider->createPropertyWidget(contentLayout, false);
+                qDebug() << "MainWindow: Used legacy property system for node" << nodeId;
+            }
         }
     }
 
