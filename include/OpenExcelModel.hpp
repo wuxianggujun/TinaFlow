@@ -167,7 +167,7 @@ private:
             }
 
             // 尝试打开Excel文件
-            OpenXLSX::XLDocument* doc = new OpenXLSX::XLDocument();
+            auto* doc = new OpenXLSX::XLDocument();
             try {
                 doc->open(m_filePath);
             } catch (const std::exception& openError) {

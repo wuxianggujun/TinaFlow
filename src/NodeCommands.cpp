@@ -64,10 +64,37 @@ bool CreateNodeCommand::undo()
         // 保存节点的所有数据用于重做
         m_nodeData = graphModel.saveNode(m_nodeId);
 
+        // 保存所有相关连接的详细信息
+        m_connectionDetails.clear();
+        auto allConnections = graphModel.allConnectionIds(m_nodeId);
+        for (const auto& connectionId : allConnections) {
+            // 保存连接的详细信息
+            ConnectionDetail detail;
+            detail.connectionId = connectionId;
+            detail.outputNodeId = connectionId.outNodeId;
+            detail.outputPortIndex = connectionId.outPortIndex;
+            detail.inputNodeId = connectionId.inNodeId;
+            detail.inputPortIndex = connectionId.inPortIndex;
+            
+            // 如果这个节点是输出节点，需要记录输入节点的信息
+            if (connectionId.outNodeId == m_nodeId) {
+                detail.isOutput = true;
+                detail.otherNodeId = connectionId.inNodeId;
+                detail.otherPortIndex = connectionId.inPortIndex;
+            } else {
+                // 这个节点是输入节点
+                detail.isOutput = false;
+                detail.otherNodeId = connectionId.outNodeId;
+                detail.otherPortIndex = connectionId.outPortIndex;
+            }
+            
+            m_connectionDetails.append(detail);
+        }
+
         // 删除节点
         graphModel.deleteNode(m_nodeId);
 
-        qDebug() << "CreateNodeCommand: Removed node" << m_nodeId;
+        qDebug() << "CreateNodeCommand: Removed node" << m_nodeId << "with" << m_connectionDetails.size() << "connections";
         return true;
 
     } catch (const std::exception& e) {
@@ -86,29 +113,49 @@ bool CreateNodeCommand::redo()
     try {
         auto& graphModel = m_scene->graphModel();
 
-        // 如果有保存的节点数据，尝试恢复
-        if (!m_nodeData.isEmpty()) {
-            // loadNode可能会改变节点ID，我们需要找到新创建的节点
-            auto oldNodeIds = graphModel.allNodeIds();
-            
-            graphModel.loadNode(m_nodeData);
-            
-            // 找到新创建的节点ID
-            auto newNodeIds = graphModel.allNodeIds();
-            for (const auto& nodeId : newNodeIds) {
-                if (oldNodeIds.find(nodeId) == oldNodeIds.end()) {
-                    // 这是新创建的节点
-                    m_nodeId = nodeId;
-                    break;
-                }
-            }
-            
-            qDebug() << "CreateNodeCommand: Restored node with ID" << m_nodeId;
-            return true;
-        } else {
-            // 如果没有保存的数据，重新创建（这应该只在第一次执行时发生）
-            return execute();
+        if (m_nodeData.isEmpty()) {
+            qWarning() << "CreateNodeCommand: No saved node data for redo";
+            return false;
         }
+
+        // 使用保存的数据恢复节点
+        graphModel.loadNode(m_nodeData);
+
+        // 验证节点是否成功恢复
+        if (!graphModel.nodeExists(m_nodeId)) {
+            qWarning() << "CreateNodeCommand: Failed to restore node" << m_nodeId;
+            return false;
+        }
+
+        // 恢复所有连接
+        for (const auto& detail : m_connectionDetails) {
+            // 验证两个节点都存在
+            if (!graphModel.nodeExists(detail.outputNodeId) || 
+                !graphModel.nodeExists(detail.inputNodeId)) {
+                qWarning() << "CreateNodeCommand: Cannot restore connection - nodes don't exist:"
+                          << detail.outputNodeId << "->" << detail.inputNodeId;
+                continue;
+            }
+
+            try {
+                // 创建连接
+                QtNodes::ConnectionId connectionId{
+                    detail.outputNodeId, detail.outputPortIndex,
+                    detail.inputNodeId, detail.inputPortIndex
+                };
+                graphModel.addConnection(connectionId);
+
+                qDebug() << "CreateNodeCommand: Restored connection:" 
+                         << detail.outputNodeId << ":" << detail.outputPortIndex 
+                         << "->" << detail.inputNodeId << ":" << detail.inputPortIndex;
+
+            } catch (const std::exception& e) {
+                qWarning() << "CreateNodeCommand: Failed to restore connection:" << e.what();
+            }
+        }
+
+        qDebug() << "CreateNodeCommand: Restored node" << m_nodeId << "with" << m_connectionDetails.size() << "connections";
+        return true;
 
     } catch (const std::exception& e) {
         qWarning() << "CreateNodeCommand: Exception during redo:" << e.what();
@@ -192,11 +239,35 @@ bool DeleteNodeCommand::execute()
             m_nodeType = m_nodeData["type"].toString();
         }
 
-        // 保存所有相关连接
+        // 保存所有相关连接的详细信息
         m_connections.clear();
+        m_connectionDetails.clear();
+        
         auto allConnections = graphModel.allConnectionIds(m_nodeId);
         for (const auto& connectionId : allConnections) {
             m_connections.append(connectionId);
+            
+            // 保存连接的详细信息
+            ConnectionDetail detail;
+            detail.connectionId = connectionId;
+            detail.outputNodeId = connectionId.outNodeId;
+            detail.outputPortIndex = connectionId.outPortIndex;
+            detail.inputNodeId = connectionId.inNodeId;
+            detail.inputPortIndex = connectionId.inPortIndex;
+            
+            // 如果这个节点是输出节点，需要记录输入节点的信息
+            if (connectionId.outNodeId == m_nodeId) {
+                detail.isOutput = true;
+                detail.otherNodeId = connectionId.inNodeId;
+                detail.otherPortIndex = connectionId.inPortIndex;
+            } else {
+                // 这个节点是输入节点
+                detail.isOutput = false;
+                detail.otherNodeId = connectionId.outNodeId;
+                detail.otherPortIndex = connectionId.outPortIndex;
+            }
+            
+            m_connectionDetails.append(detail);
         }
 
         // 删除节点（这会自动删除相关连接）
@@ -239,7 +310,6 @@ bool DeleteNodeCommand::undo()
             }
             
             qDebug() << "DeleteNodeCommand: Restored node with ID" << m_nodeId;
-            return true;
         } else {
             // 如果没有保存的数据，重新创建（简化方法）
             QtNodes::NodeId newNodeId = graphModel.addNode(m_nodeType);
@@ -255,8 +325,44 @@ bool DeleteNodeCommand::undo()
             m_nodeId = newNodeId;
 
             qDebug() << "DeleteNodeCommand: Restored node" << newNodeId << "(fallback method)";
-            return true;
         }
+
+        // 重新创建所有相关连接
+        int restoredConnections = 0;
+        for (const auto& detail : m_connectionDetails) {
+            try {
+                QtNodes::ConnectionId newConnectionId;
+                
+                if (detail.isOutput) {
+                    // 删除的节点是输出节点
+                    newConnectionId = {m_nodeId, detail.outputPortIndex, detail.otherNodeId, detail.inputPortIndex};
+                } else {
+                    // 删除的节点是输入节点
+                    newConnectionId = {detail.otherNodeId, detail.outputPortIndex, m_nodeId, detail.inputPortIndex};
+                }
+                
+                // 检查目标节点是否还存在
+                if (!graphModel.nodeExists(detail.otherNodeId)) {
+                    qWarning() << "DeleteNodeCommand: Target node" << detail.otherNodeId << "no longer exists, skipping connection";
+                    continue;
+                }
+                
+                // 检查连接是否可能
+                if (graphModel.connectionPossible(newConnectionId)) {
+                    graphModel.addConnection(newConnectionId);
+                    restoredConnections++;
+                    qDebug() << "DeleteNodeCommand: Restored connection between nodes" << newConnectionId.outNodeId << "and" << newConnectionId.inNodeId;
+                } else {
+                    qWarning() << "DeleteNodeCommand: Connection not possible, skipping";
+                }
+                
+            } catch (const std::exception& e) {
+                qWarning() << "DeleteNodeCommand: Failed to restore connection:" << e.what();
+            }
+        }
+        
+        qDebug() << "DeleteNodeCommand: Restored" << restoredConnections << "out of" << m_connectionDetails.size() << "connections";
+        return true;
 
     } catch (const std::exception& e) {
         qWarning() << "DeleteNodeCommand: Exception during undo:" << e.what();

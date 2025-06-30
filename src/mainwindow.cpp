@@ -804,7 +804,7 @@ void MainWindow::showSceneContextMenu(const QPointF& pos)
                 auto& commandManager = CommandManager::instance();
                 commandManager.beginMacro("清空画布");
                 
-                for (auto nodeId : nodeIds) {
+            for (auto nodeId : nodeIds) {
                     auto command = std::make_unique<DeleteNodeCommand>(m_graphicsScene, nodeId);
                     commandManager.executeCommand(std::move(command));
                 }
@@ -829,8 +829,8 @@ void MainWindow::deleteSelectedNode()
         
         if (commandManager.executeCommand(std::move(command))) {
             m_selectedNodeId = QtNodes::NodeId{};
-            // 清空属性面板
-            clearPropertyPanel();
+        // 清空属性面板
+        clearPropertyPanel();
             ui->statusbar->showMessage(tr("节点已删除"), 2000);
         } else {
             ui->statusbar->showMessage(tr("删除节点失败"), 2000);
@@ -852,12 +852,12 @@ void MainWindow::deleteSelectedConnection()
     // 使用命令系统删除连接
     auto command = std::make_unique<DeleteConnectionCommand>(m_graphicsScene, m_selectedConnectionId);
     auto& commandManager = CommandManager::instance();
-    
+
     // 获取连接信息用于显示
     auto outNodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(m_selectedConnectionId.outNodeId);
     auto inNodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(m_selectedConnectionId.inNodeId);
     QString description = "连接";
-    
+
     if (outNodeDelegate && inNodeDelegate) {
         QString outPortType = getPortTypeDescription(outNodeDelegate, QtNodes::PortType::Out, m_selectedConnectionId.outPortIndex);
         QString inPortType = getPortTypeDescription(inNodeDelegate, QtNodes::PortType::In, m_selectedConnectionId.inPortIndex);
@@ -870,7 +870,7 @@ void MainWindow::deleteSelectedConnection()
             .arg(m_selectedConnectionId.inPortIndex)
             .arg(inPortType);
     }
-    
+
     if (commandManager.executeCommand(std::move(command))) {
         qDebug() << "MainWindow: Deleted connection:" << description;
         ui->statusbar->showMessage(tr("连接已删除: %1").arg(description), 3000);
@@ -934,11 +934,11 @@ void MainWindow::duplicateSelectedNode()
     if (m_selectedNodeId != QtNodes::NodeId{}) {
         // 简化的复制实现
         // 实际应用中需要获取节点类型和属性
-        
-        // 获取原节点位置并偏移
-        QVariant posVariant = m_graphModel->nodeData(m_selectedNodeId, QtNodes::NodeRole::Position);
-        QPointF originalPos = posVariant.toPointF();
-        QPointF newPos = originalPos + QPointF(50, 50); // 偏移50像素
+
+            // 获取原节点位置并偏移
+            QVariant posVariant = m_graphModel->nodeData(m_selectedNodeId, QtNodes::NodeRole::Position);
+            QPointF originalPos = posVariant.toPointF();
+            QPointF newPos = originalPos + QPointF(50, 50); // 偏移50像素
         
         // 使用命令系统创建新节点（暂时使用固定类型）
         auto command = std::make_unique<CreateNodeCommand>(m_graphicsScene, "DisplayCell", newPos);

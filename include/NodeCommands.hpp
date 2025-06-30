@@ -17,6 +17,18 @@ namespace QtNodes {
     class Connection;
 }
 
+// 连接详细信息结构体
+struct ConnectionDetail {
+    QtNodes::ConnectionId connectionId;
+    QtNodes::NodeId outputNodeId;
+    QtNodes::PortIndex outputPortIndex;
+    QtNodes::NodeId inputNodeId;
+    QtNodes::PortIndex inputPortIndex;
+    bool isOutput;  // 删除的节点是否是这个连接的输出节点
+    QtNodes::NodeId otherNodeId;  // 连接的另一端节点ID
+    QtNodes::PortIndex otherPortIndex;  // 连接的另一端端口索引
+};
+
 /**
  * @brief 创建节点命令
  */
@@ -46,6 +58,7 @@ private:
     QPointF m_position;
     QtNodes::NodeId m_nodeId;
     QJsonObject m_nodeData;  // 保存节点数据用于撤销
+    QList<ConnectionDetail> m_connectionDetails;  // 保存连接的详细信息
 };
 
 /**
@@ -74,6 +87,7 @@ private:
     QPointF m_position;
     QJsonObject m_nodeData;
     QList<QtNodes::ConnectionId> m_connections;  // 保存相关连接
+    QList<ConnectionDetail> m_connectionDetails;  // 保存连接的详细信息
 };
 
 /**
