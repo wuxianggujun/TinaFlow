@@ -4,22 +4,22 @@
 
 #pragma once
 
+#include "BaseDisplayModel.hpp"
 #include "data/BooleanData.hpp"
 
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QFrame>
-#include <QtNodes/NodeDelegateModel>
 #include <QDebug>
 
 /**
  * @brief 显示布尔值的节点模型
- * 
+ *
  * 这个节点接收一个布尔数据(BooleanData)作为输入，
  * 然后在UI中显示布尔值和相关描述信息。
  * 使用不同的颜色和图标来区分True和False。
  */
-class DisplayBooleanModel : public QtNodes::NodeDelegateModel
+class DisplayBooleanModel : public BaseDisplayModel<BooleanData>
 {
     Q_OBJECT
 
@@ -88,63 +88,24 @@ public:
         return m_widget;
     }
 
-    unsigned int nPorts(QtNodes::PortType portType) const override
+protected:
+    // 实现基类的纯虚函数
+    QString getNodeTypeName() const override
     {
-        return (portType == QtNodes::PortType::In) ? 1 : 0; // 只有输入端口，没有输出
+        return "DisplayBooleanModel";
     }
 
-    QtNodes::NodeDataType dataType(QtNodes::PortType portType, QtNodes::PortIndex portIndex) const override
+    QString getDataTypeName() const override
     {
-        if (portType == QtNodes::PortType::In)
-        {
-            return BooleanData().type();
-        }
-        return {"", ""};
+        return "BooleanData";
     }
 
-    std::shared_ptr<QtNodes::NodeData> outData(QtNodes::PortIndex const port) override
-    {
-        return nullptr; // 显示节点没有输出
-    }
-
-    void setInData(std::shared_ptr<QtNodes::NodeData> nodeData, QtNodes::PortIndex const portIndex) override
-    {
-        qDebug() << "DisplayBooleanModel::setInData called, portIndex:" << portIndex;
-        
-        if (!nodeData) {
-            qDebug() << "DisplayBooleanModel: Received null nodeData";
-            m_booleanData.reset();
-            updateDisplay();
-            return;
-        }
-        
-        m_booleanData = std::dynamic_pointer_cast<BooleanData>(nodeData);
-        if (m_booleanData) {
-            qDebug() << "DisplayBooleanModel: Successfully received BooleanData:" 
-                     << m_booleanData->valueAsString();
-        } else {
-            qDebug() << "DisplayBooleanModel: Failed to cast to BooleanData";
-        }
-        
-        updateDisplay();
-    }
-
-    QJsonObject save() const override
-    {
-        return NodeDelegateModel::save(); // 调用基类方法保存model-name
-    }
-
-    void load(QJsonObject const& json) override
-    {
-        // 显示节点不需要加载状态
-    }
-
-private:
-    void updateDisplay()
+    void updateDisplay() override
     {
         qDebug() << "DisplayBooleanModel::updateDisplay called";
-        
-        if (!m_booleanData) {
+
+        auto booleanData = getData();
+        if (!hasValidData()) {
             // 显示空状态
             m_resultLabel->setText("--");
             m_descriptionLabel->setText("等待输入");
@@ -160,8 +121,8 @@ private:
         }
 
         try {
-            bool value = m_booleanData->value();
-            QString description = m_booleanData->description();
+            bool value = booleanData->value();
+            QString description = booleanData->description();
             
             if (value) {
                 // True状态 - 绿色
@@ -203,7 +164,7 @@ private:
             
             // 设置描述
             if (description.isEmpty()) {
-                m_descriptionLabel->setText(QString("结果: %1").arg(m_booleanData->localizedString()));
+                m_descriptionLabel->setText(QString("结果: %1").arg(booleanData->localizedString()));
             } else {
                 m_descriptionLabel->setText(description);
             }
@@ -226,10 +187,9 @@ private:
         }
     }
 
+private:
     QWidget* m_widget;
     QFrame* m_frame;
     QLabel* m_resultLabel;
     QLabel* m_descriptionLabel;
-    
-    std::shared_ptr<BooleanData> m_booleanData;
 };

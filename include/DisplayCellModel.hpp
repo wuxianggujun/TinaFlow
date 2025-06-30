@@ -4,23 +4,23 @@
 
 #pragma once
 
+#include "BaseDisplayModel.hpp"
 #include "data/CellData.hpp"
 
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFrame>
-#include <QtNodes/NodeDelegateModel>
 #include <QDebug>
 
 /**
  * @brief 显示Excel单元格数据的节点模型
- * 
+ *
  * 这个节点接收一个单元格数据(CellData)作为输入，
  * 然后在UI中显示单元格的地址、值和类型信息。
  * 这是数据流的终端节点，用于查看处理结果。
  */
-class DisplayCellModel : public QtNodes::NodeDelegateModel
+class DisplayCellModel : public BaseDisplayModel<CellData>
 {
     Q_OBJECT
 
@@ -85,62 +85,29 @@ public:
         return m_widget;
     }
 
-    unsigned int nPorts(QtNodes::PortType portType) const override
+protected:
+    // 实现基类的纯虚函数
+    QString getNodeTypeName() const override
     {
-        return (portType == QtNodes::PortType::In) ? 1 : 0; // 只有输入端口，没有输出
+        return "DisplayCellModel";
     }
 
-    QtNodes::NodeDataType dataType(QtNodes::PortType portType, QtNodes::PortIndex portIndex) const override
+    QString getDataTypeName() const override
     {
-        if (portType == QtNodes::PortType::In)
-        {
-            return CellData().type();
-        }
-        return {"", ""};
+        return "CellData";
     }
 
-    std::shared_ptr<QtNodes::NodeData> outData(QtNodes::PortIndex const port) override
+    bool isDataValid(std::shared_ptr<CellData> data) const override
     {
-        return nullptr; // 显示节点没有输出
+        return data && data->isValid();
     }
 
-    void setInData(std::shared_ptr<QtNodes::NodeData> nodeData, QtNodes::PortIndex const portIndex) override
-    {
-        qDebug() << "DisplayCellModel::setInData called, portIndex:" << portIndex;
-        
-        if (!nodeData) {
-            qDebug() << "DisplayCellModel: Received null nodeData";
-            m_cellData.reset();
-            updateDisplay();
-            return;
-        }
-        
-        m_cellData = std::dynamic_pointer_cast<CellData>(nodeData);
-        if (m_cellData) {
-            qDebug() << "DisplayCellModel: Successfully received CellData";
-        } else {
-            qDebug() << "DisplayCellModel: Failed to cast to CellData";
-        }
-        
-        updateDisplay();
-    }
-
-    QJsonObject save() const override
-    {
-        return NodeDelegateModel::save(); // 调用基类方法保存model-name
-    }
-
-    void load(QJsonObject const& json) override
-    {
-        // 显示节点不需要加载状态
-    }
-
-private:
-    void updateDisplay()
+    void updateDisplay() override
     {
         qDebug() << "DisplayCellModel::updateDisplay called";
-        
-        if (!m_cellData || !m_cellData->isValid()) {
+
+        auto cellData = getData();
+        if (!hasValidData()) {
             // 显示空状态
             m_addressLabel->setText("地址: --");
             m_valueLabel->setText("值: --");
@@ -150,7 +117,7 @@ private:
         }
 
         try {
-            auto cell = m_cellData->cell();
+            auto cell = cellData->cell();
             
             // 获取单元格地址
             QString address = QString::fromStdString(cell->cellReference().address());
@@ -196,10 +163,9 @@ private:
         }
     }
 
+private:
     QWidget* m_widget;
     QLabel* m_addressLabel;
     QLabel* m_valueLabel;
     QLabel* m_typeLabel;
-    
-    std::shared_ptr<CellData> m_cellData;
 };

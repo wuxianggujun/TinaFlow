@@ -4,23 +4,23 @@
 
 #pragma once
 
+#include "BaseDisplayModel.hpp"
 #include "data/RangeData.hpp"
 
 #include <QTableWidget>
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QHeaderView>
-#include <QtNodes/NodeDelegateModel>
 #include <QDebug>
 
 /**
  * @brief 显示Excel范围数据的节点模型
- * 
+ *
  * 这个节点接收一个范围数据(RangeData)作为输入，
  * 然后在表格中显示所有数据。
  * 这是数据流的终端节点，用于查看批量处理结果。
  */
-class DisplayRangeModel : public QtNodes::NodeDelegateModel
+class DisplayRangeModel : public BaseDisplayModel<RangeData>
 {
     Q_OBJECT
 
@@ -94,62 +94,29 @@ public:
         return m_widget;
     }
 
-    unsigned int nPorts(QtNodes::PortType portType) const override
+protected:
+    // 实现基类的纯虚函数
+    QString getNodeTypeName() const override
     {
-        return (portType == QtNodes::PortType::In) ? 1 : 0; // 只有输入端口，没有输出
+        return "DisplayRangeModel";
     }
 
-    QtNodes::NodeDataType dataType(QtNodes::PortType portType, QtNodes::PortIndex portIndex) const override
+    QString getDataTypeName() const override
     {
-        if (portType == QtNodes::PortType::In)
-        {
-            return RangeData().type();
-        }
-        return {"", ""};
+        return "RangeData";
     }
 
-    std::shared_ptr<QtNodes::NodeData> outData(QtNodes::PortIndex const port) override
+    bool isDataValid(std::shared_ptr<RangeData> data) const override
     {
-        return nullptr; // 显示节点没有输出
+        return data && !data->isEmpty();
     }
 
-    void setInData(std::shared_ptr<QtNodes::NodeData> nodeData, QtNodes::PortIndex const portIndex) override
-    {
-        qDebug() << "DisplayRangeModel::setInData called, portIndex:" << portIndex;
-        
-        if (!nodeData) {
-            qDebug() << "DisplayRangeModel: Received null nodeData";
-            m_rangeData.reset();
-            updateDisplay();
-            return;
-        }
-        
-        m_rangeData = std::dynamic_pointer_cast<RangeData>(nodeData);
-        if (m_rangeData) {
-            qDebug() << "DisplayRangeModel: Successfully received RangeData";
-        } else {
-            qDebug() << "DisplayRangeModel: Failed to cast to RangeData";
-        }
-        
-        updateDisplay();
-    }
-
-    QJsonObject save() const override
-    {
-        return NodeDelegateModel::save(); // 调用基类方法保存model-name
-    }
-
-    void load(QJsonObject const& json) override
-    {
-        // 显示节点不需要加载状态
-    }
-
-private:
-    void updateDisplay()
+    void updateDisplay() override
     {
         qDebug() << "DisplayRangeModel::updateDisplay called";
-        
-        if (!m_rangeData || m_rangeData->isEmpty()) {
+
+        auto rangeData = getData();
+        if (!hasValidData()) {
             // 显示空状态
             m_infoLabel->setText("范围: --");
             m_tableWidget->clear();
@@ -162,14 +129,14 @@ private:
         try {
             // 更新信息标签
             QString info = QString("范围: %1 (%2行 x %3列)")
-                .arg(m_rangeData->rangeAddress())
-                .arg(m_rangeData->rowCount())
-                .arg(m_rangeData->columnCount());
+                .arg(rangeData->rangeAddress())
+                .arg(rangeData->rowCount())
+                .arg(rangeData->columnCount());
             m_infoLabel->setText(info);
             
             // 设置表格大小
-            int rows = m_rangeData->rowCount();
-            int cols = m_rangeData->columnCount();
+            int rows = rangeData->rowCount();
+            int cols = rangeData->columnCount();
             
             m_tableWidget->setRowCount(rows);
             m_tableWidget->setColumnCount(cols);
@@ -197,7 +164,7 @@ private:
             // 填充数据
             for (int row = 0; row < rows; ++row) {
                 for (int col = 0; col < cols; ++col) {
-                    QVariant cellValue = m_rangeData->cellValue(row, col);
+                    QVariant cellValue = rangeData->cellValue(row, col);
                     QString displayText = cellValue.toString();
                     
                     auto* item = new QTableWidgetItem(displayText);
@@ -236,9 +203,8 @@ private:
         }
     }
 
+private:
     QWidget* m_widget;
     QLabel* m_infoLabel;
     QTableWidget* m_tableWidget;
-    
-    std::shared_ptr<RangeData> m_rangeData;
 };

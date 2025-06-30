@@ -59,7 +59,6 @@ private:
     void clearPropertyPanel();
 
     // 特定节点的属性编辑器
-    void addForEachRowProperties(QVBoxLayout* layout, QtNodes::NodeId nodeId);
     void addStringCompareProperties(QVBoxLayout* layout, QtNodes::NodeId nodeId);
 
     static std::shared_ptr<QtNodes::NodeDelegateModelRegistry> registerDataModels();

@@ -4,27 +4,27 @@
 
 #pragma once
 
+#include "BaseDisplayModel.hpp"
 #include "data/RangeData.hpp"
 
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QGridLayout>
 #include <QFrame>
-#include <QtNodes/NodeDelegateModel>
 #include <QDebug>
 
 /**
  * @brief 显示范围信息的节点模型
- * 
+ *
  * 这个节点接收一个范围数据(RangeData)作为输入，
  * 然后显示范围的详细信息：
  * - 行数和列数
  * - 范围地址
  * - 数据预览
- * 
+ *
  * 这个节点纯粹用于信息显示，没有输出端口。
  */
-class RangeInfoModel : public QtNodes::NodeDelegateModel
+class RangeInfoModel : public BaseDisplayModel<RangeData>
 {
     Q_OBJECT
 
@@ -132,63 +132,29 @@ public:
         return m_widget;
     }
 
-    unsigned int nPorts(QtNodes::PortType portType) const override
+protected:
+    // 实现基类的纯虚函数
+    QString getNodeTypeName() const override
     {
-        return (portType == QtNodes::PortType::In) ? 1 : 0; // 只有输入端口，没有输出
+        return "RangeInfoModel";
     }
 
-    QtNodes::NodeDataType dataType(QtNodes::PortType portType, QtNodes::PortIndex portIndex) const override
+    QString getDataTypeName() const override
     {
-        if (portType == QtNodes::PortType::In)
-        {
-            return RangeData().type();
-        }
-        return {"", ""};
+        return "RangeData";
     }
 
-    std::shared_ptr<QtNodes::NodeData> outData(QtNodes::PortIndex const port) override
+    bool isDataValid(std::shared_ptr<RangeData> data) const override
     {
-        return nullptr; // 信息显示节点没有输出
+        return data && !data->isEmpty();
     }
 
-    void setInData(std::shared_ptr<QtNodes::NodeData> nodeData, QtNodes::PortIndex const portIndex) override
-    {
-        qDebug() << "RangeInfoModel::setInData called, portIndex:" << portIndex;
-        
-        if (!nodeData) {
-            qDebug() << "RangeInfoModel: Received null nodeData";
-            m_rangeData.reset();
-            updateDisplay();
-            return;
-        }
-        
-        m_rangeData = std::dynamic_pointer_cast<RangeData>(nodeData);
-        if (m_rangeData) {
-            qDebug() << "RangeInfoModel: Successfully received RangeData:" 
-                     << m_rangeData->rowCount() << "x" << m_rangeData->columnCount();
-        } else {
-            qDebug() << "RangeInfoModel: Failed to cast to RangeData";
-        }
-        
-        updateDisplay();
-    }
-
-    QJsonObject save() const override
-    {
-        return NodeDelegateModel::save(); // 调用基类方法保存model-name
-    }
-
-    void load(QJsonObject const& json) override
-    {
-        // 信息显示节点不需要加载状态
-    }
-
-private:
-    void updateDisplay()
+    void updateDisplay() override
     {
         qDebug() << "RangeInfoModel::updateDisplay called";
-        
-        if (!m_rangeData || m_rangeData->isEmpty()) {
+
+        auto rangeData = getData();
+        if (!hasValidData()) {
             // 显示空状态
             m_rowCountLabel->setText("--");
             m_columnCountLabel->setText("--");
@@ -209,8 +175,8 @@ private:
         }
 
         try {
-            int rows = m_rangeData->rowCount();
-            int cols = m_rangeData->columnCount();
+            int rows = rangeData->rowCount();
+            int cols = rangeData->columnCount();
             int totalCells = rows * cols;
             
             // 更新信息
@@ -260,6 +226,7 @@ private:
         }
     }
 
+private:
     QWidget* m_widget;
     QFrame* m_frame;
     QLabel* m_rowCountLabel;
@@ -267,6 +234,4 @@ private:
     QLabel* m_rangeLabel;
     QLabel* m_cellCountLabel;
     QLabel* m_statusLabel;
-    
-    std::shared_ptr<RangeData> m_rangeData;
 };

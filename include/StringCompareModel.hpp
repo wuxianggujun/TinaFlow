@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "BaseNodeModel.hpp"
 #include "data/CellData.hpp"
 #include "data/BooleanData.hpp"
 
@@ -12,18 +13,17 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QLabel>
-#include <QtNodes/NodeDelegateModel>
 #include <QDebug>
 
 /**
  * @brief 字符串比较节点模型
- * 
+ *
  * 这个节点接收一个单元格数据(CellData)作为输入，
  * 允许用户设置比较操作和目标值，
  * 然后输出两个布尔结果：True端口和False端口。
  * 根据比较结果，只有一个端口会输出有效数据。
  */
-class StringCompareModel : public QtNodes::NodeDelegateModel
+class StringCompareModel : public BaseNodeModel
 {
     Q_OBJECT
 
@@ -79,6 +79,10 @@ public:
                 this, &StringCompareModel::onParameterChanged);
         connect(m_valueEdit, &QLineEdit::textChanged,
                 this, &StringCompareModel::onParameterChanged);
+
+        // 注册需要保存的属性
+        registerComboBox("operation", m_operationCombo, "比较操作");
+        registerLineEdit("value", m_valueEdit, "比较值");
     }
 
     QString caption() const override
@@ -151,15 +155,15 @@ public:
         updateComparison();
     }
 
-    QJsonObject save() const override
+protected:
+    // 实现基类的虚函数
+    QString getNodeTypeName() const override
     {
-        QJsonObject modelJson = NodeDelegateModel::save(); // 调用基类方法保存model-name
-        modelJson["operation"] = m_operationCombo->currentData().toInt();
-        modelJson["value"] = m_valueEdit->text();
-        return modelJson;
+        return "StringCompareModel";
     }
 
-    void load(QJsonObject const& json) override
+    // 自定义加载逻辑，处理ComboBox的特殊情况
+    void onLoad(const QJsonObject& json) override
     {
         if (json.contains("operation")) {
             int op = json["operation"].toInt();
@@ -169,9 +173,6 @@ public:
                     break;
                 }
             }
-        }
-        if (json.contains("value")) {
-            m_valueEdit->setText(json["value"].toString());
         }
     }
 

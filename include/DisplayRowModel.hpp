@@ -4,23 +4,23 @@
 
 #pragma once
 
+#include "BaseDisplayModel.hpp"
 #include "data/RowData.hpp"
 
 #include <QTableWidget>
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QHeaderView>
-#include <QtNodes/NodeDelegateModel>
 #include <QDebug>
 
 /**
  * @brief 显示单行数据的节点模型
- * 
+ *
  * 这个节点接收一个行数据(RowData)作为输入，
  * 然后在表格中显示该行的所有列数据。
  * 适用于循环中查看当前处理的行数据。
  */
-class DisplayRowModel : public QtNodes::NodeDelegateModel
+class DisplayRowModel : public BaseDisplayModel<RowData>
 {
     Q_OBJECT
 
@@ -99,63 +99,24 @@ public:
         return m_widget;
     }
 
-    unsigned int nPorts(QtNodes::PortType portType) const override
+protected:
+    // 实现基类的纯虚函数
+    QString getNodeTypeName() const override
     {
-        return (portType == QtNodes::PortType::In) ? 1 : 0; // 只有输入端口，没有输出
+        return "DisplayRowModel";
     }
 
-    QtNodes::NodeDataType dataType(QtNodes::PortType portType, QtNodes::PortIndex portIndex) const override
+    QString getDataTypeName() const override
     {
-        if (portType == QtNodes::PortType::In)
-        {
-            return RowData().type();
-        }
-        return {"", ""};
+        return "RowData";
     }
 
-    std::shared_ptr<QtNodes::NodeData> outData(QtNodes::PortIndex const port) override
-    {
-        return nullptr; // 显示节点没有输出
-    }
-
-    void setInData(std::shared_ptr<QtNodes::NodeData> nodeData, QtNodes::PortIndex const portIndex) override
-    {
-        qDebug() << "DisplayRowModel::setInData called, portIndex:" << portIndex;
-        
-        if (!nodeData) {
-            qDebug() << "DisplayRowModel: Received null nodeData";
-            m_rowData.reset();
-            updateDisplay();
-            return;
-        }
-        
-        m_rowData = std::dynamic_pointer_cast<RowData>(nodeData);
-        if (m_rowData) {
-            qDebug() << "DisplayRowModel: Successfully received RowData for row" 
-                     << (m_rowData->rowIndex() + 1);
-        } else {
-            qDebug() << "DisplayRowModel: Failed to cast to RowData";
-        }
-        
-        updateDisplay();
-    }
-
-    QJsonObject save() const override
-    {
-        return NodeDelegateModel::save(); // 调用基类方法保存model-name
-    }
-
-    void load(QJsonObject const& json) override
-    {
-        // 显示节点不需要加载状态
-    }
-
-private:
-    void updateDisplay()
+    void updateDisplay() override
     {
         qDebug() << "DisplayRowModel::updateDisplay called";
-        
-        if (!m_rowData) {
+
+        auto rowData = getData();
+        if (!hasValidData()) {
             // 显示空状态
             m_infoLabel->setText("行: --");
             m_tableWidget->setColumnCount(0);
@@ -166,19 +127,19 @@ private:
         try {
             // 更新信息标签
             QString info;
-            if (m_rowData->totalRows() > 0) {
-                double progress = m_rowData->progressPercentage();
+            if (rowData->totalRows() > 0) {
+                double progress = rowData->progressPercentage();
                 info = QString("行: %1/%2 (%.1f%%)")
-                    .arg(m_rowData->rowIndex() + 1)
-                    .arg(m_rowData->totalRows())
+                    .arg(rowData->rowIndex() + 1)
+                    .arg(rowData->totalRows())
                     .arg(progress, 0, 'f', 1);
             } else {
-                info = QString("行: %1").arg(m_rowData->rowIndex() + 1);
+                info = QString("行: %1").arg(rowData->rowIndex() + 1);
             }
             m_infoLabel->setText(info);
             
             // 设置表格列数
-            int cols = m_rowData->columnCount();
+            int cols = rowData->columnCount();
             m_tableWidget->setColumnCount(cols);
             
             // 设置列标题（A, B, C, ...）
@@ -196,7 +157,7 @@ private:
             
             // 填充数据
             for (int col = 0; col < cols; ++col) {
-                QVariant cellValue = m_rowData->cellValue(col);
+                QVariant cellValue = rowData->cellValue(col);
                 QString displayText = cellValue.toString();
                 
                 auto* item = new QTableWidgetItem(displayText);
@@ -233,8 +194,8 @@ private:
                 }
             }
             
-            qDebug() << "DisplayRowModel: Updated display for row" 
-                     << (m_rowData->rowIndex() + 1) << "with" << cols << "columns";
+            qDebug() << "DisplayRowModel: Updated display for row"
+                     << (rowData->rowIndex() + 1) << "with" << cols << "columns";
             
         } catch (const std::exception& e) {
             qDebug() << "DisplayRowModel: Error updating display:" << e.what();
@@ -243,9 +204,8 @@ private:
         }
     }
 
+private:
     QWidget* m_widget;
     QLabel* m_infoLabel;
     QTableWidget* m_tableWidget;
-    
-    std::shared_ptr<RowData> m_rowData;
 };

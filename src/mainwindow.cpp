@@ -9,17 +9,17 @@
 #include "DisplayRangeModel.hpp"
 #include "StringCompareModel.hpp"
 #include "DisplayBooleanModel.hpp"
-#include "ForEachRowModel.hpp"
+
 #include "DisplayRowModel.hpp"
 #include "RangeInfoModel.hpp"
 #include "SmartLoopProcessorModel.hpp"
 #include "DisplayCellListModel.hpp"
+#include "SaveExcelModel.hpp"
 #include <QtNodes/ConnectionStyle>
 #include <QtNodes/NodeStyle>
 #include <QtNodes/DataFlowGraphicsScene>
 
-// 需要包含具体的节点模型以便调用特定方法
-#include "OpenExcelModel.hpp"
+
 
 #include <QFileDialog>
 #include <QMessageBox>
@@ -103,11 +103,12 @@ std::shared_ptr<QtNodes::NodeDelegateModelRegistry> MainWindow::registerDataMode
     ret->registerModel<DisplayRangeModel>("DisplayRange");
     ret->registerModel<StringCompareModel>("StringCompare");
     ret->registerModel<DisplayBooleanModel>("DisplayBoolean");
-    ret->registerModel<ForEachRowModel>("ForEachRow");
+
     ret->registerModel<SmartLoopProcessorModel>("SmartLoopProcessor");
     ret->registerModel<DisplayCellListModel>("DisplayCellList");
     ret->registerModel<DisplayRowModel>("DisplayRow");
     ret->registerModel<RangeInfoModel>("RangeInfo");
+    ret->registerModel<SaveExcelModel>("SaveExcel");
     return ret;
 }
 
@@ -369,9 +370,7 @@ void MainWindow::updatePropertyPanel(QtNodes::NodeId nodeId)
     contentLayout->addWidget(infoLabel);
 
     // 根据节点类型添加特定的属性编辑器
-    if (nodeName == "ForEachRow") {
-        addForEachRowProperties(contentLayout, nodeId);
-    } else if (nodeName == "StringCompare") {
+    if (nodeName == "StringCompare") {
         addStringCompareProperties(contentLayout, nodeId);
     } else {
         // 通用属性
@@ -419,72 +418,7 @@ void MainWindow::clearPropertyPanel()
     qDebug() << "MainWindow: Cleared property panel";
 }
 
-void MainWindow::addForEachRowProperties(QVBoxLayout* layout, QtNodes::NodeId nodeId)
-{
-    // ForEachRow节点的属性编辑器
-    QLabel* descLabel = new QLabel(tr("行提取器属性："));
-    descLabel->setStyleSheet("font-weight: bold; margin-top: 10px;");
-    layout->addWidget(descLabel);
 
-    // 获取节点实例
-    auto* forEachModel = m_graphModel->delegateModel<ForEachRowModel>(nodeId);
-    if (!forEachModel) {
-        QLabel* errorLabel = new QLabel(tr("无法获取节点实例"));
-        errorLabel->setStyleSheet("color: red;");
-        layout->addWidget(errorLabel);
-        return;
-    }
-
-    // 当前行号设置
-    QLabel* rowLabel = new QLabel(tr("要提取的行号："));
-    layout->addWidget(rowLabel);
-
-    QSpinBox* rowSpinBox = new QSpinBox();
-    rowSpinBox->setRange(1, qMax(1, forEachModel->getTotalRows()));
-    rowSpinBox->setValue(forEachModel->getCurrentRowIndex() + 1); // 显示1基索引
-    rowSpinBox->setSuffix(QString(" / %1").arg(forEachModel->getTotalRows()));
-    layout->addWidget(rowSpinBox);
-
-    // 连接信号，当用户改变值时更新节点
-    connect(rowSpinBox, QOverload<int>::of(&QSpinBox::valueChanged),
-            [forEachModel](int value) {
-                forEachModel->setCurrentRowIndex(value - 1); // 转换为0基索引
-            });
-
-    // 目标列设置
-    QLabel* columnLabel = new QLabel(tr("要提取的列："));
-    layout->addWidget(columnLabel);
-
-    QComboBox* columnCombo = new QComboBox();
-
-    // 动态获取列数
-    int totalColumns = forEachModel->getTotalColumns();
-    if (totalColumns > 0) {
-        for (int i = 0; i < totalColumns; ++i) {
-            QString columnName = QString("%1列").arg(QChar('A' + i));
-            columnCombo->addItem(columnName, i);
-        }
-        columnCombo->setCurrentIndex(forEachModel->getTargetColumn());
-    } else {
-        columnCombo->addItem("等待数据...", -1);
-        columnCombo->setEnabled(false);
-    }
-    layout->addWidget(columnCombo);
-
-    // 连接信号，当用户改变列时更新节点
-    connect(columnCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            [forEachModel](int index) {
-                forEachModel->setTargetColumn(index);
-            });
-
-    // 说明文本
-    QLabel* helpLabel = new QLabel(tr("提示：修改行号和列会立即更新输出数据\n第二个输出端口提供单元格数据，可连接到StringCompare"));
-    helpLabel->setStyleSheet("color: #666666; font-size: 10px; font-style: italic;");
-    helpLabel->setWordWrap(true);
-    layout->addWidget(helpLabel);
-
-    qDebug() << "MainWindow: Added ForEachRow properties for node" << nodeId;
-}
 
 void MainWindow::addStringCompareProperties(QVBoxLayout* layout, QtNodes::NodeId nodeId)
 {
@@ -689,6 +623,14 @@ void MainWindow::showSceneContextMenu(const QPointF& pos)
         m_graphModel->setNodeData(nodeId, QtNodes::NodeRole::Position, pos);
     });
 
+    dataSourceMenu->addSeparator();
+
+    QAction* addSaveExcelAction = dataSourceMenu->addAction("保存Excel");
+    connect(addSaveExcelAction, &QAction::triggered, [this, pos]() {
+        auto nodeId = m_graphModel->addNode("SaveExcel");
+        m_graphModel->setNodeData(nodeId, QtNodes::NodeRole::Position, pos);
+    });
+
     // 处理节点
     QMenu* processMenu = addNodeMenu->addMenu("数据处理");
     QAction* addSmartLoopAction = processMenu->addAction("智能循环处理器");
@@ -697,11 +639,7 @@ void MainWindow::showSceneContextMenu(const QPointF& pos)
         m_graphModel->setNodeData(nodeId, QtNodes::NodeRole::Position, pos);
     });
 
-    QAction* addForEachAction = processMenu->addAction("遍历行(旧版)");
-    connect(addForEachAction, &QAction::triggered, [this, pos]() {
-        auto nodeId = m_graphModel->addNode("ForEachRow");
-        m_graphModel->setNodeData(nodeId, QtNodes::NodeRole::Position, pos);
-    });
+
 
     QAction* addStringCompareAction = processMenu->addAction("字符串比较");
     connect(addStringCompareAction, &QAction::triggered, [this, pos]() {
@@ -900,18 +838,7 @@ void MainWindow::triggerDataFlow()
 
         QString nodeName = nodeDelegate->name();
 
-        // 启动所有ForEach循环节点
-        if (nodeName == "ForEachRow") {
-            auto* forEachModel = m_graphModel->delegateModel<ForEachRowModel>(nodeId);
-            if (forEachModel) {
-                // 检查是否有数据输入
-                auto connections = m_graphModel->connections(nodeId, QtNodes::PortType::In, 0);
-                if (!connections.empty()) {
-                    qDebug() << "MainWindow: Starting ForEachRowModel";
-                    forEachModel->startLoop(); // 直接启动，不延迟
-                }
-            }
-        }
+
 
         // 检查是否为源节点（没有输入端口或输入端口没有连接）
         bool isSourceNode = true;
