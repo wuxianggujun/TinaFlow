@@ -13,6 +13,7 @@
 #include "TinaFlowGraphicsView.hpp"
 #include "CommandHistoryWidget.hpp"
 #include "ModernToolBar.hpp"
+#include "NodePalette.hpp"
 
 namespace Ui {
 class MainWindow;
@@ -49,12 +50,19 @@ private slots:
     void deleteSelectedConnection();
     void showAllConnectionsForDeletion();
     void duplicateSelectedNode();
+    
+    // 节点面板相关
+    void onNodePaletteCreationRequested(const QString& nodeId);
+    void onNodePaletteSelectionChanged(const QString& nodeId);
+    void showImprovedSceneContextMenu(const QPointF& pos);
+    void createNodeFromPalette(const QString& nodeId, const QPointF& position);
     QString getPortTypeDescription(QtNodes::NodeDelegateModel* nodeModel, QtNodes::PortType portType, QtNodes::PortIndex portIndex);
 
 private:
     void setupNodeEditor();
     void setupModernToolbar();
     void setupPropertyPanel();
+    void setupNodePalette();
     void setupKeyboardShortcuts();
     void setupCustomStyles();
     void saveToFile(const QString& fileName);
@@ -91,6 +99,9 @@ private:
     
     // 现代化工具栏
     ModernToolBar* m_modernToolBar;
+    
+    // 节点面板
+    NodePalette* m_nodePalette;
 
     // 右键菜单相关
     QtNodes::NodeId m_selectedNodeId;

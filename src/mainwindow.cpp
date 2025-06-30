@@ -26,6 +26,7 @@
 #include "CommandManager.hpp"
 #include "NodeCommands.hpp"
 #include "ModernToolBar.hpp"
+#include "NodeCatalog.hpp"
 
 // QtNodes
 #include <QtNodes/ConnectionStyle>
@@ -52,6 +53,8 @@
 #include <QPushButton>
 #include <QFrame>
 #include <QShortcut>
+#include <QDockWidget>
+#include <QCursor>
 
 // 静态成员变量定义
 bool MainWindow::s_globalExecutionEnabled = false;
@@ -65,6 +68,7 @@ MainWindow::MainWindow(QWidget* parent)
     setupNodeEditor();
     setupModernToolbar();
     setupPropertyPanel();
+    setupNodePalette();
     setupKeyboardShortcuts();
 }
 
@@ -97,7 +101,11 @@ void MainWindow::setupNodeEditor()
     connect(m_graphicsView, &TinaFlowGraphicsView::connectionContextMenuRequested,
             this, &MainWindow::showConnectionContextMenu);
     connect(m_graphicsView, &TinaFlowGraphicsView::sceneContextMenuRequested,
-            this, &MainWindow::showSceneContextMenu);
+            this, &MainWindow::showImprovedSceneContextMenu);
+    
+    // 连接拖拽事件
+    connect(m_graphicsView, &TinaFlowGraphicsView::nodeCreationFromDragRequested,
+            this, &MainWindow::createNodeFromPalette);
 
     // 重新启用数据更新事件，使用队列连接并添加防护逻辑
     connect(m_graphModel.get(), &QtNodes::DataFlowGraphModel::inPortDataWasSet,
@@ -1113,6 +1121,29 @@ void MainWindow::setStyle()
   )");
 }
 
+void MainWindow::setupNodePalette()
+{
+    // 创建节点面板
+    m_nodePalette = new NodePalette(this);
+    
+    // 创建节点面板的停靠窗口
+    QDockWidget* nodePaletteDock = new QDockWidget("节点面板", this);
+    nodePaletteDock->setWidget(m_nodePalette);
+    nodePaletteDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+    nodePaletteDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
+    
+    // 将停靠窗口添加到左侧
+    addDockWidget(Qt::LeftDockWidgetArea, nodePaletteDock);
+    
+    // 连接节点面板信号
+    connect(m_nodePalette, &NodePalette::nodeCreationRequested, 
+            this, &MainWindow::onNodePaletteCreationRequested);
+    connect(m_nodePalette, &NodePalette::nodeSelectionChanged, 
+            this, &MainWindow::onNodePaletteSelectionChanged);
+    
+    qDebug() << "MainWindow: Node palette setup completed";
+}
+
 void MainWindow::setupKeyboardShortcuts()
 {
     // 缩放快捷键
@@ -1147,4 +1178,125 @@ void MainWindow::setupKeyboardShortcuts()
     });
     
     qDebug() << "MainWindow: Keyboard shortcuts setup completed";
+}
+
+// 节点面板信号处理
+void MainWindow::onNodePaletteCreationRequested(const QString& nodeId)
+{
+    // 获取当前鼠标位置作为默认创建位置
+    QPoint globalMousePos = QCursor::pos();
+    QPoint viewPos = m_graphicsView->mapFromGlobal(globalMousePos);
+    QPointF scenePos = m_graphicsView->mapToScene(viewPos);
+    
+    // 如果鼠标不在视图内，使用视图中心
+    if (!m_graphicsView->rect().contains(viewPos)) {
+        scenePos = m_graphicsView->mapToScene(m_graphicsView->rect().center());
+    }
+    
+    createNodeFromPalette(nodeId, scenePos);
+}
+
+void MainWindow::onNodePaletteSelectionChanged(const QString& nodeId)
+{
+    // 显示节点信息
+    NodeInfo nodeInfo = NodeCatalog::getNodeInfo(nodeId);
+    if (!nodeInfo.id.isEmpty()) {
+        ui->statusbar->showMessage(
+            QString("选中节点: %1 - %2").arg(nodeInfo.displayName).arg(nodeInfo.description), 3000);
+    }
+}
+
+void MainWindow::createNodeFromPalette(const QString& nodeId, const QPointF& position)
+{
+    qDebug() << "MainWindow: Creating node from palette:" << nodeId << "at position:" << position;
+    
+    auto command = std::make_unique<CreateNodeCommand>(m_graphicsScene, nodeId, position);
+    auto& commandManager = CommandManager::instance();
+    
+    if (commandManager.executeCommand(std::move(command))) {
+        NodeInfo nodeInfo = NodeCatalog::getNodeInfo(nodeId);
+        ui->statusbar->showMessage(tr("已创建节点: %1").arg(nodeInfo.displayName), 2000);
+    } else {
+        ui->statusbar->showMessage(tr("创建节点失败"), 2000);
+    }
+}
+
+void MainWindow::showImprovedSceneContextMenu(const QPointF& pos)
+{
+    QMenu contextMenu(this);
+    contextMenu.setStyleSheet(
+        "QMenu {"
+        "background-color: white;"
+        "border: 1px solid #ccc;"
+        "border-radius: 4px;"
+        "padding: 4px;"
+        "}"
+        "QMenu::item {"
+        "padding: 8px 24px;"
+        "border: none;"
+        "}"
+        "QMenu::item:selected {"
+        "background-color: #e3f2fd;"
+        "color: #1976d2;"
+        "}"
+        "QMenu::separator {"
+        "height: 1px;"
+        "background-color: #eee;"
+        "margin: 4px 8px;"
+        "}"
+    );
+
+    // 常用节点快速访问
+    QMenu* quickAccessMenu = contextMenu.addMenu("⭐ 常用节点");
+    QList<NodeInfo> favoriteNodes = NodeCatalog::getFrequentlyUsedNodes();
+    for (const NodeInfo& nodeInfo : favoriteNodes) {
+        QAction* action = quickAccessMenu->addAction(nodeInfo.displayName);
+        action->setToolTip(nodeInfo.description);
+        connect(action, &QAction::triggered, [this, nodeInfo, pos]() {
+            createNodeFromPalette(nodeInfo.id, pos);
+        });
+    }
+
+    contextMenu.addSeparator();
+
+    // 按分类添加节点
+    QStringList categories = NodeCatalog::getAllCategories();
+    for (const QString& category : categories) {
+        QMenu* categoryMenu = contextMenu.addMenu(category);
+        QList<NodeInfo> categoryNodes = NodeCatalog::getNodesByCategory(category);
+        
+        for (const NodeInfo& nodeInfo : categoryNodes) {
+            QAction* action = categoryMenu->addAction(nodeInfo.displayName);
+            action->setToolTip(nodeInfo.description);
+            connect(action, &QAction::triggered, [this, nodeInfo, pos]() {
+                createNodeFromPalette(nodeInfo.id, pos);
+            });
+        }
+    }
+
+    contextMenu.addSeparator();
+
+    // 画布操作
+    QAction* clearAllAction = contextMenu.addAction("🗑️ 清空画布");
+    connect(clearAllAction, &QAction::triggered, [this]() {
+        if (QMessageBox::question(this, "确认", "确定要清空所有节点吗？\n此操作可以撤销。") == QMessageBox::Yes) {
+            auto nodeIds = m_graphModel->allNodeIds();
+            if (!nodeIds.empty()) {
+                auto& commandManager = CommandManager::instance();
+                commandManager.beginMacro("清空画布");
+                
+                for (auto nodeId : nodeIds) {
+                    auto command = std::make_unique<DeleteNodeCommand>(m_graphicsScene, nodeId);
+                    commandManager.executeCommand(std::move(command));
+                }
+                
+                commandManager.endMacro();
+                ui->statusbar->showMessage(tr("已清空画布，删除了 %1 个节点").arg(nodeIds.size()), 3000);
+            }
+        }
+    });
+
+    // 转换坐标并显示菜单
+    QPoint globalPos = m_graphicsView->mapToGlobal(m_graphicsView->mapFromScene(pos));
+    contextMenu.exec(globalPos);
 }

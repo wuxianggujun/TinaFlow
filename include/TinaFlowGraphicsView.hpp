@@ -8,6 +8,10 @@
 #include <QtNodes/DataFlowGraphicsScene>
 #include <QtNodes/internal/ConnectionGraphicsObject.hpp>
 #include <QContextMenuEvent>
+#include <QDragEnterEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
+#include <QMimeData>
 #include <QGraphicsItem>
 #include <QGraphicsPathItem>
 #include <QMenu>
@@ -32,6 +36,9 @@ public:
         : QtNodes::GraphicsView(scene, parent)
         , m_scene(scene)
     {
+        // 启用拖拽接受
+        setAcceptDrops(true);
+        qDebug() << "TinaFlowGraphicsView: Initialized with drag-drop support";
     }
 
 protected:
@@ -67,6 +74,43 @@ protected:
 
         // 默认情况：空白区域菜单
         emit sceneContextMenuRequested(scenePos);
+    }
+    
+    void dragEnterEvent(QDragEnterEvent* event) override
+    {
+        // 检查是否为节点拖拽
+        if (event->mimeData()->hasFormat("application/x-tinaflow-node")) {
+            event->acceptProposedAction();
+            qDebug() << "TinaFlowGraphicsView: Accepting node drag";
+        } else {
+            QtNodes::GraphicsView::dragEnterEvent(event);
+        }
+    }
+
+    void dragMoveEvent(QDragMoveEvent* event) override
+    {
+        // 检查是否为节点拖拽
+        if (event->mimeData()->hasFormat("application/x-tinaflow-node")) {
+            event->acceptProposedAction();
+        } else {
+            QtNodes::GraphicsView::dragMoveEvent(event);
+        }
+    }
+
+    void dropEvent(QDropEvent* event) override
+    {
+        // 检查是否为节点拖拽
+        if (event->mimeData()->hasFormat("application/x-tinaflow-node")) {
+            QString nodeType = QString::fromUtf8(event->mimeData()->data("application/x-tinaflow-node"));
+            QPointF scenePos = mapToScene(event->pos());
+            
+            qDebug() << "TinaFlowGraphicsView: Dropping node" << nodeType << "at position" << scenePos;
+            
+            emit nodeCreationFromDragRequested(nodeType, scenePos);
+            event->acceptProposedAction();
+        } else {
+            QtNodes::GraphicsView::dropEvent(event);
+        }
     }
 
 private:
@@ -151,6 +195,7 @@ signals:
     void nodeContextMenuRequested(QtNodes::NodeId nodeId, const QPointF& pos);
     void connectionContextMenuRequested(QtNodes::ConnectionId connectionId, const QPointF& pos);
     void sceneContextMenuRequested(const QPointF& pos);
+    void nodeCreationFromDragRequested(const QString& nodeType, const QPointF& position);
 
 private:
     QtNodes::DataFlowGraphicsScene* m_scene;
