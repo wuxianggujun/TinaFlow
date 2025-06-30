@@ -29,6 +29,7 @@ public:
     
     bool execute() override;
     bool undo() override;
+    bool redo() override;
     
     QString getDescription() const override;
     QString getType() const override;
@@ -58,6 +59,7 @@ public:
     
     bool execute() override;
     bool undo() override;
+    bool redo() override;
     
     QString getDescription() const override;
     QString getType() const override;

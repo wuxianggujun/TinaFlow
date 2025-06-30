@@ -61,8 +61,8 @@ bool CreateNodeCommand::undo()
             return false;
         }
 
-        // 保存节点数据（如果需要的话）
-        // m_nodeData = graphModel.nodeData(m_nodeId, QtNodes::NodeRole::Widget);
+        // 保存节点的所有数据用于重做
+        m_nodeData = graphModel.saveNode(m_nodeId);
 
         // 删除节点
         graphModel.deleteNode(m_nodeId);
@@ -72,6 +72,46 @@ bool CreateNodeCommand::undo()
 
     } catch (const std::exception& e) {
         qWarning() << "CreateNodeCommand: Exception during undo:" << e.what();
+        return false;
+    }
+}
+
+bool CreateNodeCommand::redo()
+{
+    if (!m_scene) {
+        qWarning() << "CreateNodeCommand: Scene is null";
+        return false;
+    }
+
+    try {
+        auto& graphModel = m_scene->graphModel();
+
+        // 如果有保存的节点数据，尝试恢复
+        if (!m_nodeData.isEmpty()) {
+            // loadNode可能会改变节点ID，我们需要找到新创建的节点
+            auto oldNodeIds = graphModel.allNodeIds();
+            
+            graphModel.loadNode(m_nodeData);
+            
+            // 找到新创建的节点ID
+            auto newNodeIds = graphModel.allNodeIds();
+            for (const auto& nodeId : newNodeIds) {
+                if (oldNodeIds.find(nodeId) == oldNodeIds.end()) {
+                    // 这是新创建的节点
+                    m_nodeId = nodeId;
+                    break;
+                }
+            }
+            
+            qDebug() << "CreateNodeCommand: Restored node with ID" << m_nodeId;
+            return true;
+        } else {
+            // 如果没有保存的数据，重新创建（这应该只在第一次执行时发生）
+            return execute();
+        }
+
+    } catch (const std::exception& e) {
+        qWarning() << "CreateNodeCommand: Exception during redo:" << e.what();
         return false;
     }
 }
@@ -144,9 +184,13 @@ bool DeleteNodeCommand::execute()
         // 保存节点信息用于撤销
         m_position = graphModel.nodeData(m_nodeId, QtNodes::NodeRole::Position).value<QPointF>();
         
-        // 获取节点类型（这里需要根据实际的QtNodes版本调整）
-        // 暂时使用简化的方法保存节点类型
-        m_nodeType = "UnknownNode";
+        // 保存完整的节点数据
+        m_nodeData = graphModel.saveNode(m_nodeId);
+        
+        // 获取节点类型（从保存的数据中获取）
+        if (m_nodeData.contains("type")) {
+            m_nodeType = m_nodeData["type"].toString();
+        }
 
         // 保存所有相关连接
         m_connections.clear();
@@ -177,27 +221,73 @@ bool DeleteNodeCommand::undo()
     try {
         auto& graphModel = m_scene->graphModel();
 
-        // 重新创建节点
-        QtNodes::NodeId newNodeId = graphModel.addNode(m_nodeType);
-        if (newNodeId == QtNodes::InvalidNodeId) {
-            qWarning() << "DeleteNodeCommand: Failed to restore node";
-            return false;
+        // 如果有完整的节点数据，恢复它
+        if (!m_nodeData.isEmpty()) {
+            // loadNode可能会改变节点ID，我们需要找到新创建的节点
+            auto oldNodeIds = graphModel.allNodeIds();
+            
+            graphModel.loadNode(m_nodeData);
+            
+            // 找到新创建的节点ID
+            auto newNodeIds = graphModel.allNodeIds();
+            for (const auto& nodeId : newNodeIds) {
+                if (oldNodeIds.find(nodeId) == oldNodeIds.end()) {
+                    // 这是新创建的节点
+                    m_nodeId = nodeId;
+                    break;
+                }
+            }
+            
+            qDebug() << "DeleteNodeCommand: Restored node with ID" << m_nodeId;
+            return true;
+        } else {
+            // 如果没有保存的数据，重新创建（简化方法）
+            QtNodes::NodeId newNodeId = graphModel.addNode(m_nodeType);
+            if (newNodeId == QtNodes::NodeId{}) {
+                qWarning() << "DeleteNodeCommand: Failed to restore node";
+                return false;
+            }
+
+            // 恢复位置
+            graphModel.setNodeData(newNodeId, QtNodes::NodeRole::Position, m_position);
+            
+            // 更新节点ID
+            m_nodeId = newNodeId;
+
+            qDebug() << "DeleteNodeCommand: Restored node" << newNodeId << "(fallback method)";
+            return true;
         }
-
-        // 恢复位置
-        graphModel.setNodeData(newNodeId, QtNodes::NodeRole::Position, m_position);
-        
-        // 更新节点ID（新创建的可能不同）
-        m_nodeId = newNodeId;
-
-        // 注意：连接的恢复比较复杂，这里简化处理
-        // 实际应用中需要保存更详细的连接信息
-
-        qDebug() << "DeleteNodeCommand: Restored node" << newNodeId;
-        return true;
 
     } catch (const std::exception& e) {
         qWarning() << "DeleteNodeCommand: Exception during undo:" << e.what();
+        return false;
+    }
+}
+
+bool DeleteNodeCommand::redo()
+{
+    if (!m_scene) {
+        qWarning() << "DeleteNodeCommand: Scene is null";
+        return false;
+    }
+
+    try {
+        auto& graphModel = m_scene->graphModel();
+
+        // 检查当前节点是否存在
+        if (!graphModel.nodeExists(m_nodeId)) {
+            qWarning() << "DeleteNodeCommand: Node not found for redo:" << m_nodeId;
+            return false;
+        }
+
+        // 直接删除节点（不需要重新保存数据，因为已经保存过了）
+        graphModel.deleteNode(m_nodeId);
+
+        qDebug() << "DeleteNodeCommand: Re-deleted node" << m_nodeId;
+        return true;
+
+    } catch (const std::exception& e) {
+        qWarning() << "DeleteNodeCommand: Exception during redo:" << e.what();
         return false;
     }
 }
