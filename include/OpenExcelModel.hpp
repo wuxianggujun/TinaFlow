@@ -17,6 +17,9 @@
 #include "XLDocument.hpp"
 #include "data/WorkbookData.hpp"
 #include "PropertyWidget.hpp"
+#include "ErrorHandler.hpp"
+#include "DataValidator.hpp"
+#include "PerformanceProfiler.hpp"
 
 class ClickableLineEdit : public QLineEdit
 {
@@ -142,6 +145,8 @@ private:
 
     void compute()
     {
+        PROFILE_NODE("OpenExcelModel");
+
         if (m_filePath.empty())
         {
             m_workbookData = nullptr;
@@ -153,36 +158,61 @@ private:
             return;
         }
 
-        try
-        {
-            OpenXLSX::XLDocument* doc = new OpenXLSX::XLDocument();
-            doc->open(m_filePath);
+        SAFE_EXECUTE({
+            // 验证文件路径
+            QString filePath = QString::fromStdString(m_filePath);
+            auto validation = DataValidator::validateExcelFile(filePath);
+            if (!validation.isValid) {
+                throw TinaFlowException::fileNotFound(filePath);
+            }
 
+            // 尝试打开Excel文件
+            OpenXLSX::XLDocument* doc = new OpenXLSX::XLDocument();
+            try {
+                doc->open(m_filePath);
+            } catch (const std::exception& openError) {
+                delete doc;
+                TINAFLOW_THROW(ExcelFileInvalid, QString("无法打开Excel文件: %1 - %2").arg(filePath).arg(openError.what()));
+            }
+
+            // 获取工作簿
             OpenXLSX::XLWorkbook wb = doc->workbook();
+            // 检查工作簿是否有效（通过检查是否有工作表）
+            if (wb.worksheetCount() == 0) {
+                delete doc;
+                TINAFLOW_THROW(ExcelFileInvalid, QString("Excel工作簿无效或为空: %1").arg(filePath));
+            }
+
             m_workbookData = std::make_shared<WorkbookData>(wb, doc);
             Q_EMIT dataUpdated(0);
-        }
-        catch (const std::exception& e)
-        {
-            m_workbookData = nullptr;
-            QMessageBox::warning(
-                nullptr,
-                "打开文件失败",
-                QString("错误信息: %1").arg(e.what())
-            );
-        }
+
+            qDebug() << "OpenExcelModel: Successfully opened Excel file:" << filePath;
+
+        }, m_widget, "OpenExcelModel", "打开Excel文件");
     }
     
     void chooseFile()
     {
-        const QString path = QFileDialog::getOpenFileName(nullptr, "打开 Excel File", {}, "Excel Files (*.xlsx)");
-        if (path.isEmpty())
-            return;
-        m_filePath = path.toStdString();
-        m_lineEdit->setToolTip(path);
-        m_lineEdit->setText(QFileInfo(path).fileName());
+        SAFE_EXECUTE({
+            const QString path = QFileDialog::getOpenFileName(nullptr, "打开 Excel File", {}, "Excel Files (*.xlsx *.xls)");
+            if (path.isEmpty()) {
+                return; // 用户取消选择
+            }
 
-        compute();
+            // 验证选择的文件
+            auto validation = DataValidator::validateExcelFile(path);
+            if (!validation.isValid) {
+                SHOW_WARNING(validation.errorMessage, validation.suggestions.join("\n"), m_widget);
+                return;
+            }
+
+            m_filePath = path.toStdString();
+            m_lineEdit->setToolTip(path);
+            m_lineEdit->setText(QFileInfo(path).fileName());
+
+            compute();
+
+        }, m_widget, "OpenExcelModel", "选择Excel文件");
     }
 
 protected:

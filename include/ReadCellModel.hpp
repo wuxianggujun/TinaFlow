@@ -8,6 +8,8 @@
 #include "data/SheetData.hpp"
 #include "data/CellData.hpp"
 #include "PropertyWidget.hpp"
+#include "ErrorHandler.hpp"
+#include "DataValidator.hpp"
 
 #include <QLineEdit>
 #include <QHBoxLayout>
@@ -137,7 +139,7 @@ private:
     void updateCellData()
     {
         qDebug() << "ReadCellModel::updateCellData called";
-        
+
         if (!m_sheetData) {
             qDebug() << "ReadCellModel: No sheet data available";
             m_cellData.reset();
@@ -153,22 +155,29 @@ private:
             return;
         }
 
-        try {
+        SAFE_EXECUTE({
+            // 验证单元格地址
+            auto validation = DataValidator::validateCellAddress(cellAddress);
+            if (!validation.isValid) {
+                throw TinaFlowException::invalidCellAddress(cellAddress);
+            }
+
             // 使用OpenXLSX读取单元格数据
             auto& worksheet = m_sheetData->worksheet();
             auto cell = worksheet.cell(cellAddress.toStdString());
-            
+
             qDebug() << "ReadCellModel: Reading cell" << cellAddress;
-            
+
             // 创建CellData
             m_cellData = std::make_shared<CellData>(cell);
-            
+
             qDebug() << "ReadCellModel: Successfully read cell data";
             emit dataUpdated(0);
-            
-        } catch (const std::exception& e) {
-            qDebug() << "ReadCellModel: Error reading cell:" << e.what();
-            m_cellData.reset();
+
+        }, m_widget, "ReadCellModel", QString("读取单元格 %1").arg(cellAddress));
+
+        // 如果发生错误，清除数据
+        if (!m_cellData) {
             emit dataUpdated(0);
         }
     }

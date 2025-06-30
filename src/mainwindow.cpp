@@ -17,6 +17,8 @@
 #include "SaveExcelModel.hpp"
 #include "IPropertyProvider.hpp"
 #include "PropertyWidget.hpp"
+#include "ErrorHandler.hpp"
+#include "DataValidator.hpp"
 #include <QtNodes/ConnectionStyle>
 #include <QtNodes/NodeStyle>
 #include <QtNodes/DataFlowGraphicsScene>

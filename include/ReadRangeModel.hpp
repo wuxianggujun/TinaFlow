@@ -8,6 +8,8 @@
 #include "data/SheetData.hpp"
 #include "data/RangeData.hpp"
 #include "PropertyWidget.hpp"
+#include "ErrorHandler.hpp"
+#include "DataValidator.hpp"
 
 #include <QLineEdit>
 #include <QHBoxLayout>
@@ -153,11 +155,17 @@ private:
             return;
         }
 
-        try {
+        SAFE_EXECUTE({
+            // 验证范围地址
+            auto validation = DataValidator::validateRange(rangeAddress);
+            if (!validation.isValid) {
+                throw TinaFlowException::invalidRange(rangeAddress);
+            }
+
             // 使用OpenXLSX读取范围数据
             auto& worksheet = m_sheetData->worksheet();
             auto range = worksheet.range(rangeAddress.toStdString());
-            
+
             qDebug() << "ReadRangeModel: Reading range" << rangeAddress;
             
             // 获取范围的行列数
@@ -208,13 +216,14 @@ private:
             // 创建RangeData
             m_rangeData = std::make_shared<RangeData>(rangeAddress, data);
             
-            qDebug() << "ReadRangeModel: Successfully read range data:" 
+            qDebug() << "ReadRangeModel: Successfully read range data:"
                      << rowCount << "rows x" << colCount << "cols";
             emit dataUpdated(0);
-            
-        } catch (const std::exception& e) {
-            qDebug() << "ReadRangeModel: Error reading range:" << e.what();
-            m_rangeData.reset();
+
+        }, m_widget, "ReadRangeModel", QString("读取范围 %1").arg(rangeAddress));
+
+        // 如果发生错误，清除数据
+        if (!m_rangeData) {
             emit dataUpdated(0);
         }
     }
