@@ -4,24 +4,25 @@
 
 #pragma once
 
+#include "BaseNodeModel.hpp"
 #include "data/SheetData.hpp"
 #include "data/CellData.hpp"
+#include "PropertyWidget.hpp"
 
 #include <QLineEdit>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QTimer>
-#include <QtNodes/NodeDelegateModel>
 #include <QDebug>
 
 /**
  * @brief 读取Excel单元格数据的节点模型
- * 
+ *
  * 这个节点接收一个工作表数据(SheetData)作为输入，
  * 允许用户指定单元格地址（如"A1", "B5"），
  * 然后输出该单元格的数据(CellData)。
  */
-class ReadCellModel : public QtNodes::NodeDelegateModel
+class ReadCellModel : public BaseNodeModel
 {
     Q_OBJECT
 
@@ -172,9 +173,82 @@ private:
         }
     }
 
+protected:
+    // 实现BaseNodeModel的虚函数
+    QString getNodeTypeName() const override
+    {
+        return "ReadCellModel";
+    }
+
+    // 实现IPropertyProvider接口
+    bool createPropertyPanel(PropertyWidget* propertyWidget) override
+    {
+        propertyWidget->addTitle("读取单元格设置");
+        propertyWidget->addDescription("从Excel工作表中读取指定单元格的数据");
+
+        // 添加模式切换按钮
+        propertyWidget->addModeToggleButtons();
+
+        // 单元格地址设置
+        propertyWidget->addTextProperty("单元格地址", m_cellAddressEdit->text(),
+            "cellAddress", "输入单元格地址，如A1、B5等",
+            [this](const QString& newAddress) {
+                if (!newAddress.isEmpty()) {
+                    m_cellAddressEdit->setText(newAddress.toUpper());
+                    qDebug() << "ReadCellModel: Cell address changed to" << newAddress;
+                }
+            });
+
+        // 工作表连接状态
+        propertyWidget->addSeparator();
+        propertyWidget->addTitle("连接状态");
+
+        if (m_sheetData) {
+            propertyWidget->addInfoProperty("工作表状态", "已连接", "color: #28a745; font-weight: bold;");
+            propertyWidget->addInfoProperty("工作表名称", QString::fromStdString(m_sheetData->sheetName()), "color: #666;");
+        } else {
+            propertyWidget->addInfoProperty("工作表状态", "未连接", "color: #999; font-style: italic;");
+        }
+
+        // 输出数据状态
+        if (m_cellData && m_cellData->isValid()) {
+            propertyWidget->addSeparator();
+            propertyWidget->addTitle("输出数据");
+
+            try {
+                QString address = m_cellData->address();
+                QVariant value = m_cellData->value();
+                QString type = m_cellData->type().name;
+
+                propertyWidget->addInfoProperty("读取地址", address, "color: #2E86AB; font-weight: bold;");
+                propertyWidget->addInfoProperty("单元格值", value.toString(), "color: #333; font-weight: bold;");
+                propertyWidget->addInfoProperty("数据类型", type, "color: #666;");
+
+            } catch (const std::exception& e) {
+                propertyWidget->addInfoProperty("数据状态", QString("读取失败: %1").arg(e.what()), "color: #dc3545;");
+            }
+        } else {
+            propertyWidget->addSeparator();
+            propertyWidget->addInfoProperty("输出数据", "无数据", "color: #999; font-style: italic;");
+        }
+
+        return true;
+    }
+
+    QString getDisplayName() const override
+    {
+        return "读取单元格";
+    }
+
+    QString getDescription() const override
+    {
+        return "从Excel工作表中读取指定单元格的数据";
+    }
+
+private:
     QWidget* m_widget;
     QLineEdit* m_cellAddressEdit;
-    
+
     std::shared_ptr<SheetData> m_sheetData;
     std::shared_ptr<CellData> m_cellData;
 };

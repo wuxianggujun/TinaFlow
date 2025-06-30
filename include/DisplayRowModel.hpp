@@ -204,6 +204,93 @@ protected:
         }
     }
 
+protected:
+    // 重写基类方法，添加行数据特定的属性
+    void addDataSpecificProperties(PropertyWidget* propertyWidget) override
+    {
+        if (!hasValidData()) return;
+
+        try {
+            auto rowData = getData();
+            int rowIndex = rowData->rowIndex();
+            int columnCount = rowData->columnCount();
+
+            propertyWidget->addSeparator();
+            propertyWidget->addTitle("行数据信息");
+
+            // 基本信息
+            propertyWidget->addInfoProperty("行号", QString::number(rowIndex + 1), "color: #2E86AB; font-weight: bold;");
+            propertyWidget->addInfoProperty("列数", QString::number(columnCount), "color: #333; font-weight: bold;");
+
+            // 数据统计
+            if (columnCount > 0) {
+                propertyWidget->addSeparator();
+                propertyWidget->addTitle("数据统计");
+
+                int emptyCount = 0;
+                int numberCount = 0;
+                int textCount = 0;
+                int boolCount = 0;
+
+                // 统计不同类型的数据
+                for (int col = 0; col < columnCount; ++col) {
+                    QVariant value = rowData->cellValue(col);
+                    if (value.isNull() || value.toString().isEmpty()) {
+                        emptyCount++;
+                    } else if (value.type() == QVariant::Bool) {
+                        boolCount++;
+                    } else if (value.canConvert<double>()) {
+                        numberCount++;
+                    } else {
+                        textCount++;
+                    }
+                }
+
+                propertyWidget->addInfoProperty("空单元格", QString::number(emptyCount), "color: #999;");
+                propertyWidget->addInfoProperty("数值单元格", QString::number(numberCount), "color: #007acc;");
+                propertyWidget->addInfoProperty("文本单元格", QString::number(textCount), "color: #28a745;");
+                propertyWidget->addInfoProperty("布尔单元格", QString::number(boolCount), "color: #6f42c1;");
+
+                // 数据预览
+                propertyWidget->addSeparator();
+                propertyWidget->addTitle("列数据预览");
+
+                int previewCols = qMin(8, columnCount);
+
+                for (int col = 0; col < previewCols; ++col) {
+                    QVariant value = rowData->cellValue(col);
+                    QString valueStr = value.toString();
+                    if (valueStr.length() > 20) {
+                        valueStr = valueStr.left(20) + "...";
+                    }
+                    if (valueStr.isEmpty()) {
+                        valueStr = "(空)";
+                    }
+
+                    QString colLabel = QString("列%1").arg(col + 1);
+                    propertyWidget->addInfoProperty(colLabel, valueStr, "color: #666; font-family: monospace;");
+                }
+
+                if (columnCount > previewCols) {
+                    propertyWidget->addInfoProperty("", QString("... 还有%1列").arg(columnCount - previewCols), "color: #999; font-style: italic;");
+                }
+            }
+
+        } catch (const std::exception& e) {
+            propertyWidget->addInfoProperty("错误", QString("无法读取数据: %1").arg(e.what()), "color: #dc3545;");
+        }
+    }
+
+    QString getDisplayName() const override
+    {
+        return "显示行数据";
+    }
+
+    QString getDescription() const override
+    {
+        return "显示Excel行的所有列数据，适用于循环处理中的数据查看";
+    }
+
 private:
     QWidget* m_widget;
     QLabel* m_infoLabel;

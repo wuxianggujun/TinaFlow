@@ -226,6 +226,106 @@ protected:
         }
     }
 
+protected:
+    // 重写基类方法，添加范围信息特定的属性
+    void addDataSpecificProperties(PropertyWidget* propertyWidget) override
+    {
+        if (!hasValidData()) return;
+
+        try {
+            auto rangeData = getData();
+            int rows = rangeData->rowCount();
+            int cols = rangeData->columnCount();
+            QString rangeAddress = rangeData->rangeAddress();
+
+            propertyWidget->addSeparator();
+            propertyWidget->addTitle("范围信息");
+
+            // 基本信息
+            propertyWidget->addInfoProperty("范围地址", rangeAddress, "color: #2E86AB; font-weight: bold;");
+            propertyWidget->addInfoProperty("行数", QString::number(rows), "color: #333; font-weight: bold;");
+            propertyWidget->addInfoProperty("列数", QString::number(cols), "color: #333; font-weight: bold;");
+            propertyWidget->addInfoProperty("总单元格数", QString::number(rows * cols), "color: #666;");
+
+            // 数据统计
+            if (rows > 0 && cols > 0) {
+                propertyWidget->addSeparator();
+                propertyWidget->addTitle("数据统计");
+
+                int emptyCount = 0;
+                int numberCount = 0;
+                int textCount = 0;
+                int boolCount = 0;
+
+                // 统计不同类型的数据
+                for (int r = 0; r < rows; ++r) {
+                    for (int c = 0; c < cols; ++c) {
+                        QVariant value = rangeData->cellValue(r, c);
+                        if (value.isNull() || value.toString().isEmpty()) {
+                            emptyCount++;
+                        } else if (value.type() == QVariant::Bool) {
+                            boolCount++;
+                        } else if (value.canConvert<double>()) {
+                            numberCount++;
+                        } else {
+                            textCount++;
+                        }
+                    }
+                }
+
+                propertyWidget->addInfoProperty("空单元格", QString::number(emptyCount), "color: #999;");
+                propertyWidget->addInfoProperty("数值单元格", QString::number(numberCount), "color: #007acc;");
+                propertyWidget->addInfoProperty("文本单元格", QString::number(textCount), "color: #28a745;");
+                propertyWidget->addInfoProperty("布尔单元格", QString::number(boolCount), "color: #6f42c1;");
+
+                // 数据预览
+                propertyWidget->addSeparator();
+                propertyWidget->addTitle("数据预览");
+
+                int previewRows = qMin(5, rows);
+                int previewCols = qMin(4, cols);
+
+                for (int r = 0; r < previewRows; ++r) {
+                    QStringList rowValues;
+                    for (int c = 0; c < previewCols; ++c) {
+                        QVariant value = rangeData->cellValue(r, c);
+                        QString valueStr = value.toString();
+                        if (valueStr.length() > 8) {
+                            valueStr = valueStr.left(8) + "...";
+                        }
+                        if (valueStr.isEmpty()) {
+                            valueStr = "(空)";
+                        }
+                        rowValues << valueStr;
+                    }
+                    if (cols > previewCols) {
+                        rowValues << "...";
+                    }
+
+                    QString rowText = QString("第%1行: %2").arg(r + 1).arg(rowValues.join(" | "));
+                    propertyWidget->addInfoProperty("", rowText, "color: #666; font-family: monospace; font-size: 10px;");
+                }
+
+                if (rows > previewRows) {
+                    propertyWidget->addInfoProperty("", "...", "color: #999; text-align: center;");
+                }
+            }
+
+        } catch (const std::exception& e) {
+            propertyWidget->addInfoProperty("错误", QString("无法读取数据: %1").arg(e.what()), "color: #dc3545;");
+        }
+    }
+
+    QString getDisplayName() const override
+    {
+        return "范围信息";
+    }
+
+    QString getDescription() const override
+    {
+        return "显示Excel范围的详细信息和数据统计";
+    }
+
 private:
     QWidget* m_widget;
     QFrame* m_frame;

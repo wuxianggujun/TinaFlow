@@ -4,24 +4,25 @@
 
 #pragma once
 
+#include "BaseNodeModel.hpp"
 #include "data/SheetData.hpp"
 #include "data/RangeData.hpp"
+#include "PropertyWidget.hpp"
 
 #include <QLineEdit>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QTimer>
-#include <QtNodes/NodeDelegateModel>
 #include <QDebug>
 
 /**
  * @brief 读取Excel单元格范围数据的节点模型
- * 
+ *
  * 这个节点接收一个工作表数据(SheetData)作为输入，
  * 允许用户指定单元格范围（如"A1:C10"），
  * 然后输出该范围的所有数据(RangeData)。
  */
-class ReadRangeModel : public QtNodes::NodeDelegateModel
+class ReadRangeModel : public BaseNodeModel
 {
     Q_OBJECT
 
@@ -218,9 +219,112 @@ private:
         }
     }
 
+protected:
+    // 实现BaseNodeModel的虚函数
+    QString getNodeTypeName() const override
+    {
+        return "ReadRangeModel";
+    }
+
+    // 实现IPropertyProvider接口
+    bool createPropertyPanel(PropertyWidget* propertyWidget) override
+    {
+        propertyWidget->addTitle("读取范围设置");
+        propertyWidget->addDescription("从Excel工作表中读取指定范围的数据");
+
+        // 添加模式切换按钮
+        propertyWidget->addModeToggleButtons();
+
+        // 范围地址设置
+        propertyWidget->addTextProperty("范围地址", m_rangeEdit->text(),
+            "rangeAddress", "输入范围地址，如A1:C10、B2:E20等",
+            [this](const QString& newRange) {
+                if (!newRange.isEmpty()) {
+                    m_rangeEdit->setText(newRange.toUpper());
+                    qDebug() << "ReadRangeModel: Range address changed to" << newRange;
+                }
+            });
+
+        // 工作表连接状态
+        propertyWidget->addSeparator();
+        propertyWidget->addTitle("连接状态");
+
+        if (m_sheetData) {
+            propertyWidget->addInfoProperty("工作表状态", "已连接", "color: #28a745; font-weight: bold;");
+            propertyWidget->addInfoProperty("工作表名称", QString::fromStdString(m_sheetData->sheetName()), "color: #666;");
+        } else {
+            propertyWidget->addInfoProperty("工作表状态", "未连接", "color: #999; font-style: italic;");
+        }
+
+        // 输出数据状态
+        if (m_rangeData && !m_rangeData->isEmpty()) {
+            propertyWidget->addSeparator();
+            propertyWidget->addTitle("输出数据");
+
+            try {
+                int rows = m_rangeData->rowCount();
+                int cols = m_rangeData->columnCount();
+
+                propertyWidget->addInfoProperty("读取范围", m_rangeEdit->text(), "color: #2E86AB; font-weight: bold;");
+                propertyWidget->addInfoProperty("数据大小", QString("%1行 x %2列").arg(rows).arg(cols), "color: #333; font-weight: bold;");
+                propertyWidget->addInfoProperty("总单元格数", QString::number(rows * cols), "color: #666;");
+
+                // 数据预览（显示前几个单元格的值）
+                if (rows > 0 && cols > 0) {
+                    propertyWidget->addSeparator();
+                    propertyWidget->addTitle("数据预览");
+
+                    int previewRows = qMin(3, rows);
+                    int previewCols = qMin(3, cols);
+
+                    for (int r = 0; r < previewRows; ++r) {
+                        QStringList rowValues;
+                        for (int c = 0; c < previewCols; ++c) {
+                            QVariant value = m_rangeData->cellValue(r, c);
+                            QString valueStr = value.toString();
+                            if (valueStr.length() > 10) {
+                                valueStr = valueStr.left(10) + "...";
+                            }
+                            rowValues << valueStr;
+                        }
+                        if (cols > previewCols) {
+                            rowValues << "...";
+                        }
+
+                        QString rowText = QString("第%1行: %2").arg(r + 1).arg(rowValues.join(" | "));
+                        propertyWidget->addInfoProperty("", rowText, "color: #666; font-family: monospace; font-size: 10px;");
+                    }
+
+                    if (rows > previewRows) {
+                        propertyWidget->addInfoProperty("", "...", "color: #999; text-align: center;");
+                    }
+                }
+
+            } catch (const std::exception& e) {
+                propertyWidget->addInfoProperty("数据状态", QString("读取失败: %1").arg(e.what()), "color: #dc3545;");
+            }
+        } else {
+            propertyWidget->addSeparator();
+            propertyWidget->addInfoProperty("输出数据", "无数据", "color: #999; font-style: italic;");
+        }
+
+        return true;
+    }
+
+    QString getDisplayName() const override
+    {
+        return "读取范围";
+    }
+
+    QString getDescription() const override
+    {
+        return "从Excel工作表中读取指定范围的数据";
+    }
+
+private:
     QWidget* m_widget;
     QLineEdit* m_rangeEdit;
-    
+
     std::shared_ptr<SheetData> m_sheetData;
     std::shared_ptr<RangeData> m_rangeData;
 };
