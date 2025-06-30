@@ -32,6 +32,8 @@ private slots:
     void onRunClicked();
     void onPauseClicked();
     void onStopClicked();
+    void onUndoClicked();
+    void onRedoClicked();
     void onNodeSelected(QtNodes::NodeId nodeId);
     void onNodeDeselected();
 

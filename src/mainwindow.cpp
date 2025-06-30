@@ -19,6 +19,8 @@
 #include "PropertyWidget.hpp"
 #include "ErrorHandler.hpp"
 #include "DataValidator.hpp"
+#include "CommandManager.hpp"
+#include "NodeCommands.hpp"
 #include <QtNodes/ConnectionStyle>
 #include <QtNodes/NodeStyle>
 #include <QtNodes/DataFlowGraphicsScene>
@@ -160,10 +162,48 @@ void MainWindow::setupToolbar()
     stopAction->setEnabled(false);
     connect(stopAction, &QAction::triggered, this, &MainWindow::onStopClicked);
 
+    // 分隔符
+    toolbar->addSeparator();
+
+    // 撤销按钮
+    QAction* undoAction = toolbar->addAction(tr("↶ 撤销"));
+    undoAction->setToolTip(tr("撤销上一个操作 (Ctrl+Z)"));
+    undoAction->setShortcut(QKeySequence::Undo);
+    undoAction->setEnabled(false);
+    connect(undoAction, &QAction::triggered, this, &MainWindow::onUndoClicked);
+
+    // 重做按钮
+    QAction* redoAction = toolbar->addAction(tr("↷ 重做"));
+    redoAction->setToolTip(tr("重做下一个操作 (Ctrl+Y)"));
+    redoAction->setShortcut(QKeySequence::Redo);
+    redoAction->setEnabled(false);
+    connect(redoAction, &QAction::triggered, this, &MainWindow::onRedoClicked);
+
+    // 连接命令管理器信号
+    auto& commandManager = CommandManager::instance();
+    connect(&commandManager, &CommandManager::canUndoChanged, undoAction, &QAction::setEnabled);
+    connect(&commandManager, &CommandManager::canRedoChanged, redoAction, &QAction::setEnabled);
+    connect(&commandManager, &CommandManager::undoTextChanged, [undoAction](const QString& text) {
+        if (text.isEmpty()) {
+            undoAction->setToolTip(tr("撤销 (Ctrl+Z)"));
+        } else {
+            undoAction->setToolTip(text + tr(" (Ctrl+Z)"));
+        }
+    });
+    connect(&commandManager, &CommandManager::redoTextChanged, [redoAction](const QString& text) {
+        if (text.isEmpty()) {
+            redoAction->setToolTip(tr("重做 (Ctrl+Y)"));
+        } else {
+            redoAction->setToolTip(text + tr(" (Ctrl+Y)"));
+        }
+    });
+    
     // 保存按钮引用以便后续控制
     runAction->setObjectName("runAction");
     pauseAction->setObjectName("pauseAction");
     stopAction->setObjectName("stopAction");
+    undoAction->setObjectName("undoAction");
+    redoAction->setObjectName("redoAction");
 }
 
 void MainWindow::setupPropertyPanel()
@@ -334,6 +374,33 @@ void MainWindow::onStopClicked()
 
     ui->statusbar->showMessage(tr("流程已停止"), 3000);
 }
+
+void MainWindow::onUndoClicked()
+{
+    qDebug() << "MainWindow: Undo clicked";
+    auto& commandManager = CommandManager::instance();
+    if (commandManager.canUndo()) {
+        if (commandManager.undo()) {
+            ui->statusbar->showMessage(tr("已撤销: %1").arg(commandManager.getUndoText()), 2000);
+        } else {
+            ui->statusbar->showMessage(tr("撤销失败"), 2000);
+        }
+    }
+}
+
+void MainWindow::onRedoClicked()
+{
+    qDebug() << "MainWindow: Redo clicked";
+    auto& commandManager = CommandManager::instance();
+    if (commandManager.canRedo()) {
+        if (commandManager.redo()) {
+            ui->statusbar->showMessage(tr("已重做: %1").arg(commandManager.getRedoText()), 2000);
+        } else {
+            ui->statusbar->showMessage(tr("重做失败"), 2000);
+        }
+    }
+}
+
 
 void MainWindow::setGlobalExecutionState(bool running)
 {
