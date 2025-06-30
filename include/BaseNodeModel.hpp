@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "IPropertyProvider.hpp"
 #include <QtNodes/NodeDelegateModel>
 #include <QJsonObject>
 #include <QDebug>
@@ -13,6 +14,7 @@
 #include <QSpinBox>
 #include <QCheckBox>
 #include <QTextEdit>
+#include <QLabel>
 
 /**
  * @brief 节点模型的基类
@@ -28,7 +30,7 @@
  * 2. 重写getNodeTypeName()返回节点类型名称
  * 3. 可选择重写onSave()和onLoad()进行自定义处理
  */
-class BaseNodeModel : public QtNodes::NodeDelegateModel
+class BaseNodeModel : public QtNodes::NodeDelegateModel, public PropertyProviderBase
 {
     Q_OBJECT
 

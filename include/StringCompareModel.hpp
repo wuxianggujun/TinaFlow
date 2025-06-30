@@ -176,6 +176,68 @@ protected:
         }
     }
 
+    // 实现IPropertyProvider接口
+    bool createPropertyWidget(QVBoxLayout* parent) override
+    {
+        addTitle(parent, "字符串比较设置");
+        addDescription(parent, "设置比较操作和目标值，输出True/False结果");
+
+        // 比较操作
+        addLabeledWidget(parent, "比较操作:", new QLabel(
+            m_operationCombo->currentText()
+        ));
+
+        // 比较值
+        addLabeledWidget(parent, "比较值:", new QLabel(
+            m_valueEdit->text().isEmpty() ? "未设置" : m_valueEdit->text()
+        ));
+
+        // 当前输入数据
+        if (m_cellData && m_cellData->isValid()) {
+            addSeparator(parent);
+            addTitle(parent, "输入数据");
+
+            try {
+                QString address = m_cellData->address();
+                QVariant value = m_cellData->value();
+                auto* inputInfo = new QLabel(QString("单元格: %1\n值: %2")
+                    .arg(address)
+                    .arg(value.toString()));
+                inputInfo->setStyleSheet("color: #666;");
+                inputInfo->setWordWrap(true);
+                parent->addWidget(inputInfo);
+            } catch (...) {
+                auto* errorInfo = new QLabel("无法读取输入数据");
+                errorInfo->setStyleSheet("color: #999;");
+                parent->addWidget(errorInfo);
+            }
+        }
+
+        // 比较结果
+        if (m_result) {
+            addSeparator(parent);
+            addTitle(parent, "比较结果");
+
+            auto* resultInfo = new QLabel(QString("结果: %1")
+                .arg(m_result->value() ? "True" : "False"));
+            resultInfo->setStyleSheet(QString("color: %1; font-weight: bold;")
+                .arg(m_result->value() ? "#28a745" : "#dc3545"));
+            parent->addWidget(resultInfo);
+        }
+
+        return true;
+    }
+
+    QString getDisplayName() const override
+    {
+        return "字符串比较";
+    }
+
+    QString getDescription() const override
+    {
+        return "比较单元格值与指定字符串，输出布尔结果";
+    }
+
 
 
 private slots:

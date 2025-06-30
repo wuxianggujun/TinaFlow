@@ -15,6 +15,7 @@
 #include "SmartLoopProcessorModel.hpp"
 #include "DisplayCellListModel.hpp"
 #include "SaveExcelModel.hpp"
+#include "IPropertyProvider.hpp"
 #include <QtNodes/ConnectionStyle>
 #include <QtNodes/NodeStyle>
 #include <QtNodes/DataFlowGraphicsScene>
@@ -81,6 +82,24 @@ void MainWindow::setupNodeEditor()
             this, &MainWindow::showConnectionContextMenu);
     connect(m_graphicsView, &TinaFlowGraphicsView::sceneContextMenuRequested,
             this, &MainWindow::showSceneContextMenu);
+
+    // 连接数据更新事件，用于刷新属性面板
+    connect(m_graphModel.get(), &QtNodes::DataFlowGraphModel::inPortDataWasSet,
+            this, [this](QtNodes::NodeId nodeId, QtNodes::PortType, QtNodes::PortIndex) {
+                // 如果更新的节点是当前选中的节点，刷新属性面板
+                if (nodeId == m_selectedNodeId) {
+                    refreshCurrentPropertyPanel();
+                }
+            });
+
+    // 连接节点更新事件
+    connect(m_graphModel.get(), &QtNodes::DataFlowGraphModel::nodeUpdated,
+            this, [this](QtNodes::NodeId nodeId) {
+                // 如果更新的节点是当前选中的节点，刷新属性面板
+                if (nodeId == m_selectedNodeId) {
+                    refreshCurrentPropertyPanel();
+                }
+            });
     
     QLayout* containerLayout = ui->nodeEditorHost->layout();
     if (!containerLayout) {
@@ -323,13 +342,24 @@ void MainWindow::setGlobalExecutionState(bool running)
 void MainWindow::onNodeSelected(QtNodes::NodeId nodeId)
 {
     qDebug() << "MainWindow: Node selected:" << nodeId;
+    m_selectedNodeId = nodeId; // 保存选中的节点ID
     updatePropertyPanel(nodeId);
 }
 
 void MainWindow::onNodeDeselected()
 {
     qDebug() << "MainWindow: Node deselected";
+    m_selectedNodeId = QtNodes::InvalidNodeId; // 清除选中的节点ID
     clearPropertyPanel();
+}
+
+void MainWindow::refreshCurrentPropertyPanel()
+{
+    // 如果有选中的节点，刷新其属性面板
+    if (m_selectedNodeId != QtNodes::InvalidNodeId) {
+        qDebug() << "MainWindow: Refreshing property panel for node" << m_selectedNodeId;
+        updatePropertyPanel(m_selectedNodeId);
+    }
 }
 
 void MainWindow::updatePropertyPanel(QtNodes::NodeId nodeId)
@@ -369,11 +399,22 @@ void MainWindow::updatePropertyPanel(QtNodes::NodeId nodeId)
     infoLabel->setStyleSheet("color: #666666; font-size: 11px; padding: 4px;");
     contentLayout->addWidget(infoLabel);
 
-    // 根据节点类型添加特定的属性编辑器
-    if (nodeName == "StringCompare") {
-        addStringCompareProperties(contentLayout, nodeId);
-    } else {
-        // 通用属性
+    // 尝试使用新的属性提供系统
+    bool hasProperties = false;
+
+    // 获取节点模型并检查是否实现了IPropertyProvider接口
+    auto* nodeModel = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(nodeId);
+    if (nodeModel) {
+        auto* propertyProvider = dynamic_cast<IPropertyProvider*>(nodeModel);
+        if (propertyProvider) {
+            // 使用节点自己的属性界面
+            hasProperties = propertyProvider->createPropertyWidget(contentLayout);
+            qDebug() << "MainWindow: Used property provider for node" << nodeId;
+        }
+    }
+
+    // 如果没有属性提供者，显示默认消息
+    if (!hasProperties) {
         QLabel* genericLabel = new QLabel(tr("此节点暂无可编辑属性"));
         genericLabel->setAlignment(Qt::AlignCenter);
         genericLabel->setStyleSheet("color: #999999; padding: 20px;");
@@ -420,40 +461,7 @@ void MainWindow::clearPropertyPanel()
 
 
 
-void MainWindow::addStringCompareProperties(QVBoxLayout* layout, QtNodes::NodeId nodeId)
-{
-    // StringCompare节点的属性编辑器
-    QLabel* descLabel = new QLabel(tr("字符串比较节点属性："));
-    descLabel->setStyleSheet("font-weight: bold; margin-top: 10px;");
-    layout->addWidget(descLabel);
 
-    // 比较操作
-    QLabel* operationLabel = new QLabel(tr("比较操作："));
-    layout->addWidget(operationLabel);
-
-    QComboBox* operationCombo = new QComboBox();
-    operationCombo->addItem(tr("等于"), 0);
-    operationCombo->addItem(tr("不等于"), 1);
-    operationCombo->addItem(tr("包含"), 2);
-    operationCombo->addItem(tr("不包含"), 3);
-    operationCombo->addItem(tr("开始于"), 4);
-    operationCombo->addItem(tr("结束于"), 5);
-    layout->addWidget(operationCombo);
-
-    // 比较值
-    QLabel* valueLabel = new QLabel(tr("比较值："));
-    layout->addWidget(valueLabel);
-
-    QLineEdit* valueEdit = new QLineEdit();
-    valueEdit->setPlaceholderText(tr("输入要比较的值"));
-    layout->addWidget(valueEdit);
-
-    // 大小写敏感
-    QCheckBox* caseSensitiveCheck = new QCheckBox(tr("区分大小写"));
-    layout->addWidget(caseSensitiveCheck);
-
-    qDebug() << "MainWindow: Added StringCompare properties for node" << nodeId;
-}
 
 void MainWindow::setupCustomStyles()
 {

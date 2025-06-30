@@ -3,6 +3,7 @@
 //
 
 #pragma once
+#include "BaseNodeModel.hpp"
 #include <QtEvents>
 #include <string>
 #include <QWidget>
@@ -12,7 +13,6 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QMessageBox>
-#include <QtNodes/NodeDelegateModel>
 
 #include "XLDocument.hpp"
 #include "data/WorkbookData.hpp"
@@ -49,7 +49,7 @@ signals:
 };
 
 
-class OpenExcelModel : public QtNodes::NodeDelegateModel
+class OpenExcelModel : public BaseNodeModel
 {
     
 public:
@@ -63,8 +63,11 @@ public:
         m_lineEdit = new ClickableLineEdit();
         m_lineEdit->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         layout->addWidget(m_lineEdit);
-        
+
         connect(m_lineEdit, &ClickableLineEdit::clicked, this, &OpenExcelModel::chooseFile);
+
+        // 注册属性
+        registerLineEdit("filePath", m_lineEdit, "Excel文件路径");
     }
 
     [[nodiscard]] QString caption() const override
@@ -180,7 +183,82 @@ private:
 
         compute();
     }
-    
+
+protected:
+    // 实现BaseNodeModel的虚函数
+    QString getNodeTypeName() const override
+    {
+        return "OpenExcelModel";
+    }
+
+    // 实现IPropertyProvider接口
+    bool createPropertyWidget(QVBoxLayout* parent) override
+    {
+        addTitle(parent, "Excel文件设置");
+        addDescription(parent, "选择要打开的Excel文件，支持.xlsx格式");
+
+        // 文件路径显示
+        auto* pathLabel = new QLabel("当前文件:");
+        pathLabel->setStyleSheet("font-weight: bold; margin-top: 5px;");
+        parent->addWidget(pathLabel);
+
+        if (m_filePath.empty()) {
+            auto* noFileLabel = new QLabel("未选择文件");
+            noFileLabel->setStyleSheet("color: #999; font-style: italic;");
+            parent->addWidget(noFileLabel);
+        } else {
+            QString fullPath = QString::fromStdString(m_filePath);
+            QString fileName = QFileInfo(fullPath).fileName();
+
+            // 显示文件名
+            auto* fileNameLabel = new QLabel(QString("文件名: %1").arg(fileName));
+            fileNameLabel->setStyleSheet("color: #333; font-weight: bold;");
+            parent->addWidget(fileNameLabel);
+
+            // 显示完整路径
+            auto* fullPathLabel = new QLabel(QString("完整路径: %1").arg(fullPath));
+            fullPathLabel->setStyleSheet("color: #666; font-size: 10px;");
+            fullPathLabel->setWordWrap(true);
+            fullPathLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+            parent->addWidget(fullPathLabel);
+        }
+
+        // 文件信息
+        if (!m_filePath.empty() && m_workbookData && m_workbookData->isValid()) {
+            addSeparator(parent);
+            addTitle(parent, "文件信息");
+
+            auto* infoLabel = new QLabel();
+            try {
+                auto workbook = m_workbookData->workbook();
+                if (workbook) {
+                    int sheetCount = workbook->worksheetCount();
+                    QString info = QString("工作表数量: %1").arg(sheetCount);
+                    infoLabel->setText(info);
+                } else {
+                    infoLabel->setText("无法获取工作表信息");
+                }
+            } catch (...) {
+                infoLabel->setText("文件信息读取失败");
+            }
+            infoLabel->setStyleSheet("color: #666;");
+            parent->addWidget(infoLabel);
+        }
+
+        return true;
+    }
+
+    QString getDisplayName() const override
+    {
+        return "打开Excel文件";
+    }
+
+    QString getDescription() const override
+    {
+        return "打开Excel文件并读取工作簿数据";
+    }
+
+private:
     QWidget* m_widget;
     ClickableLineEdit* m_lineEdit;
     std::string m_filePath;

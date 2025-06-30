@@ -56,10 +56,10 @@ private:
     void setGlobalExecutionState(bool running);
     void triggerDataFlow();
     void updatePropertyPanel(QtNodes::NodeId nodeId);
+    void refreshCurrentPropertyPanel(); // 刷新当前选中节点的属性面板
     void clearPropertyPanel();
 
-    // 特定节点的属性编辑器
-    void addStringCompareProperties(QVBoxLayout* layout, QtNodes::NodeId nodeId);
+
 
     static std::shared_ptr<QtNodes::NodeDelegateModelRegistry> registerDataModels();
     static void setStyle();
