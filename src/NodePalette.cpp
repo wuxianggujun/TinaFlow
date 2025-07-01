@@ -175,7 +175,7 @@ void NodePalette::setupSearchArea()
         "QLineEdit:focus {"
         "border-color: #80bdff;"
         "outline: 0;"
-        "box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);"
+        "border: 2px solid #80bdff;"
         "}"
     );
     connect(m_searchEdit, &QLineEdit::textChanged, this, &NodePalette::onSearchTextChanged);

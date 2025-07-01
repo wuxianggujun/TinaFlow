@@ -14,6 +14,10 @@ class NodePalette;
 namespace Ui {
 class MainWindow;
 }
+namespace ads {
+class CDockManager;
+class CDockWidget;
+}
 
 class MainWindow : public QMainWindow
 {
@@ -54,6 +58,7 @@ private slots:
 private:
     void setupNodeEditor();
     void reinitializeNodeEditor();
+    void cleanupGraphicsComponents();
     void setupModernToolbar();
     void setupAdvancedPanels();
     void setupKeyboardShortcuts();
@@ -66,6 +71,9 @@ private:
     void updatePropertyPanelReference();
     void connectADSNodePaletteSignals();
     void setupADSCentralWidget();
+    bool validateADSComponents();
+    void createADSCentralWidget(ads::CDockManager* dockManager);
+    void configureCentralWidgetFeatures(ads::CDockWidget* centralDockWidget);
     void setupCustomStyles();
     void saveToFile(const QString& fileName);
     void loadFromFile(const QString& fileName);

@@ -235,21 +235,8 @@ void MainWindow::setupNodeEditor()
 
 void MainWindow::reinitializeNodeEditor()
 {
-    // 简化方法：不直接操作ADS中央部件，让setupADSCentralWidget处理
-
-    // 安全地删除旧的组件
-    if (m_graphicsView)
-    {
-        m_graphicsView->setParent(nullptr);  // 先移除父子关系
-        m_graphicsView->deleteLater();       // 使用deleteLater避免立即删除
-        m_graphicsView = nullptr;
-    }
-
-    if (m_graphicsScene)
-    {
-        m_graphicsScene->deleteLater();      // 使用deleteLater避免立即删除
-        m_graphicsScene = nullptr;
-    }
+    // 安全地清理旧的组件
+    cleanupGraphicsComponents();
 
     // 重新创建所有组件
     std::shared_ptr<QtNodes::NodeDelegateModelRegistry> modelRegistry = registerDataModels();
@@ -322,6 +309,23 @@ void MainWindow::reinitializeNodeEditor()
     updatePropertyPanelReference();
 
     // 节点编辑器已重新初始化
+}
+
+void MainWindow::cleanupGraphicsComponents()
+{
+    // 安全地删除图形组件
+    if (m_graphicsView)
+    {
+        m_graphicsView->setParent(nullptr);
+        m_graphicsView->deleteLater();
+        m_graphicsView = nullptr;
+    }
+
+    if (m_graphicsScene)
+    {
+        m_graphicsScene->deleteLater();
+        m_graphicsScene = nullptr;
+    }
 }
 
 std::shared_ptr<QtNodes::NodeDelegateModelRegistry> MainWindow::registerDataModels()
@@ -1339,26 +1343,12 @@ void MainWindow::clearADSPropertyPanel()
 
 void MainWindow::setupADSCentralWidget()
 {
-    // 正确设置ADS中央部件，避免创建独立窗口
-
-    if (!m_adsPanelManager)
-    {
-        qCritical() << "MainWindow: ADS面板管理器不存在";
-        return;
-    }
-
-    if (!m_graphicsView)
-    {
-        qCritical() << "MainWindow: 图形视图不存在";
+    // 验证必要组件
+    if (!validateADSComponents()) {
         return;
     }
 
     auto* dockManager = m_adsPanelManager->dockManager();
-    if (!dockManager)
-    {
-        qCritical() << "MainWindow: DockManager不存在";
-        return;
-    }
 
     // 检查是否已经有中央部件
     auto* existingCentralWidget = dockManager->centralWidget();
@@ -1369,25 +1359,61 @@ void MainWindow::setupADSCentralWidget()
         return;
     }
 
-    // 如果没有中央部件，创建一个新的
+    // 创建新的中央部件
+    createADSCentralWidget(dockManager);
+}
+
+bool MainWindow::validateADSComponents()
+{
+    if (!m_adsPanelManager)
+    {
+        qCritical() << "MainWindow: ADS面板管理器不存在";
+        return false;
+    }
+
+    if (!m_graphicsView)
+    {
+        qCritical() << "MainWindow: 图形视图不存在";
+        return false;
+    }
+
+    auto* dockManager = m_adsPanelManager->dockManager();
+    if (!dockManager)
+    {
+        qCritical() << "MainWindow: DockManager不存在";
+        return false;
+    }
+
+    return true;
+}
+
+void MainWindow::createADSCentralWidget(ads::CDockManager* dockManager)
+{
+    // 创建中央停靠部件
     auto* centralDockWidget = new ads::CDockWidget("", dockManager);
     centralDockWidget->setWidget(m_graphicsView);
     centralDockWidget->setObjectName("central_editor");
 
-    // 设置中央部件属性 - 关键：禁用所有可能导致独立窗口的功能
+    // 配置中央部件属性
+    configureCentralWidgetFeatures(centralDockWidget);
+
+    // 设置为ADS中央部件
+    dockManager->setCentralWidget(centralDockWidget);
+}
+
+void MainWindow::configureCentralWidgetFeatures(ads::CDockWidget* centralDockWidget)
+{
+    // 禁用所有可能导致独立窗口的功能
     centralDockWidget->setFeature(ads::CDockWidget::DockWidgetClosable, false);
     centralDockWidget->setFeature(ads::CDockWidget::DockWidgetMovable, false);
     centralDockWidget->setFeature(ads::CDockWidget::DockWidgetFloatable, false);
     centralDockWidget->setFeature(ads::CDockWidget::DockWidgetPinnable, false);
 
-    // 最重要：隐藏标题栏，让它看起来像普通的中央部件
+    // 隐藏标题栏，让它看起来像普通的中央部件
     centralDockWidget->setFeature(ads::CDockWidget::NoTab, true);
 
     // 确保它不会作为独立窗口显示
     centralDockWidget->setWindowFlags(Qt::Widget);
-
-    // 设置为ADS中央部件
-    dockManager->setCentralWidget(centralDockWidget);
 }
 
 void MainWindow::updatePropertyPanelReference()
