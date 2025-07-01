@@ -122,13 +122,13 @@ void ADSPanelManager::setupDockManager()
     ads::CDockManager::setConfigFlag(ads::CDockManager::DockAreaHideDisabledButtons, true);
     ads::CDockManager::setConfigFlag(ads::CDockManager::DockAreaDynamicTabsMenuButtonVisibility, true);
     
-    // 创建停靠管理器
+    // 关键修复：CDockManager应该直接接管MainWindow，而不是作为子部件
     m_dockManager = new ads::CDockManager(m_mainWindow);
     
     // 设置样式
     setupADSStyle();
     
-    qDebug() << "ADSPanelManager: ADS停靠管理器创建完成";
+    qDebug() << "ADSPanelManager: ADS停靠管理器创建完成，已接管主窗口";
 }
 
 void ADSPanelManager::setupADSStyle()
