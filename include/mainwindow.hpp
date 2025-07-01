@@ -89,6 +89,7 @@ private:
     void setupKeyboardShortcuts();
     void setupLayoutMenu();
     void setupFileMenu();
+    void setupEditMenu();
     void setupViewMenu();
     void createADSLayoutMenu(QMenu* parentMenu);
     void createViewControlMenu(QMenu* parentMenu);
@@ -119,7 +120,13 @@ private:
     
     // 端口类型描述方法
     QString getPortTypeDescription(QtNodes::NodeDelegateModel* nodeModel, QtNodes::PortType portType, QtNodes::PortIndex portIndex);
-    
+
+    // 改进的节点选中检测方法
+    QtNodes::NodeId getSelectedNodeIdImproved(const QPointF& pos);
+
+    // 获取指定位置的节点
+    QtNodes::NodeId getNodeAtPosition(const QPointF& pos);
+
     static std::shared_ptr<QtNodes::NodeDelegateModelRegistry> registerDataModels();
 
 public:

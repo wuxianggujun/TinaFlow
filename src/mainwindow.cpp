@@ -13,6 +13,7 @@
 #include <QInputDialog>
 #include <QDateTime>
 #include <QTimer>
+#include <limits>
 
 // Qt Widgets
 #include <QMenu>
@@ -27,6 +28,7 @@
 #include <QtNodes/NodeDelegateModelRegistry>
 #include <QtNodes/ConnectionStyle>
 #include <QtNodes/NodeStyle>
+#include <QtNodes/internal/NodeGraphicsObject.hpp>
 
 // Model includes
 #include "model/OpenExcelModel.hpp"
@@ -659,6 +661,15 @@ void MainWindow::setGlobalExecutionState(bool running)
 void MainWindow::onNodeSelected(QtNodes::NodeId nodeId)
 {
     m_selectedNodeId = nodeId;
+
+    // 获取节点信息用于状态栏显示
+    if (m_graphModel && nodeId != QtNodes::NodeId{}) {
+        auto nodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(nodeId);
+        if (nodeDelegate) {
+            ui->statusbar->showMessage(tr("已选择节点: %1 (按Delete键删除)").arg(nodeDelegate->name()), 5000);
+        }
+    }
+
     updateADSPropertyPanel(nodeId);
 }
 
@@ -667,24 +678,61 @@ void MainWindow::showNodeContextMenu(QtNodes::NodeId nodeId, const QPointF& pos)
     m_selectedNodeId = nodeId;
 
     QMenu contextMenu(this);
+    contextMenu.setStyleSheet(
+        "QMenu {"
+        "background-color: white;"
+        "border: 1px solid #ccc;"
+        "border-radius: 4px;"
+        "padding: 4px;"
+        "}"
+        "QMenu::item {"
+        "padding: 8px 24px;"
+        "border: none;"
+        "}"
+        "QMenu::item:selected {"
+        "background-color: #e3f2fd;"
+        "color: #1976d2;"
+        "}"
+        "QMenu::separator {"
+        "height: 1px;"
+        "background-color: #eee;"
+        "margin: 4px 8px;"
+        "}"
+    );
 
-    QAction* deleteAction = contextMenu.addAction("删除节点");
-    deleteAction->setIcon(QIcon(":/icons/delete.png"));
+    // 获取节点信息
+    auto nodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(nodeId);
+    QString nodeName = nodeDelegate ? nodeDelegate->name() : "未知节点";
+
+    qDebug() << "MainWindow: Showing node context menu for:" << nodeName;
+
+    // 节点信息（只读）
+    QAction* infoAction = contextMenu.addAction(QString("📋 节点: %1").arg(nodeName));
+    infoAction->setEnabled(false);
+
+    contextMenu.addSeparator();
+
+    // 删除节点
+    QAction* deleteAction = contextMenu.addAction("🗑️ 删除节点");
+    deleteAction->setShortcut(QKeySequence::Delete);
     connect(deleteAction, &QAction::triggered, this, &MainWindow::deleteSelectedNode);
 
-    QAction* duplicateAction = contextMenu.addAction("复制节点");
-    duplicateAction->setIcon(QIcon(":/icons/copy.png"));
+    // 复制节点
+    QAction* duplicateAction = contextMenu.addAction("📋 复制节点");
+    duplicateAction->setShortcut(QKeySequence("Ctrl+D"));
     connect(duplicateAction, &QAction::triggered, this, &MainWindow::duplicateSelectedNode);
 
     contextMenu.addSeparator();
 
-    // 获取节点信息
-    auto nodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(nodeId);
-    if (nodeDelegate)
-    {
-        QAction* infoAction = contextMenu.addAction(QString("节点: %1").arg(nodeDelegate->name()));
-        infoAction->setEnabled(false);
-    }
+    // 属性
+    QAction* propertiesAction = contextMenu.addAction("⚙️ 节点属性");
+    connect(propertiesAction, &QAction::triggered, this, [this, nodeId]() {
+        // 确保属性面板显示该节点
+        updateADSPropertyPanel(nodeId);
+        if (m_adsPanelManager) {
+            m_adsPanelManager->showPanel("property_panel");
+        }
+    });
 
     // 转换坐标并显示菜单
     QPoint globalPos = m_graphicsView->mapToGlobal(m_graphicsView->mapFromScene(pos));
@@ -733,6 +781,15 @@ void MainWindow::deleteSelectedNode()
 {
     if (m_selectedNodeId != QtNodes::NodeId{})
     {
+        // 获取节点信息用于反馈
+        QString nodeInfo = "未知节点";
+        if (m_graphModel) {
+            auto nodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(m_selectedNodeId);
+            if (nodeDelegate) {
+                nodeInfo = nodeDelegate->name();
+            }
+        }
+
         // 使用命令系统删除节点
         auto command = std::make_unique<DeleteNodeCommand>(m_graphicsScene, m_selectedNodeId);
         auto& commandManager = CommandManager::instance();
@@ -742,12 +799,16 @@ void MainWindow::deleteSelectedNode()
             m_selectedNodeId = QtNodes::NodeId{};
             // 清空属性面板
             clearADSPropertyPanel();
-            ui->statusbar->showMessage(tr("节点已删除"), 2000);
+            ui->statusbar->showMessage(tr("已删除节点: %1").arg(nodeInfo), Constants::STATUS_MESSAGE_TIMEOUT);
         }
         else
         {
-            ui->statusbar->showMessage(tr("删除节点失败"), 2000);
+            ui->statusbar->showMessage(tr("删除节点失败: %1").arg(nodeInfo), Constants::STATUS_MESSAGE_TIMEOUT);
         }
+    }
+    else
+    {
+        ui->statusbar->showMessage(tr("请先选择要删除的节点"), Constants::STATUS_MESSAGE_TIMEOUT);
     }
 }
 
@@ -1092,6 +1153,10 @@ void MainWindow::showImprovedSceneContextMenu(const QPointF& pos)
         "margin: 4px 8px;"
         "}"
     );
+
+    qDebug() << "MainWindow: Showing scene context menu (empty area)";
+
+    // 这里只处理空白区域的菜单，不包含节点操作
 
     // 常用节点快速访问
     QMenu* quickAccessMenu = contextMenu.addMenu("⭐ 常用节点");
@@ -1560,12 +1625,32 @@ void MainWindow::setupKeyboardShortcuts()
         }
     });
 
+    // 删除快捷键
+    QShortcut* deleteShortcut = new QShortcut(QKeySequence::Delete, this);
+    connect(deleteShortcut, &QShortcut::activated, this, &MainWindow::deleteSelectedNode);
+
+    // 备用删除快捷键
+    QShortcut* deleteShortcut2 = new QShortcut(QKeySequence("Backspace"), this);
+    connect(deleteShortcut2, &QShortcut::activated, this, &MainWindow::deleteSelectedNode);
+
+    // 撤销重做快捷键
+    QShortcut* undoShortcut = new QShortcut(QKeySequence::Undo, this);
+    connect(undoShortcut, &QShortcut::activated, this, &MainWindow::onUndoClicked);
+
+    QShortcut* redoShortcut = new QShortcut(QKeySequence::Redo, this);
+    connect(redoShortcut, &QShortcut::activated, this, &MainWindow::onRedoClicked);
+
+    // 复制快捷键
+    QShortcut* duplicateShortcut = new QShortcut(QKeySequence("Ctrl+D"), this);
+    connect(duplicateShortcut, &QShortcut::activated, this, &MainWindow::duplicateSelectedNode);
+
     // 快捷键设置完成
 }
 
 void MainWindow::setupLayoutMenu()
 {
     setupFileMenu();
+    setupEditMenu();
     setupViewMenu();
 }
 
@@ -1596,6 +1681,37 @@ void MainWindow::setupFileMenu()
 
         if (actionData.addSeparatorAfter) {
             fileMenu->addSeparator();
+        }
+    }
+}
+
+void MainWindow::setupEditMenu()
+{
+    QMenu* editMenu = menuBar()->addMenu("✏️ 编辑");
+
+    // 使用结构化数据定义编辑菜单项
+    struct EditMenuAction {
+        QString text;
+        QKeySequence shortcut;
+        std::function<void()> slot;
+        bool addSeparatorAfter = false;
+    };
+
+    QVector<EditMenuAction> editActions = {
+        {"↶ 撤销", QKeySequence::Undo, [this]() { onUndoClicked(); }},
+        {"↷ 重做", QKeySequence::Redo, [this]() { onRedoClicked(); }, true},
+        {"📋 复制节点", QKeySequence("Ctrl+D"), [this]() { duplicateSelectedNode(); }},
+        {"🗑️ 删除节点", QKeySequence::Delete, [this]() { deleteSelectedNode(); }}
+    };
+
+    // 批量创建编辑菜单项
+    for (const auto& actionData : editActions) {
+        QAction* action = editMenu->addAction(actionData.text);
+        action->setShortcut(actionData.shortcut);
+        connect(action, &QAction::triggered, this, actionData.slot);
+
+        if (actionData.addSeparatorAfter) {
+            editMenu->addSeparator();
         }
     }
 }
@@ -1696,49 +1812,134 @@ void MainWindow::setupWindowDisplay()
         if (restoreGeometry(geometry))
         {
             geometryRestored = true;
-
         }
     }
 
     // 如果没有恢复几何信息，设置默认大小和位置
     if (!geometryRestored)
     {
-        // 获取屏幕尺寸
-        QScreen* screen = QApplication::primaryScreen();
-        if (screen)
-        {
-            QRect screenGeometry = screen->availableGeometry();
-
-            // 设置窗口为屏幕的80%大小，居中显示
-            int width = static_cast<int>(screenGeometry.width() * 0.8);
-            int height = static_cast<int>(screenGeometry.height() * 0.8);
-            int x = (screenGeometry.width() - width) / 2;
-            int y = (screenGeometry.height() - height) / 2;
-
-            setGeometry(x, y, width, height);
-
-        }
-        else
-        {
-            // 备用默认大小
-            resize(1200, 800);
-
-        }
+        resize(1200, 800);
+        // 居中显示
+        QRect screenGeometry = QApplication::primaryScreen()->geometry();
+        int x = (screenGeometry.width() - width()) / 2;
+        int y = (screenGeometry.height() - height()) / 2;
+        move(x, y);
     }
 
-    // 最小窗口大小已在构造函数中设置
-
-    // 确保窗口状态正确
-    if (settings.contains("windowState"))
+    // 保存几何信息
+    connect(this, &QWidget::destroyed, [this]()
     {
-        QByteArray state = settings.value("windowState").toByteArray();
-        restoreState(state);
+        QSettings settings;
+        settings.setValue("geometry", saveGeometry());
+    });
+}
+
+QtNodes::NodeId MainWindow::getSelectedNodeIdImproved(const QPointF& pos)
+{
+    // 方法1：优先检查场景中的选中项
+    auto selectedItems = m_graphicsScene->selectedItems();
+    qDebug() << "MainWindow: Found" << selectedItems.size() << "selected items";
+
+    for (auto* item : selectedItems) {
+        // 输出选中项的类型
+        if (auto* object = dynamic_cast<QObject*>(item)) {
+            qDebug() << "MainWindow: Selected item type:" << object->metaObject()->className();
+        }
+
+        // 检查是否是节点图形对象
+        if (auto* nodeObject = qgraphicsitem_cast<QtNodes::NodeGraphicsObject*>(item)) {
+            QtNodes::NodeId nodeId = nodeObject->nodeId();
+            qDebug() << "MainWindow: Found selected node from graphics object:" << nodeId;
+            return nodeId;
+        }
     }
 
-    // 确保窗口正确显示
-    show();
-    raise();
-    activateWindow();
+    // 方法2：检查鼠标位置附近的节点
+    QGraphicsItem* item = m_graphicsScene->itemAt(pos, QTransform());
+    if (item) {
+        // 向上查找节点图形对象
+        QGraphicsItem* current = item;
+        while (current) {
+            if (auto* nodeObject = qgraphicsitem_cast<QtNodes::NodeGraphicsObject*>(current)) {
+                QtNodes::NodeId nodeId = nodeObject->nodeId();
+                qDebug() << "MainWindow: Found node from item hierarchy:" << nodeId;
+                return nodeId;
+            }
+            current = current->parentItem();
+        }
+    }
 
+    // 方法3：通过位置查找最近的节点
+    auto allNodes = m_graphModel->allNodeIds();
+    QtNodes::NodeId closestNodeId{};
+    qreal minDistance = std::numeric_limits<qreal>::max();
 
+    qDebug() << "MainWindow: Looking for node near position:" << pos;
+
+    for (auto nodeId : allNodes) {
+        QVariant nodePos = m_graphModel->nodeData(nodeId, QtNodes::NodeRole::Position);
+        if (nodePos.isValid()) {
+            QPointF nodePosF = nodePos.toPointF();
+            qreal distance = (pos - nodePosF).manhattanLength();
+
+            qDebug() << "MainWindow: Node" << nodeId << "at" << nodePosF << "distance:" << distance;
+
+            // 如果距离很近，直接返回
+            if (distance < 100) {  // 100像素内认为是点击了节点
+                qDebug() << "MainWindow: Close match found for nodeId:" << nodeId;
+                return nodeId;
+            }
+
+            // 记录最近的节点作为备选
+            if (distance < 200 && distance < minDistance) {
+                minDistance = distance;
+                closestNodeId = nodeId;
+            }
+        }
+    }
+
+    if (closestNodeId != QtNodes::NodeId{}) {
+        qDebug() << "MainWindow: Using closest node:" << closestNodeId << "distance:" << minDistance;
+        return closestNodeId;
+    }
+
+    qDebug() << "MainWindow: No node found near position:" << pos;
+    return QtNodes::NodeId{};
+}
+
+QtNodes::NodeId MainWindow::getNodeAtPosition(const QPointF& pos)
+{
+    // 检查鼠标位置下的图形项
+    QGraphicsItem* item = m_graphicsScene->itemAt(pos, QTransform());
+    if (item) {
+        // 向上查找节点图形对象
+        QGraphicsItem* current = item;
+        while (current) {
+            if (auto* nodeObject = qgraphicsitem_cast<QtNodes::NodeGraphicsObject*>(current)) {
+                QtNodes::NodeId nodeId = nodeObject->nodeId();
+                qDebug() << "MainWindow: Found node at position:" << nodeId;
+                return nodeId;
+            }
+            current = current->parentItem();
+        }
+    }
+
+    // 如果没有直接找到，检查附近的节点（小范围）
+    auto allNodes = m_graphModel->allNodeIds();
+    for (auto nodeId : allNodes) {
+        QVariant nodePos = m_graphModel->nodeData(nodeId, QtNodes::NodeRole::Position);
+        if (nodePos.isValid()) {
+            QPointF nodePosF = nodePos.toPointF();
+            qreal distance = (pos - nodePosF).manhattanLength();
+
+            // 只有非常接近的节点才认为是点击了节点（50像素内）
+            if (distance < 50) {
+                qDebug() << "MainWindow: Found nearby node at position:" << nodeId << "distance:" << distance;
+                return nodeId;
+            }
+        }
+    }
+
+    qDebug() << "MainWindow: No node found at position:" << pos;
+    return QtNodes::NodeId{};
 }
