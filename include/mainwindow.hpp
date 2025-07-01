@@ -1,6 +1,11 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QMenuBar>
+#include <QMenu>
+#include <QAction>
+#include <QKeySequence>
+#include <functional>
 #include <QtNodes/NodeDelegateModelRegistry>
 #include <QtNodes/DataFlowGraphModel>
 #include <QtNodes/DataFlowGraphicsScene>
@@ -63,8 +68,14 @@ private:
     void setupAdvancedPanels();
     void setupKeyboardShortcuts();
     void setupLayoutMenu();
-    void setupFileMenu(QMenuBar* menuBar);
-    void setupViewMenu(QMenuBar* menuBar);
+    void setupFileMenu();
+    void setupViewMenu();
+    void createADSLayoutMenu(QMenu* parentMenu);
+    void createViewControlMenu(QMenu* parentMenu);
+    void saveCurrentLayout();
+    QAction* createMenuAction(QMenu* menu, const QString& text,
+                             const QKeySequence& shortcut = QKeySequence(),
+                             std::function<void()> slot = nullptr);
     void setupWindowDisplay();
     
     // ADS面板更新方法

@@ -1602,112 +1602,117 @@ void MainWindow::setupKeyboardShortcuts()
 
 void MainWindow::setupLayoutMenu()
 {
-    QMenuBar* menuBar = this->menuBar();
-
-    // 1. 创建文件菜单
-    setupFileMenu(menuBar);
-
-    // 2. 创建视图菜单
-    setupViewMenu(menuBar);
+    setupFileMenu();
+    setupViewMenu();
 }
 
-void MainWindow::setupFileMenu(QMenuBar* menuBar)
+void MainWindow::setupFileMenu()
 {
-    // 创建文件菜单
-    QMenu* fileMenu = menuBar->addMenu("📁 文件");
+    QMenu* fileMenu = menuBar()->addMenu("📁 文件");
 
-    // 新建文件
-    QAction* newAction = fileMenu->addAction("🆕 新建");
-    newAction->setShortcut(QKeySequence::New);
-    connect(newAction, &QAction::triggered, this, &MainWindow::onNewFile);
+    // 使用结构化数据定义菜单项
+    struct MenuAction {
+        QString text;
+        QKeySequence shortcut;
+        std::function<void()> slot;
+        bool addSeparatorAfter = false;
+    };
 
-    // 打开文件
-    QAction* openAction = fileMenu->addAction("📂 打开");
-    openAction->setShortcut(QKeySequence::Open);
-    connect(openAction, &QAction::triggered, this, &MainWindow::onOpenFile);
+    QVector<MenuAction> fileActions = {
+        {"🆕 新建", QKeySequence::New, [this]() { onNewFile(); }},
+        {"📂 打开", QKeySequence::Open, [this]() { onOpenFile(); }, true},
+        {"💾 保存", QKeySequence::Save, [this]() { onSaveFile(); }, true},
+        {"🚪 退出", QKeySequence::Quit, [this]() { close(); }}
+    };
 
-    fileMenu->addSeparator();
+    // 批量创建菜单项
+    for (const auto& actionData : fileActions) {
+        QAction* action = fileMenu->addAction(actionData.text);
+        action->setShortcut(actionData.shortcut);
+        connect(action, &QAction::triggered, this, actionData.slot);
 
-    // 保存文件
-    QAction* saveAction = fileMenu->addAction("💾 保存");
-    saveAction->setShortcut(QKeySequence::Save);
-    connect(saveAction, &QAction::triggered, this, &MainWindow::onSaveFile);
-
-    fileMenu->addSeparator();
-
-    // 退出
-    QAction* exitAction = fileMenu->addAction("🚪 退出");
-    exitAction->setShortcut(QKeySequence::Quit);
-    connect(exitAction, &QAction::triggered, this, &QWidget::close);
+        if (actionData.addSeparatorAfter) {
+            fileMenu->addSeparator();
+        }
+    }
 }
 
-void MainWindow::setupViewMenu(QMenuBar* menuBar)
+void MainWindow::setupViewMenu()
 {
-    // 创建视图菜单
-    QMenu* viewMenu = menuBar->addMenu("👁️ 视图");
+    QMenu* viewMenu = menuBar()->addMenu("👁️ 视图");
 
-    // 添加ADS布局控制菜单（如果ADS系统已初始化）
-    if (m_adsPanelManager)
-    {
-        QMenu* adsLayoutMenu = viewMenu->addMenu("🎛️ ADS布局");
-
-        // 布局预设
-        QAction* defaultLayoutAction = adsLayoutMenu->addAction("🏠 默认布局");
-        connect(defaultLayoutAction, &QAction::triggered,
-                m_adsPanelManager, &ADSPanelManager::setupDefaultLayout);
-
-        adsLayoutMenu->addSeparator();
-
-        // 面板控制
-        QAction* showPropertyAction = adsLayoutMenu->addAction("🔧 显示属性面板");
-        connect(showPropertyAction, &QAction::triggered,
-                [this]() { m_adsPanelManager->showPanel("property_panel"); });
-
-        QAction* showNodePaletteAction = adsLayoutMenu->addAction("🗂️ 显示节点面板");
-        connect(showNodePaletteAction, &QAction::triggered,
-                [this]() { m_adsPanelManager->showPanel("node_palette"); });
-
-        QAction* showOutputAction = adsLayoutMenu->addAction("💻 显示输出控制台");
-        connect(showOutputAction, &QAction::triggered,
-                [this]() { m_adsPanelManager->showPanel("output_console"); });
-
-        adsLayoutMenu->addSeparator();
-
-        // 布局管理
-        QAction* saveLayoutAction = adsLayoutMenu->addAction("💾 保存当前布局");
-        connect(saveLayoutAction, &QAction::triggered,
-                [this]()
-                {
-                    QString layoutName = QString("user_layout_%1").arg(
-                        QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss"));
-                    m_adsPanelManager->saveLayoutPreset(layoutName);
-                    ui->statusbar->showMessage(tr("布局已保存: %1").arg(layoutName), 3000);
-                });
-
-        QAction* resetLayoutAction = adsLayoutMenu->addAction("🔄 重置到默认布局");
-        connect(resetLayoutAction, &QAction::triggered,
-                m_adsPanelManager, &ADSPanelManager::resetToDefaultLayout);
+    // 创建ADS布局子菜单
+    if (m_adsPanelManager) {
+        createADSLayoutMenu(viewMenu);
+        viewMenu->addSeparator();
     }
 
-    viewMenu->addSeparator();
+    // 添加全屏控制
+    createViewControlMenu(viewMenu);
+}
 
+void MainWindow::createADSLayoutMenu(QMenu* parentMenu)
+{
+    QMenu* adsLayoutMenu = parentMenu->addMenu("🎛️ ADS布局");
+
+    // 使用结构化数据定义ADS菜单项
+    struct ADSMenuAction {
+        QString text;
+        std::function<void()> slot;
+        bool addSeparatorAfter = false;
+    };
+
+    QVector<ADSMenuAction> adsActions = {
+        {"🏠 默认布局", [this]() { m_adsPanelManager->setupDefaultLayout(); }, true},
+        {"🔧 显示属性面板", [this]() { m_adsPanelManager->showPanel("property_panel"); }},
+        {"🗂️ 显示节点面板", [this]() { m_adsPanelManager->showPanel("node_palette"); }},
+        {"💻 显示输出控制台", [this]() { m_adsPanelManager->showPanel("output_console"); }, true},
+        {"💾 保存当前布局", [this]() { saveCurrentLayout(); }},
+        {"🔄 重置到默认布局", [this]() { m_adsPanelManager->resetToDefaultLayout(); }}
+    };
+
+    // 批量创建ADS菜单项
+    for (const auto& actionData : adsActions) {
+        QAction* action = adsLayoutMenu->addAction(actionData.text);
+        connect(action, &QAction::triggered, this, actionData.slot);
+
+        if (actionData.addSeparatorAfter) {
+            adsLayoutMenu->addSeparator();
+        }
+    }
+}
+
+void MainWindow::createViewControlMenu(QMenu* parentMenu)
+{
     // 全屏控制
-    QAction* fullScreenAction = viewMenu->addAction("🖥️ 全屏");
+    QAction* fullScreenAction = parentMenu->addAction("🖥️ 全屏");
     fullScreenAction->setCheckable(true);
     fullScreenAction->setShortcut(QKeySequence("F11"));
-    connect(fullScreenAction, &QAction::toggled, this, [this](bool fullScreen)
-    {
-        if (fullScreen)
-        {
-            showFullScreen();
-        }
-        else
-        {
-            showNormal();
-        }
+    connect(fullScreenAction, &QAction::toggled, this, [this](bool fullScreen) {
+        fullScreen ? showFullScreen() : showNormal();
     });
+}
 
-    // 布局菜单设置完成
+void MainWindow::saveCurrentLayout()
+{
+    QString layoutName = QString("user_layout_%1").arg(
+        QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss"));
+    m_adsPanelManager->saveLayoutPreset(layoutName);
+    ui->statusbar->showMessage(tr("布局已保存: %1").arg(layoutName), 3000);
+}
+
+QAction* MainWindow::createMenuAction(QMenu* menu, const QString& text,
+                                     const QKeySequence& shortcut,
+                                     std::function<void()> slot)
+{
+    QAction* action = menu->addAction(text);
+    if (!shortcut.isEmpty()) {
+        action->setShortcut(shortcut);
+    }
+    if (slot) {
+        connect(action, &QAction::triggered, this, slot);
+    }
+    return action;
 }
 
 void MainWindow::setupWindowDisplay()
