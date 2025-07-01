@@ -86,6 +86,11 @@ MainWindow::MainWindow(QWidget* parent)
       , m_adsPanelManager(nullptr)
       , m_selectedNodeId(QtNodes::NodeId{})
       , m_selectedConnectionId(QtNodes::ConnectionId{})
+      , m_autoSaveTimer(new QTimer(this))
+      , m_hasUnsavedChanges(false)
+      , m_nodeCountLabel(new QLabel(this))
+      , m_connectionCountLabel(new QLabel(this))
+      , m_statusLabel(new QLabel(this))
 {
     ui->setupUi(this);
 
@@ -99,6 +104,12 @@ MainWindow::MainWindow(QWidget* parent)
     // 然后初始化ADS系统
     setupAdvancedPanels();
     setupLayoutMenu(); // 只调用一次，包含ADS和通用菜单
+
+    // 设置自动保存
+    setupAutoSave();
+
+    // 设置状态栏
+    setupStatusBar();
 
     // 最后显示窗口
     setupWindowDisplay();
@@ -494,8 +505,21 @@ bool MainWindow::saveToFile(const QString& fileName)
     }
 
     try {
-        QJsonObject jsonObject = m_graphModel->save();
-        QJsonDocument jsonDocument(jsonObject);
+        // 创建包含元数据的完整文档
+        QJsonObject documentJson;
+
+        // 添加文件元数据
+        QJsonObject metadata;
+        metadata["version"] = "1.0";
+        metadata["created"] = QDateTime::currentDateTime().toString(Qt::ISODate);
+        metadata["application"] = "TinaFlow";
+        metadata["nodeCount"] = static_cast<int>(m_graphModel->allNodeIds().size());
+        metadata["connectionCount"] = getTotalConnectionCount();
+
+        documentJson["metadata"] = metadata;
+        documentJson["workflow"] = m_graphModel->save();
+
+        QJsonDocument jsonDocument(documentJson);
 
         QFile file(fileName);
         if (!file.open(QIODevice::WriteOnly)) {
@@ -506,8 +530,15 @@ bool MainWindow::saveToFile(const QString& fileName)
         file.write(jsonDocument.toJson());
         file.close();
 
+        // 更新当前文件路径和保存状态
+        m_currentFilePath = fileName;
+        m_hasUnsavedChanges = false;
+
         setWindowTitle(QString("TinaFlow - %1").arg(QFileInfo(fileName).baseName()));
-        ui->statusbar->showMessage(tr("文件已保存: %1").arg(fileName), 3000);
+        ui->statusbar->showMessage(tr("文件已保存: %1 (%2个节点, %3个连接)")
+            .arg(fileName)
+            .arg(m_graphModel->allNodeIds().size())
+            .arg(getTotalConnectionCount()), 3000);
         return true;
     }
     catch (const std::exception& e) {
@@ -548,8 +579,36 @@ bool MainWindow::loadFromFile(const QString& fileName)
         // 重新初始化节点编辑器以重置ID计数器
         reinitializeNodeEditor();
 
-        // 加载新数据
-        m_graphModel->load(jsonDocument.object());
+        QJsonObject rootObject = jsonDocument.object();
+        QJsonObject workflowData;
+
+        // 检查是否是新格式（包含元数据）
+        if (rootObject.contains("metadata") && rootObject.contains("workflow")) {
+            // 新格式：包含元数据
+            QJsonObject metadata = rootObject["metadata"].toObject();
+            workflowData = rootObject["workflow"].toObject();
+
+            // 显示文件信息
+            QString version = metadata["version"].toString();
+            QString created = metadata["created"].toString();
+            int nodeCount = metadata["nodeCount"].toInt();
+            int connectionCount = metadata["connectionCount"].toInt();
+
+            qDebug() << "Loading TinaFlow file version:" << version
+                     << "created:" << created
+                     << "nodes:" << nodeCount
+                     << "connections:" << connectionCount;
+        } else {
+            // 旧格式：直接是工作流数据
+            workflowData = rootObject;
+        }
+
+        // 加载工作流数据
+        m_graphModel->load(workflowData);
+
+        // 更新当前文件路径
+        m_currentFilePath = fileName;
+        m_hasUnsavedChanges = false;
 
         // 重置视图缩放并适应内容
         if (m_graphicsView) {
@@ -1641,6 +1700,10 @@ void MainWindow::setupKeyboardShortcuts()
     QShortcut* duplicateShortcut = new QShortcut(QKeySequence("Ctrl+D"), this);
     connect(duplicateShortcut, &QShortcut::activated, this, &MainWindow::duplicateSelectedNode);
 
+    // 帮助快捷键
+    QShortcut* helpShortcut = new QShortcut(QKeySequence::HelpContents, this);
+    connect(helpShortcut, &QShortcut::activated, this, &MainWindow::showShortcutHelp);
+
     // 快捷键设置完成
 }
 
@@ -1648,6 +1711,7 @@ void MainWindow::setupLayoutMenu()
 {
     setupFileMenu();
     setupViewMenu();
+    setupHelpMenu();
 }
 
 void MainWindow::setupFileMenu()
@@ -1856,4 +1920,254 @@ void MainWindow::setupWindowDisplay()
     });
 }
 
+void MainWindow::setupAutoSave()
+{
+    // 设置自动保存间隔（5分钟）
+    m_autoSaveTimer->setInterval(5 * 60 * 1000);
+    m_autoSaveTimer->setSingleShot(false);
 
+    connect(m_autoSaveTimer, &QTimer::timeout, this, [this]() {
+        if (m_hasUnsavedChanges && !m_currentFilePath.isEmpty()) {
+            // 创建自动保存文件名
+            QFileInfo fileInfo(m_currentFilePath);
+            QString autoSavePath = fileInfo.absolutePath() + "/" +
+                                 fileInfo.baseName() + "_autosave." + fileInfo.suffix();
+
+            try {
+                // 保存到自动保存文件
+                QJsonObject sceneJson = m_graphModel->save();
+                QJsonDocument document(sceneJson);
+
+                QFile file(autoSavePath);
+                if (file.open(QIODevice::WriteOnly)) {
+                    file.write(document.toJson());
+                    file.close();
+                    qDebug() << "Auto-saved to:" << autoSavePath;
+                }
+            } catch (const std::exception& e) {
+                qWarning() << "Auto-save failed:" << e.what();
+            }
+        }
+    });
+
+    // 监听图形模型变化
+    if (m_graphModel) {
+        connect(m_graphModel.get(), &QtNodes::DataFlowGraphModel::nodeCreated,
+                this, [this]() {
+                    m_hasUnsavedChanges = true;
+                    updateWindowTitle();
+                });
+        connect(m_graphModel.get(), &QtNodes::DataFlowGraphModel::nodeDeleted,
+                this, [this]() {
+                    m_hasUnsavedChanges = true;
+                    updateWindowTitle();
+                });
+        connect(m_graphModel.get(), &QtNodes::DataFlowGraphModel::connectionCreated,
+                this, [this]() {
+                    m_hasUnsavedChanges = true;
+                    updateWindowTitle();
+                });
+        connect(m_graphModel.get(), &QtNodes::DataFlowGraphModel::connectionDeleted,
+                this, [this]() {
+                    m_hasUnsavedChanges = true;
+                    updateWindowTitle();
+                });
+    }
+
+    // 启动自动保存定时器
+    m_autoSaveTimer->start();
+}
+
+void MainWindow::setupHelpMenu()
+{
+    QMenu* helpMenu = menuBar()->addMenu("❓ 帮助");
+
+    // 快捷键帮助
+    QAction* shortcutHelpAction = helpMenu->addAction("⌨️ 快捷键帮助");
+    shortcutHelpAction->setShortcut(QKeySequence::HelpContents);
+    connect(shortcutHelpAction, &QAction::triggered, this, &MainWindow::showShortcutHelp);
+
+    helpMenu->addSeparator();
+
+    // 用户指南
+    QAction* userGuideAction = helpMenu->addAction("📖 用户指南");
+    connect(userGuideAction, &QAction::triggered, this, &MainWindow::showUserGuide);
+
+    // 报告问题
+    QAction* reportBugAction = helpMenu->addAction("🐛 报告问题");
+    connect(reportBugAction, &QAction::triggered, this, &MainWindow::reportBug);
+
+    helpMenu->addSeparator();
+
+    // 关于
+    QAction* aboutAction = helpMenu->addAction("ℹ️ 关于 TinaFlow");
+    connect(aboutAction, &QAction::triggered, this, &MainWindow::showAboutDialog);
+}
+
+void MainWindow::showShortcutHelp()
+{
+    // TODO: 实现快捷键帮助对话框
+    QMessageBox::information(this, "快捷键帮助",
+        "常用快捷键：\n\n"
+        "文件操作：\n"
+        "Ctrl+N - 新建\n"
+        "Ctrl+O - 打开\n"
+        "Ctrl+S - 保存\n\n"
+        "编辑操作：\n"
+        "Ctrl+Z - 撤销\n"
+        "Ctrl+Y - 重做\n"
+        "Delete - 删除选中节点\n"
+        "Ctrl+D - 复制节点\n\n"
+        "视图操作：\n"
+        "Ctrl++ - 放大\n"
+        "Ctrl+- - 缩小\n"
+        "Ctrl+0 - 适应窗口\n"
+        "F11 - 全屏\n\n"
+        "执行控制：\n"
+        "F5 - 运行\n"
+        "Shift+F5 - 停止");
+}
+
+void MainWindow::showAboutDialog()
+{
+    QMessageBox::about(this, "关于 TinaFlow",
+        "<h2>TinaFlow 节点流程编辑器</h2>"
+        "<p><b>版本:</b> 1.0</p>"
+        "<p>一个强大的可视化节点编程工具，专注于Excel数据处理和自动化流程</p>"
+        "<p><b>主要功能：</b></p>"
+        "<ul>"
+        "<li>🎯 可视化节点编程</li>"
+        "<li>📊 Excel数据读取与处理</li>"
+        "<li>🔄 智能循环处理</li>"
+        "<li>💾 Excel文件保存</li>"
+        "<li>🔗 数据流可视化</li>"
+        "<li>⚡ 高性能数据处理</li>"
+        "<li>🎨 现代化用户界面</li>"
+        "</ul>"
+        "<p><b>技术栈：</b></p>"
+        "<p>Qt6, C++20, OpenXLSX, QtNodes, ADS</p>"
+        "<p><b>联系方式：</b></p>"
+        "<p>📧 3344207732@qq.com | 💬 QQ群: 876680171</p>"
+        "<p>© 2025 TinaFlow. All rights reserved.</p>");
+}
+
+void MainWindow::showUserGuide()
+{
+    QMessageBox::information(this, "用户指南",
+        "<h3>TinaFlow 使用指南</h3>"
+        "<p><b>1. 创建节点：</b></p>"
+        "<p>从左侧节点面板拖拽节点到画布，或右键点击空白区域选择节点</p>"
+        "<p><b>2. 连接节点：</b></p>"
+        "<p>拖拽节点的输出端口到另一个节点的输入端口</p>"
+        "<p><b>3. 配置属性：</b></p>"
+        "<p>选中节点后在右侧属性面板中配置参数</p>"
+        "<p><b>4. 运行流程：</b></p>"
+        "<p>点击工具栏的运行按钮或按F5键执行流程</p>"
+        "<p><b>5. 保存工作：</b></p>"
+        "<p>使用Ctrl+S保存当前工作流程</p>");
+}
+
+void MainWindow::reportBug()
+{
+    QMessageBox::information(this, "报告问题",
+        "<h3>问题反馈</h3>"
+        "<p>如果您遇到问题或有改进建议，请通过以下方式联系我们：</p>"
+        "<p><b>邮箱：</b> 3344207732@qq.com</p>"
+        "<p><b>QQ群：</b> 876680171</p>"
+        "<p>请详细描述问题的重现步骤，包括：</p>"
+        "<ul>"
+        "<li>操作系统版本</li>"
+        "<li>具体的操作步骤</li>"
+        "<li>期望的结果和实际结果</li>"
+        "<li>如有可能，请提供相关的.tflow文件</li>"
+        "</ul>"
+        "<p>我们会尽快处理您的反馈。</p>");
+}
+
+void MainWindow::updateWindowTitle()
+{
+    QString title = "TinaFlow";
+
+    if (!m_currentFilePath.isEmpty()) {
+        QFileInfo fileInfo(m_currentFilePath);
+        title += " - " + fileInfo.baseName();
+    } else {
+        title += " - 新建";
+    }
+
+    if (m_hasUnsavedChanges) {
+        title += " *";  // 添加星号表示有未保存的更改
+    }
+
+    setWindowTitle(title);
+}
+
+void MainWindow::setupStatusBar()
+{
+    // 设置状态栏组件样式
+    m_nodeCountLabel->setStyleSheet("QLabel { padding: 2px 8px; border: 1px solid #ccc; border-radius: 3px; background-color: #f0f0f0; }");
+    m_connectionCountLabel->setStyleSheet("QLabel { padding: 2px 8px; border: 1px solid #ccc; border-radius: 3px; background-color: #f0f0f0; }");
+    m_statusLabel->setStyleSheet("QLabel { padding: 2px 8px; color: #666; }");
+
+    // 初始化显示
+    updateStatusBarInfo();
+
+    // 添加到状态栏
+    ui->statusbar->addPermanentWidget(m_nodeCountLabel);
+    ui->statusbar->addPermanentWidget(m_connectionCountLabel);
+    ui->statusbar->addWidget(m_statusLabel, 1); // 拉伸填充
+
+    // 连接图模型变化信号
+    if (m_graphModel) {
+        connect(m_graphModel.get(), &QtNodes::DataFlowGraphModel::nodeCreated,
+                this, &MainWindow::updateStatusBarInfo);
+        connect(m_graphModel.get(), &QtNodes::DataFlowGraphModel::nodeDeleted,
+                this, &MainWindow::updateStatusBarInfo);
+        connect(m_graphModel.get(), &QtNodes::DataFlowGraphModel::connectionCreated,
+                this, &MainWindow::updateStatusBarInfo);
+        connect(m_graphModel.get(), &QtNodes::DataFlowGraphModel::connectionDeleted,
+                this, &MainWindow::updateStatusBarInfo);
+    }
+}
+
+void MainWindow::updateStatusBarInfo()
+{
+    if (!m_graphModel) return;
+
+    int nodeCount = static_cast<int>(m_graphModel->allNodeIds().size());
+    int connectionCount = getTotalConnectionCount();
+
+    m_nodeCountLabel->setText(QString("📦 节点: %1").arg(nodeCount));
+    m_connectionCountLabel->setText(QString("🔗 连接: %1").arg(connectionCount));
+
+    if (nodeCount == 0) {
+        m_statusLabel->setText("准备就绪 - 从左侧面板拖拽节点开始创建流程");
+    } else {
+        m_statusLabel->setText(QString("工作流包含 %1 个节点和 %2 个连接").arg(nodeCount).arg(connectionCount));
+    }
+}
+
+int MainWindow::getTotalConnectionCount() const
+{
+    if (!m_graphModel) return 0;
+
+    std::unordered_set<QtNodes::ConnectionId> allConnections;
+    auto allNodes = m_graphModel->allNodeIds();
+
+    // 遍历所有节点，收集所有连接
+    for (const auto& nodeId : allNodes) {
+        auto nodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(nodeId);
+        if (!nodeDelegate) continue;
+
+        // 只检查输出端口，避免重复计算同一个连接
+        unsigned int outputPorts = nodeDelegate->nPorts(QtNodes::PortType::Out);
+        for (unsigned int portIndex = 0; portIndex < outputPorts; ++portIndex) {
+            auto connections = m_graphModel->connections(nodeId, QtNodes::PortType::Out, portIndex);
+            for (const auto& conn : connections) {
+                allConnections.insert(conn);
+            }
+        }
+    }
+
+    return static_cast<int>(allConnections.size());
+}

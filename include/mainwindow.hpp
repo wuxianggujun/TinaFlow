@@ -74,6 +74,12 @@ private slots:
     void showImprovedSceneContextMenu(const QPointF& pos);
     void createNodeFromPalette(const QString& nodeId, const QPointF& position);
 
+    // 帮助功能
+    void showShortcutHelp();
+    void showAboutDialog();
+    void showUserGuide();
+    void reportBug();
+
 private:
     // 节点编辑器设置
     void setupNodeEditor();
@@ -89,8 +95,11 @@ private:
     void setupAdvancedPanels();
     void setupKeyboardShortcuts();
     void setupLayoutMenu();
+    void setupAutoSave(); // 自动保存设置
+    void setupStatusBar(); // 状态栏设置
     void setupFileMenu();
     void setupViewMenu();
+    void setupHelpMenu(); // 帮助菜单
     void createADSLayoutMenu(QMenu* parentMenu);
     void createViewControlMenu(QMenu* parentMenu);
     void saveCurrentLayout();
@@ -114,6 +123,12 @@ private:
     bool saveToFile(const QString& fileName);
     bool loadFromFile(const QString& fileName);
     void handleFileError(const QString& operation, const QString& fileName, const QString& error);
+    void updateWindowTitle(); // 更新窗口标题
+    void updateStatusBarInfo(); // 更新状态栏信息
+    void addToRecentFiles(const QString& fileName); // 添加到最近文件
+    void updateRecentFileActions(); // 更新最近文件菜单
+    void openRecentFile(); // 打开最近文件
+    int getTotalConnectionCount() const; // 获取总连接数
 
     void setGlobalExecutionState(bool running);
     void triggerDataFlow();
@@ -143,4 +158,19 @@ private:
     // 选中状态
     QtNodes::NodeId m_selectedNodeId;
     QtNodes::ConnectionId m_selectedConnectionId;
+
+    // 自动保存
+    QTimer* m_autoSaveTimer;
+    QString m_currentFilePath;
+    bool m_hasUnsavedChanges;
+
+    // 状态栏组件
+    QLabel* m_nodeCountLabel;
+    QLabel* m_connectionCountLabel;
+    QLabel* m_statusLabel;
+
+    // 最近文件
+    QStringList m_recentFiles;
+    QList<QAction*> m_recentFileActions;
+    static const int MaxRecentFiles = 5;
 };
