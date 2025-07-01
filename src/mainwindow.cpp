@@ -704,8 +704,6 @@ void MainWindow::showNodeContextMenu(QtNodes::NodeId nodeId, const QPointF& pos)
     auto nodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(nodeId);
     QString nodeName = nodeDelegate ? nodeDelegate->name() : "未知节点";
 
-    qDebug() << "MainWindow: Showing node context menu for:" << nodeName;
-
     // 节点信息（只读）
     QAction* infoAction = contextMenu.addAction(QString("📋 节点: %1").arg(nodeName));
     infoAction->setEnabled(false);
@@ -1153,8 +1151,6 @@ void MainWindow::showImprovedSceneContextMenu(const QPointF& pos)
         "margin: 4px 8px;"
         "}"
     );
-
-    qDebug() << "MainWindow: Showing scene context menu (empty area)";
 
     // 这里只处理空白区域的菜单，不包含节点操作
 
@@ -1834,112 +1830,4 @@ void MainWindow::setupWindowDisplay()
     });
 }
 
-QtNodes::NodeId MainWindow::getSelectedNodeIdImproved(const QPointF& pos)
-{
-    // 方法1：优先检查场景中的选中项
-    auto selectedItems = m_graphicsScene->selectedItems();
-    qDebug() << "MainWindow: Found" << selectedItems.size() << "selected items";
 
-    for (auto* item : selectedItems) {
-        // 输出选中项的类型
-        if (auto* object = dynamic_cast<QObject*>(item)) {
-            qDebug() << "MainWindow: Selected item type:" << object->metaObject()->className();
-        }
-
-        // 检查是否是节点图形对象
-        if (auto* nodeObject = qgraphicsitem_cast<QtNodes::NodeGraphicsObject*>(item)) {
-            QtNodes::NodeId nodeId = nodeObject->nodeId();
-            qDebug() << "MainWindow: Found selected node from graphics object:" << nodeId;
-            return nodeId;
-        }
-    }
-
-    // 方法2：检查鼠标位置附近的节点
-    QGraphicsItem* item = m_graphicsScene->itemAt(pos, QTransform());
-    if (item) {
-        // 向上查找节点图形对象
-        QGraphicsItem* current = item;
-        while (current) {
-            if (auto* nodeObject = qgraphicsitem_cast<QtNodes::NodeGraphicsObject*>(current)) {
-                QtNodes::NodeId nodeId = nodeObject->nodeId();
-                qDebug() << "MainWindow: Found node from item hierarchy:" << nodeId;
-                return nodeId;
-            }
-            current = current->parentItem();
-        }
-    }
-
-    // 方法3：通过位置查找最近的节点
-    auto allNodes = m_graphModel->allNodeIds();
-    QtNodes::NodeId closestNodeId{};
-    qreal minDistance = std::numeric_limits<qreal>::max();
-
-    qDebug() << "MainWindow: Looking for node near position:" << pos;
-
-    for (auto nodeId : allNodes) {
-        QVariant nodePos = m_graphModel->nodeData(nodeId, QtNodes::NodeRole::Position);
-        if (nodePos.isValid()) {
-            QPointF nodePosF = nodePos.toPointF();
-            qreal distance = (pos - nodePosF).manhattanLength();
-
-            qDebug() << "MainWindow: Node" << nodeId << "at" << nodePosF << "distance:" << distance;
-
-            // 如果距离很近，直接返回
-            if (distance < 100) {  // 100像素内认为是点击了节点
-                qDebug() << "MainWindow: Close match found for nodeId:" << nodeId;
-                return nodeId;
-            }
-
-            // 记录最近的节点作为备选
-            if (distance < 200 && distance < minDistance) {
-                minDistance = distance;
-                closestNodeId = nodeId;
-            }
-        }
-    }
-
-    if (closestNodeId != QtNodes::NodeId{}) {
-        qDebug() << "MainWindow: Using closest node:" << closestNodeId << "distance:" << minDistance;
-        return closestNodeId;
-    }
-
-    qDebug() << "MainWindow: No node found near position:" << pos;
-    return QtNodes::NodeId{};
-}
-
-QtNodes::NodeId MainWindow::getNodeAtPosition(const QPointF& pos)
-{
-    // 检查鼠标位置下的图形项
-    QGraphicsItem* item = m_graphicsScene->itemAt(pos, QTransform());
-    if (item) {
-        // 向上查找节点图形对象
-        QGraphicsItem* current = item;
-        while (current) {
-            if (auto* nodeObject = qgraphicsitem_cast<QtNodes::NodeGraphicsObject*>(current)) {
-                QtNodes::NodeId nodeId = nodeObject->nodeId();
-                qDebug() << "MainWindow: Found node at position:" << nodeId;
-                return nodeId;
-            }
-            current = current->parentItem();
-        }
-    }
-
-    // 如果没有直接找到，检查附近的节点（小范围）
-    auto allNodes = m_graphModel->allNodeIds();
-    for (auto nodeId : allNodes) {
-        QVariant nodePos = m_graphModel->nodeData(nodeId, QtNodes::NodeRole::Position);
-        if (nodePos.isValid()) {
-            QPointF nodePosF = nodePos.toPointF();
-            qreal distance = (pos - nodePosF).manhattanLength();
-
-            // 只有非常接近的节点才认为是点击了节点（50像素内）
-            if (distance < 50) {
-                qDebug() << "MainWindow: Found nearby node at position:" << nodeId << "distance:" << distance;
-                return nodeId;
-            }
-        }
-    }
-
-    qDebug() << "MainWindow: No node found at position:" << pos;
-    return QtNodes::NodeId{};
-}

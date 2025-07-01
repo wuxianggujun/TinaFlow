@@ -46,19 +46,16 @@ protected:
     void contextMenuEvent(QContextMenuEvent* event) override
     {
         QPointF scenePos = mapToScene(event->pos());
-        qDebug() << "TinaFlowGraphicsView: Context menu at" << scenePos;
 
         // 检查鼠标位置下的图形项
         QGraphicsItem* item = m_scene->itemAt(scenePos, transform());
         if (!item) {
-            qDebug() << "TinaFlowGraphicsView: No item found, showing scene menu";
             emit sceneContextMenuRequested(scenePos);
             return;
         }
 
         // 检查是否是连接线
         if (auto* connectionObject = qgraphicsitem_cast<QtNodes::ConnectionGraphicsObject*>(item)) {
-            qDebug() << "TinaFlowGraphicsView: Found connection item";
             QtNodes::ConnectionId connectionId = findConnectionIdByGraphicsObject(connectionObject);
             emit connectionContextMenuRequested(connectionId, scenePos);
             return;
@@ -66,19 +63,12 @@ protected:
 
         // 检查是否是节点
         QtNodes::NodeId nodeId = findNodeAtItem(item);
-        auto allNodes = m_scene->graphModel().allNodeIds();
-        bool isValidNode = allNodes.contains(nodeId);
-
-        qDebug() << "TinaFlowGraphicsView: Found nodeId:" << nodeId << "isValid:" << isValidNode;
-
-        if (isValidNode) {
-            qDebug() << "TinaFlowGraphicsView: Found node item, nodeId:" << nodeId;
+        if (m_scene->graphModel().allNodeIds().contains(nodeId)) {
             emit nodeContextMenuRequested(nodeId, scenePos);
             return;
         }
 
         // 默认情况：空白区域菜单
-        qDebug() << "TinaFlowGraphicsView: Showing scene menu as fallback";
         emit sceneContextMenuRequested(scenePos);
     }
     
@@ -122,29 +112,17 @@ protected:
 private:
     QtNodes::NodeId findNodeAtItem(QGraphicsItem* item)
     {
-        // 输出项的类型信息
-        if (auto* object = dynamic_cast<QObject*>(item)) {
-            qDebug() << "TinaFlowGraphicsView: Item type:" << object->metaObject()->className();
-        }
-
         // 向上查找节点图形对象
         QGraphicsItem* current = item;
         int depth = 0;
         while (current && depth < 10) {  // 防止无限循环
-            if (auto* object = dynamic_cast<QObject*>(current)) {
-                qDebug() << "TinaFlowGraphicsView: Checking depth" << depth << "type:" << object->metaObject()->className();
-            }
-
             if (auto* nodeObject = qgraphicsitem_cast<QtNodes::NodeGraphicsObject*>(current)) {
-                QtNodes::NodeId nodeId = nodeObject->nodeId();
-                qDebug() << "TinaFlowGraphicsView: Found NodeGraphicsObject at depth" << depth << "nodeId:" << nodeId;
-                return nodeId;
+                return nodeObject->nodeId();
             }
             current = current->parentItem();
             depth++;
         }
 
-        qDebug() << "TinaFlowGraphicsView: No NodeGraphicsObject found in hierarchy";
         return QtNodes::NodeId{};
     }
 
