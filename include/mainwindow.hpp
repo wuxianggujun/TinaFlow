@@ -28,6 +28,20 @@ class MainWindow : public QMainWindow
 {
     Q_OBJECT
 
+    // 常量定义
+    struct Constants {
+        static constexpr int MIN_WINDOW_WIDTH = 800;
+        static constexpr int MIN_WINDOW_HEIGHT = 600;
+        static constexpr int DEFAULT_WINDOW_WIDTH = 1200;
+        static constexpr int DEFAULT_WINDOW_HEIGHT = 800;
+        static constexpr int STATUS_MESSAGE_TIMEOUT = 3000;
+        static constexpr int NODE_DUPLICATE_OFFSET = 50;
+        static constexpr int UPDATE_THROTTLE_MS = 100;
+
+        static inline const QString WINDOW_TITLE_PREFIX = "TinaFlow";
+        static inline const QString FILE_FILTER = "TinaFlow文件 (*.tflow);;JSON文件 (*.json);;所有文件 (*)";
+    };
+
 public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
@@ -61,9 +75,15 @@ private slots:
     void createNodeFromPalette(const QString& nodeId, const QPointF& position);
 
 private:
+    // 节点编辑器设置
     void setupNodeEditor();
+    void createGraphicsComponents();
+    void connectNodeEditorSignals();
+    void connectDataUpdateSignals();
     void reinitializeNodeEditor();
     void cleanupGraphicsComponents();
+
+    // UI设置
     void setupModernToolbar();
     void setupAdvancedPanels();
     void setupKeyboardShortcuts();
@@ -88,8 +108,12 @@ private:
     void createADSCentralWidget(ads::CDockManager* dockManager);
     void configureCentralWidgetFeatures(ads::CDockWidget* centralDockWidget);
     void setupCustomStyles();
-    void saveToFile(const QString& fileName);
-    void loadFromFile(const QString& fileName);
+
+    // 文件操作封装
+    bool saveToFile(const QString& fileName);
+    bool loadFromFile(const QString& fileName);
+    void handleFileError(const QString& operation, const QString& fileName, const QString& error);
+
     void setGlobalExecutionState(bool running);
     void triggerDataFlow();
     

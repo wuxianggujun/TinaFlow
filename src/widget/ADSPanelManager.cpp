@@ -32,39 +32,40 @@
 
 ADSPanelManager::ADSPanelManager(QMainWindow* mainWindow, QObject* parent)
     : QObject(parent)
-    , m_mainWindow(mainWindow)
-    , m_dockManager(nullptr)
-    , m_adsPropertyPanel(nullptr)
-    , m_nodePalette(nullptr)
-    , m_commandHistoryWidget(nullptr)
+      , m_mainWindow(mainWindow)
+      , m_dockManager(nullptr)
+      , m_adsPropertyPanel(nullptr)
+      , m_nodePalette(nullptr)
+      , m_commandHistoryWidget(nullptr)
 {
-
 }
 
 ADSPanelManager::~ADSPanelManager()
 {
-
-    
     // 安全关闭所有面板
-    if (m_dockManager) {
+    if (m_dockManager)
+    {
         // 先断开所有信号连接，避免在销毁过程中触发信号
         m_dockManager->disconnect();
-        
+
         // 移除所有面板
         QList<ads::CDockWidget*> panels = m_panels.values();
-        for (auto* panel : panels) {
-            if (panel) {
+        for (auto* panel : panels)
+        {
+            if (panel)
+            {
                 panel->disconnect(); // 断开面板的信号连接
-                if (panel->dockManager() == m_dockManager) {
+                if (panel->dockManager() == m_dockManager)
+                {
                     m_dockManager->removeDockWidget(panel);
                 }
             }
         }
-        
+
         // 清理注册表
         m_panels.clear();
         m_panelTypes.clear();
-        
+
         // 重置指针
         m_adsPropertyPanel = nullptr;
         m_nodePalette = nullptr;
@@ -74,22 +75,22 @@ ADSPanelManager::~ADSPanelManager()
 
 void ADSPanelManager::initialize()
 {
-    
     // 创建ADS停靠管理器
     setupDockManager();
-    
+
     // 加载布局预设
     loadLayoutPresets();
-    
+
     // 设置面板连接
     setupPanelConnections();
-    
+
     qDebug() << "ADSPanelManager: ADS系统初始化完成";
 }
 
 void ADSPanelManager::shutdown()
 {
-    if (m_dockManager) {
+    if (m_dockManager)
+    {
         // 保存当前布局
         saveLayoutPresets();
 
@@ -107,8 +108,6 @@ void ADSPanelManager::shutdown()
 
         // ADS会自动清理其子组件
         m_dockManager = nullptr;
-
-
     }
 }
 
@@ -118,21 +117,21 @@ void ADSPanelManager::setupDockManager()
     ads::CDockManager::setConfigFlag(ads::CDockManager::OpaqueSplitterResize, true);
     ads::CDockManager::setConfigFlag(ads::CDockManager::XmlCompressionEnabled, false);
     ads::CDockManager::setConfigFlag(ads::CDockManager::FocusHighlighting, true);
-    
+
     // 配置ADS以避免创建独立窗口
     ads::CDockManager::setConfigFlag(ads::CDockManager::DragPreviewIsDynamic, true);
-    ads::CDockManager::setConfigFlag(ads::CDockManager::DragPreviewShowsContentPixmap, false);  // 禁用内容预览
+    ads::CDockManager::setConfigFlag(ads::CDockManager::DragPreviewShowsContentPixmap, false); // 禁用内容预览
     ads::CDockManager::setConfigFlag(ads::CDockManager::DragPreviewHasWindowFrame, false);
-    ads::CDockManager::setConfigFlag(ads::CDockManager::AlwaysShowTabs, false);  // 不总是显示标签
+    ads::CDockManager::setConfigFlag(ads::CDockManager::AlwaysShowTabs, false); // 不总是显示标签
 
     // 启用Auto-Hide功能
     ads::CDockManager::setAutoHideConfigFlag(ads::CDockManager::AutoHideFeatureEnabled, true);
     ads::CDockManager::setConfigFlag(ads::CDockManager::DockAreaHideDisabledButtons, true);
     ads::CDockManager::setConfigFlag(ads::CDockManager::DockAreaDynamicTabsMenuButtonVisibility, true);
-    
+
     // 让ADS接管MainWindow
     m_dockManager = new ads::CDockManager(m_mainWindow);
-    
+
     // 设置样式
     setupADSStyle();
 }
@@ -227,57 +226,59 @@ void ADSPanelManager::setupADSStyle()
             color: white;
         }
     )";
-    
+
     m_dockManager->setStyleSheet(adsStyleSheet);
 }
 
 void ADSPanelManager::setupPanelConnections()
 {
     if (!m_dockManager) return;
-    
+
     // 连接ADS信号
     connect(m_dockManager, &ads::CDockManager::focusedDockWidgetChanged,
-            this, [this](ads::CDockWidget* old, ads::CDockWidget* now) {
+            this, [this](ads::CDockWidget* old, ads::CDockWidget* now)
+            {
                 Q_UNUSED(old);
-                if (now) {
+                if (now)
+                {
                     onFocusChanged(now);
                 }
             });
-    
+
     connect(m_dockManager, &ads::CDockManager::dockWidgetAdded,
-            this, [this](ads::CDockWidget* dockWidget) {
+            this, [this](ads::CDockWidget* dockWidget)
+            {
                 QString panelId = dockWidget->objectName();
                 PanelType type = m_panelTypes.value(panelId, CustomPanel);
                 emit panelCreated(panelId, type);
-
             });
-    
+
     connect(m_dockManager, &ads::CDockManager::dockWidgetRemoved,
-            this, [this](ads::CDockWidget* dockWidget) {
+            this, [this](ads::CDockWidget* dockWidget)
+            {
                 QString panelId = dockWidget->objectName();
                 m_panels.remove(panelId);
                 m_panelTypes.remove(panelId);
                 emit panelDestroyed(panelId);
-
             });
-
-
 }
 
 ads::CDockWidget* ADSPanelManager::createPanel(PanelType type, const QString& panelId, const QString& title)
 {
-    if (m_panels.contains(panelId)) {
+    if (m_panels.contains(panelId))
+    {
         qWarning() << "ADSPanelManager: 面板已存在" << panelId;
         return m_panels[panelId];
     }
-    
+
     // 创建面板内容
     QWidget* content = createPanelContent(type);
-    if (!content) {
+    if (!content)
+    {
         qWarning() << "ADSPanelManager: 无法创建面板内容" << panelId;
         return nullptr;
     }
-    
+
     // 创建ADS停靠面板 - 重要：设置正确的父对象
     ads::CDockWidget* dockWidget = new ads::CDockWidget(title, m_dockManager);
     dockWidget->setObjectName(panelId);
@@ -286,42 +287,42 @@ ads::CDockWidget* ADSPanelManager::createPanel(PanelType type, const QString& pa
 
     // 配置面板属性
     configurePanelProperties(dockWidget, type);
-    
+
     // 注册面板
     m_panels[panelId] = dockWidget;
     m_panelTypes[panelId] = type;
-    
+
     // 连接面板信号
     connect(dockWidget, &ads::CDockWidget::visibilityChanged,
-            this, [this, panelId](bool visible) {
+            this, [this, panelId](bool visible)
+            {
                 emit panelVisibilityChanged(panelId, visible);
             });
 
     connect(dockWidget, &ads::CDockWidget::closed,
-            this, [this, dockWidget]() {
+            this, [this, dockWidget]()
+            {
                 onPanelClosed(dockWidget);
             });
-    
 
-    
+
     return dockWidget;
 }
 
 void ADSPanelManager::removePanel(const QString& panelId)
 {
-    if (!m_panels.contains(panelId)) {
+    if (!m_panels.contains(panelId))
+    {
         qWarning() << "ADSPanelManager: 面板不存在" << panelId;
         return;
     }
-    
+
     ads::CDockWidget* dockWidget = m_panels[panelId];
     m_dockManager->removeDockWidget(dockWidget);
     dockWidget->deleteLater();
-    
+
     m_panels.remove(panelId);
     m_panelTypes.remove(panelId);
-    
-
 }
 
 ads::CDockWidget* ADSPanelManager::getPanel(const QString& panelId) const
@@ -363,19 +364,22 @@ ads::CDockWidget* ADSPanelManager::createProjectExplorerPanel()
 // 布局管理实现
 void ADSPanelManager::setupDefaultLayout()
 {
-    if (!m_dockManager) {
+    if (!m_dockManager)
+    {
         qCritical() << "ADSPanelManager: DockManager 不存在，无法设置布局";
         return;
     }
-    
 
-    
+
     // 清理现有面板（安全删除）
     QStringList panelIds = m_panels.keys();
-    for (const QString& panelId : panelIds) {
+    for (const QString& panelId : panelIds)
+    {
         auto* panel = m_panels.value(panelId);
-        if (panel) {
-            if (panel->dockManager()) {
+        if (panel)
+        {
+            if (panel->dockManager())
+            {
                 m_dockManager->removeDockWidget(panel);
             }
             // 从注册表中移除，但不删除对象，让ADS系统管理
@@ -383,23 +387,24 @@ void ADSPanelManager::setupDefaultLayout()
             m_panelTypes.remove(panelId);
         }
     }
-    
+
     // 重新创建所有面板
     auto* propertyPanel = createPropertyPanel();
     auto* nodePanel = createNodePalettePanel();
     auto* historyPanel = createCommandHistoryPanel();
     auto* outputPanel = createOutputConsolePanel();
-    
+
     // 检查面板创建是否成功
-    if (!propertyPanel || !nodePanel || !historyPanel || !outputPanel) {
+    if (!propertyPanel || !nodePanel || !historyPanel || !outputPanel)
+    {
         qCritical() << "ADSPanelManager: 面板创建失败，无法设置布局";
         return;
     }
-    
 
-    
+
     // 按布局添加面板 - 确保不创建独立窗口
-    try {
+    try
+    {
         // 左侧：节点面板
         auto* nodeArea = m_dockManager->addDockWidget(ads::LeftDockWidgetArea, nodePanel);
         nodePanel->setFeature(ads::CDockWidget::DockWidgetFloatable, false);
@@ -417,54 +422,56 @@ void ADSPanelManager::setupDefaultLayout()
         outputPanel->setFeature(ads::CDockWidget::DockWidgetFloatable, false);
 
         // 设置默认激活的标签页
-        if (propertyPanel->dockAreaWidget()) {
+        if (propertyPanel->dockAreaWidget())
+        {
             propertyPanel->dockAreaWidget()->setCurrentDockWidget(propertyPanel);
         }
 
         // 不调用show()方法，让ADS系统自己管理显示
         // 这样可以避免创建独立窗口
-        
-    } catch (const std::exception& e) {
+    }
+    catch (const std::exception& e)
+    {
         qCritical() << "ADSPanelManager: 设置布局时发生异常:" << e.what();
-    } catch (...) {
+    } catch (...)
+    {
         qCritical() << "ADSPanelManager: 设置布局时发生未知异常";
     }
 }
 
 
-
-
-
-
-
 // 面板内容创建实现
 QWidget* ADSPanelManager::createPanelContent(PanelType type)
 {
-    switch (type) {
+    switch (type)
+    {
     case PropertyPanel:
-        if (!m_adsPropertyPanel) {
+        if (!m_adsPropertyPanel)
+        {
             m_adsPropertyPanel = new ADSPropertyPanel(m_mainWindow);
         }
         return m_adsPropertyPanel;
-        
+
     case NodePalettePanel:
-        if (!m_nodePalette) {
+        if (!m_nodePalette)
+        {
             m_nodePalette = new ::NodePalette(m_mainWindow); // 设置正确的父对象
         }
         return m_nodePalette;
-        
+
     case CommandHistory:
-        if (!m_commandHistoryWidget) {
+        if (!m_commandHistoryWidget)
+        {
             m_commandHistoryWidget = new CommandHistoryWidget(m_mainWindow);
         }
         return m_commandHistoryWidget;
-        
+
     case OutputConsole:
         return createOutputConsoleWidget();
-        
+
     case ProjectExplorer:
         return createProjectExplorerWidget();
-        
+
     default:
         qWarning() << "ADSPanelManager: 未知面板类型" << type;
         return nullptr;
@@ -476,19 +483,19 @@ QWidget* ADSPanelManager::createOutputConsoleWidget()
     // 设置正确的父对象，确保生命周期管理
     auto* widget = new QWidget(m_mainWindow);
     auto* layout = new QVBoxLayout(widget);
-    
+
     // 创建控制栏
     auto* controlLayout = new QHBoxLayout();
     auto* levelFilter = new QComboBox(widget); // 设置父对象
     levelFilter->addItems({"全部", "调试", "信息", "警告", "错误"});
-    
+
     auto* clearButton = new QPushButton("清空", widget); // 设置父对象
-    
+
     controlLayout->addWidget(new QLabel("日志级别:", widget)); // 设置父对象
     controlLayout->addWidget(levelFilter);
     controlLayout->addStretch();
     controlLayout->addWidget(clearButton);
-    
+
     // 创建输出文本区域
     auto* outputText = new QTextEdit(widget); // 设置父对象
     outputText->setReadOnly(true);
@@ -500,18 +507,18 @@ QWidget* ADSPanelManager::createOutputConsoleWidget()
         "border: 1px solid #464646;"
         "}"
     );
-    
+
     layout->addLayout(controlLayout);
     layout->addWidget(outputText);
-    
+
     // 连接信号
     connect(clearButton, &QPushButton::clicked, outputText, &QTextEdit::clear);
-    
+
     // 添加一些示例输出
     outputText->append("[INFO] TinaFlow 启动完成");
     outputText->append("[DEBUG] ADS面板系统初始化");
     outputText->append("[INFO] 节点编辑器准备就绪");
-    
+
     return widget;
 }
 
@@ -520,33 +527,33 @@ QWidget* ADSPanelManager::createProjectExplorerWidget()
     // 设置正确的父对象，确保生命周期管理
     auto* widget = new QWidget(m_mainWindow);
     auto* layout = new QVBoxLayout(widget);
-    
+
     // 创建文件树视图
     auto* treeView = new QTreeView(widget); // 设置父对象
     auto* fileModel = new QFileSystemModel(widget); // 设置父对象，这很重要！
-    
+
     // 设置模型
     fileModel->setRootPath(QApplication::applicationDirPath());
     treeView->setModel(fileModel);
     treeView->setRootIndex(fileModel->index(QApplication::applicationDirPath()));
-    
+
     // 隐藏不需要的列
     treeView->hideColumn(1); // Size
     treeView->hideColumn(2); // Type  
     treeView->hideColumn(3); // Date Modified
-    
+
     layout->addWidget(new QLabel("项目文件:", widget)); // 设置父对象
     layout->addWidget(treeView);
-    
+
     return widget;
 }
-
 
 
 // 面板控制实现
 void ADSPanelManager::showPanel(const QString& panelId)
 {
-    if (auto* panel = getPanel(panelId)) {
+    if (auto* panel = getPanel(panelId))
+    {
         panel->show();
         panel->raise();
         panel->setFocus();
@@ -555,17 +562,22 @@ void ADSPanelManager::showPanel(const QString& panelId)
 
 void ADSPanelManager::hidePanel(const QString& panelId)
 {
-    if (auto* panel = getPanel(panelId)) {
+    if (auto* panel = getPanel(panelId))
+    {
         panel->hide();
     }
 }
 
 void ADSPanelManager::togglePanel(const QString& panelId)
 {
-    if (auto* panel = getPanel(panelId)) {
-        if (panel->isVisible()) {
+    if (auto* panel = getPanel(panelId))
+    {
+        if (panel->isVisible())
+        {
             panel->hide();
-        } else {
+        }
+        else
+        {
             panel->show();
             panel->raise();
             panel->setFocus();
@@ -575,10 +587,12 @@ void ADSPanelManager::togglePanel(const QString& panelId)
 
 void ADSPanelManager::focusPanel(const QString& panelId)
 {
-    if (auto* panel = getPanel(panelId)) {
+    if (auto* panel = getPanel(panelId))
+    {
         panel->raise();
         panel->setFocus();
-        if (panel->dockAreaWidget()) {
+        if (panel->dockAreaWidget())
+        {
             panel->dockAreaWidget()->setCurrentDockWidget(panel);
         }
     }
@@ -588,31 +602,32 @@ void ADSPanelManager::focusPanel(const QString& panelId)
 void ADSPanelManager::saveLayoutPreset(const QString& name)
 {
     if (!m_dockManager) return;
-    
+
     QByteArray layoutData = m_dockManager->saveState();
     QJsonObject layoutObj;
     layoutObj["data"] = QString::fromUtf8(layoutData.toBase64());
     layoutObj["timestamp"] = QDateTime::currentDateTime().toString(Qt::ISODate);
-    
+
     m_layoutPresets[name] = layoutObj;
     saveLayoutPresets();
-    
+
     emit layoutPresetChanged(name);
     qDebug() << "ADSPanelManager: 保存布局预设" << name;
 }
 
 void ADSPanelManager::loadLayoutPreset(const QString& name)
 {
-    if (!m_dockManager || !m_layoutPresets.contains(name)) {
+    if (!m_dockManager || !m_layoutPresets.contains(name))
+    {
         qWarning() << "ADSPanelManager: 布局预设不存在" << name;
         return;
     }
-    
+
     QJsonObject layoutObj = m_layoutPresets[name];
     QByteArray layoutData = QByteArray::fromBase64(layoutObj["data"].toString().toUtf8());
-    
+
     m_dockManager->restoreState(layoutData);
-    
+
     emit layoutPresetChanged(name);
     qDebug() << "ADSPanelManager: 加载布局预设" << name;
 }
@@ -620,7 +635,8 @@ void ADSPanelManager::loadLayoutPreset(const QString& name)
 void ADSPanelManager::deleteLayoutPreset(const QString& name)
 {
     int removedCount = m_layoutPresets.remove(name);
-    if (removedCount > 0) {
+    if (removedCount > 0)
+    {
         saveLayoutPresets();
         qDebug() << "ADSPanelManager: 删除布局预设" << name;
     }
@@ -635,12 +651,13 @@ void ADSPanelManager::loadLayoutPresets()
 {
     QSettings settings;
     settings.beginGroup("LayoutPresets");
-    
-    for (const QString& name : settings.childKeys()) {
+
+    for (const QString& name : settings.childKeys())
+    {
         QJsonDocument doc = QJsonDocument::fromJson(settings.value(name).toByteArray());
         m_layoutPresets[name] = doc.object();
     }
-    
+
     settings.endGroup();
     qDebug() << "ADSPanelManager: 加载了" << m_layoutPresets.size() << "个布局预设";
 }
@@ -650,12 +667,13 @@ void ADSPanelManager::saveLayoutPresets()
     QSettings settings;
     settings.beginGroup("LayoutPresets");
     settings.clear();
-    
-    for (auto it = m_layoutPresets.begin(); it != m_layoutPresets.end(); ++it) {
+
+    for (auto it = m_layoutPresets.begin(); it != m_layoutPresets.end(); ++it)
+    {
         QJsonDocument doc(it.value());
         settings.setValue(it.key(), doc.toJson(QJsonDocument::Compact));
     }
-    
+
     settings.endGroup();
 }
 
@@ -663,47 +681,48 @@ void ADSPanelManager::saveLayoutPresets()
 QJsonObject ADSPanelManager::saveState() const
 {
     QJsonObject state;
-    
-    if (m_dockManager) {
+
+    if (m_dockManager)
+    {
         QByteArray layoutData = m_dockManager->saveState();
         state["layout"] = QString::fromUtf8(layoutData.toBase64());
     }
-    
+
     state["timestamp"] = QDateTime::currentDateTime().toString(Qt::ISODate);
     state["version"] = "1.0";
-    
+
     return state;
 }
 
 void ADSPanelManager::restoreState(const QJsonObject& state)
 {
-    if (!m_dockManager || !state.contains("layout")) {
+    if (!m_dockManager || !state.contains("layout"))
+    {
         qWarning() << "ADSPanelManager: 无效的状态数据";
         return;
     }
-    
+
     QByteArray layoutData = QByteArray::fromBase64(state["layout"].toString().toUtf8());
     m_dockManager->restoreState(layoutData);
-    
+
     qDebug() << "ADSPanelManager: 恢复状态完成";
 }
 
 // 插槽实现
 void ADSPanelManager::resetToDefaultLayout()
 {
-    if (m_dockManager) {
+    if (m_dockManager)
+    {
         // 清除当前布局
-        for (auto* panel : m_panels.values()) {
+        for (auto* panel : m_panels.values())
+        {
             m_dockManager->removeDockWidget(panel);
         }
-        
+
         // 重新设置默认布局
         setupDefaultLayout();
     }
 }
-
-
-
 
 
 // 面板配置实现
@@ -712,35 +731,36 @@ void ADSPanelManager::configurePanelProperties(ads::CDockWidget* panel, PanelTyp
     if (!panel) return;
 
     // 默认配置：禁用浮动功能以避免创建独立窗口
-    switch (type) {
+    switch (type)
+    {
     case PropertyPanel:
         panel->setFeature(ads::CDockWidget::DockWidgetClosable, true);
         panel->setFeature(ads::CDockWidget::DockWidgetMovable, true);
-        panel->setFeature(ads::CDockWidget::DockWidgetFloatable, false);  // 禁用浮动
+        panel->setFeature(ads::CDockWidget::DockWidgetFloatable, false); // 禁用浮动
         break;
 
     case NodePalettePanel:
         panel->setFeature(ads::CDockWidget::DockWidgetClosable, false); // 节点面板不可关闭
         panel->setFeature(ads::CDockWidget::DockWidgetMovable, true);
-        panel->setFeature(ads::CDockWidget::DockWidgetFloatable, false);  // 禁用浮动
+        panel->setFeature(ads::CDockWidget::DockWidgetFloatable, false); // 禁用浮动
         break;
 
     case CommandHistory:
         panel->setFeature(ads::CDockWidget::DockWidgetClosable, true);
         panel->setFeature(ads::CDockWidget::DockWidgetMovable, true);
-        panel->setFeature(ads::CDockWidget::DockWidgetFloatable, false);  // 禁用浮动
+        panel->setFeature(ads::CDockWidget::DockWidgetFloatable, false); // 禁用浮动
         break;
 
     case OutputConsole:
         panel->setFeature(ads::CDockWidget::DockWidgetClosable, true);
         panel->setFeature(ads::CDockWidget::DockWidgetMovable, true);
-        panel->setFeature(ads::CDockWidget::DockWidgetFloatable, false);  // 禁用浮动
+        panel->setFeature(ads::CDockWidget::DockWidgetFloatable, false); // 禁用浮动
         break;
 
     case ProjectExplorer:
         panel->setFeature(ads::CDockWidget::DockWidgetClosable, true);
         panel->setFeature(ads::CDockWidget::DockWidgetMovable, true);
-        panel->setFeature(ads::CDockWidget::DockWidgetFloatable, false);  // 禁用浮动
+        panel->setFeature(ads::CDockWidget::DockWidgetFloatable, false); // 禁用浮动
         break;
 
     default:
@@ -752,7 +772,8 @@ void ADSPanelManager::configurePanelProperties(ads::CDockWidget* panel, PanelTyp
 
 QString ADSPanelManager::getPanelTitle(PanelType type) const
 {
-    switch (type) {
+    switch (type)
+    {
     case PropertyPanel: return "🔧 属性面板";
     case NodePalettePanel: return "🗂️ 节点面板";
     case CommandHistory: return "📜 命令历史";
@@ -774,27 +795,27 @@ QIcon ADSPanelManager::getPanelIcon(PanelType type) const
 // 插槽实现
 void ADSPanelManager::onPanelClosed(ads::CDockWidget* panel)
 {
-    if (panel) {
+    if (panel)
+    {
         QString panelId = panel->objectName();
         emit panelVisibilityChanged(panelId, false);
-
     }
 }
 
 void ADSPanelManager::onPanelOpened(ads::CDockWidget* panel)
 {
-    if (panel) {
+    if (panel)
+    {
         QString panelId = panel->objectName();
         emit panelVisibilityChanged(panelId, true);
-
     }
 }
 
 void ADSPanelManager::onFocusChanged(ads::CDockWidget* panel)
 {
-    if (panel) {
+    if (panel)
+    {
         QString panelId = panel->objectName();
         emit panelFocused(panelId);
-
     }
 }

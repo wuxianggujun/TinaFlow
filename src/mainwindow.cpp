@@ -1,6 +1,7 @@
 #include "mainwindow.hpp"
 #include "ui_mainwindow.h"
 
+// Qt Core
 #include <QApplication>
 #include <QFileDialog>
 #include <QJsonDocument>
@@ -9,24 +10,23 @@
 #include <QStandardPaths>
 #include <QSettings>
 #include <QShortcut>
+#include <QInputDialog>
+#include <QDateTime>
+#include <QTimer>
+
+// Qt Widgets
 #include <QMenu>
 #include <QMenuBar>
 #include <QStatusBar>
 #include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QSplitter>
-#include <QInputDialog>
-#include <QDateTime>
 
-// Node Editor includes
+// QtNodes
 #include <QtNodes/DataFlowGraphicsScene>
 #include <QtNodes/NodeDelegateModelRegistry>
 #include <QtNodes/ConnectionStyle>
 #include <QtNodes/NodeStyle>
-
-// TinaFlow includes
-#include "CommandManager.hpp"
-#include "NodeCatalog.hpp"
-#include "NodePalette.hpp"
 
 // Model includes
 #include "model/OpenExcelModel.hpp"
@@ -60,50 +60,18 @@
 #include "model/DisplayCellListModel.hpp"
 #include "model/RangeInfoModel.hpp"
 
-// 系统组件
-#include "IPropertyProvider.hpp"
-#include "widget/PropertyWidget.hpp"
+// TinaFlow Components
+#include "CommandManager.hpp"
+#include "NodeCatalog.hpp"
+#include "NodePalette.hpp"
+#include "NodeCommands.hpp"
 #include "ErrorHandler.hpp"
 #include "DataValidator.hpp"
-#include "CommandManager.hpp"
-#include "NodeCommands.hpp"
+#include "IPropertyProvider.hpp"
+#include "widget/PropertyWidget.hpp"
 #include "widget/ModernToolBar.hpp"
 #include "widget/ADSPanelManager.hpp"
 #include "widget/ADSPropertyPanel.hpp"
-#include "NodeCatalog.hpp"
-
-// QtNodes
-#include <QtNodes/ConnectionStyle>
-#include <QtNodes/NodeStyle>
-#include <QtNodes/DataFlowGraphicsScene>
-
-// Qt核心
-#include <QFileDialog>
-#include <QMessageBox>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QStandardPaths>
-#include <QInputDialog>
-#include <QTimer>
-#include <QDateTime>
-#include <limits>
-
-// Qt界面
-#include <QMenu>
-#include <QAction>
-#include <QToolBar>
-#include <QSpinBox>
-#include <QComboBox>
-#include <QCheckBox>
-#include <QLineEdit>
-#include <QPushButton>
-#include <QFrame>
-#include <QShortcut>
-#include <QDockWidget>
-#include <QCursor>
-#include <QMenuBar>
-#include <QSettings>
-#include <QTimer>
 
 // 静态成员变量定义
 bool MainWindow::s_globalExecutionEnabled = false;
@@ -123,7 +91,7 @@ MainWindow::MainWindow(QWidget* parent)
     setupKeyboardShortcuts();
 
     // 先设置窗口属性，但不显示
-    setMinimumSize(800, 600);
+    setMinimumSize(Constants::MIN_WINDOW_WIDTH, Constants::MIN_WINDOW_HEIGHT);
 
     // 然后初始化ADS系统
     setupAdvancedPanels();
@@ -489,7 +457,7 @@ void MainWindow::onOpenFile()
         this,
         tr("打开流程文件"),
         QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
-        tr("TinaFlow文件 (*.tflow);;JSON文件 (*.json);;所有文件 (*)")
+        Constants::FILE_FILTER
     );
 
     if (!fileName.isEmpty())
@@ -504,7 +472,7 @@ void MainWindow::onSaveFile()
         this,
         tr("保存流程文件"),
         QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation),
-        tr("TinaFlow文件 (*.tflow);;JSON文件 (*.json)")
+        Constants::FILE_FILTER
     );
 
     if (!fileName.isEmpty())
@@ -513,94 +481,89 @@ void MainWindow::onSaveFile()
     }
 }
 
-void MainWindow::saveToFile(const QString& fileName)
+bool MainWindow::saveToFile(const QString& fileName)
 {
-    if (!m_graphModel)
-    {
-        QMessageBox::warning(this, tr("错误"), tr("没有可保存的数据"));
-        return;
+    if (!m_graphModel) {
+        handleFileError("保存", fileName, "没有可保存的数据");
+        return false;
     }
 
-    try
-    {
-        // 使用QtNodes的保存功能
+    try {
         QJsonObject jsonObject = m_graphModel->save();
         QJsonDocument jsonDocument(jsonObject);
 
         QFile file(fileName);
-        if (file.open(QIODevice::WriteOnly))
-        {
-            file.write(jsonDocument.toJson());
-            file.close();
+        if (!file.open(QIODevice::WriteOnly)) {
+            handleFileError("保存", fileName, "无法打开文件进行写入");
+            return false;
+        }
 
-            setWindowTitle(QString("TinaFlow - %1").arg(QFileInfo(fileName).baseName()));
-            ui->statusbar->showMessage(tr("文件已保存: %1").arg(fileName), 3000);
-        }
-        else
-        {
-            QMessageBox::critical(this, tr("错误"), tr("无法保存文件: %1").arg(fileName));
-        }
+        file.write(jsonDocument.toJson());
+        file.close();
+
+        setWindowTitle(QString("TinaFlow - %1").arg(QFileInfo(fileName).baseName()));
+        ui->statusbar->showMessage(tr("文件已保存: %1").arg(fileName), 3000);
+        return true;
     }
-    catch (const std::exception& e)
-    {
-        QMessageBox::critical(this, tr("错误"), tr("保存文件时发生错误: %1").arg(e.what()));
+    catch (const std::exception& e) {
+        handleFileError("保存", fileName, e.what());
+        return false;
     }
 }
 
-void MainWindow::loadFromFile(const QString& fileName)
+void MainWindow::handleFileError(const QString& operation, const QString& fileName, const QString& error)
 {
-    if (!m_graphModel)
-    {
-        QMessageBox::warning(this, tr("错误"), tr("图形模型未初始化"));
-        return;
+    QString message = tr("%1文件时发生错误: %2\n文件: %3").arg(operation, error, fileName);
+    QMessageBox::critical(this, tr("文件操作错误"), message);
+}
+
+bool MainWindow::loadFromFile(const QString& fileName)
+{
+    if (!m_graphModel) {
+        handleFileError("加载", fileName, "图形模型未初始化");
+        return false;
     }
 
-    try
-    {
+    try {
         QFile file(fileName);
-        if (file.open(QIODevice::ReadOnly))
-        {
-            QByteArray data = file.readAll();
-            file.close();
-
-            QJsonDocument jsonDocument = QJsonDocument::fromJson(data);
-            if (jsonDocument.isNull())
-            {
-                QMessageBox::critical(this, tr("错误"), tr("文件格式无效"));
-                return;
-            }
-
-            // 重新初始化节点编辑器以重置ID计数器
-            reinitializeNodeEditor();
-
-            // 加载新数据
-            m_graphModel->load(jsonDocument.object());
-
-            // 重置视图缩放并适应内容
-            if (m_graphicsView)
-            {
-                m_graphicsView->resetTransform();
-                // 延迟适应视图，确保节点已完全加载
-                QMetaObject::invokeMethod(this, [this]()
-                {
-                    if (m_graphicsView && m_graphicsScene)
-                    {
-                        m_graphicsView->fitInView(m_graphicsScene->itemsBoundingRect(), Qt::KeepAspectRatio);
-                    }
-                }, Qt::QueuedConnection);
-            }
-
-            setWindowTitle(QString("TinaFlow - %1").arg(QFileInfo(fileName).baseName()));
-            ui->statusbar->showMessage(tr("流程已加载，点击运行按钮(F5)开始执行"), 0);
+        if (!file.open(QIODevice::ReadOnly)) {
+            handleFileError("加载", fileName, "无法打开文件进行读取");
+            return false;
         }
-        else
-        {
-            QMessageBox::critical(this, tr("错误"), tr("无法打开文件: %1").arg(fileName));
+
+        QByteArray data = file.readAll();
+        file.close();
+
+        QJsonDocument jsonDocument = QJsonDocument::fromJson(data);
+        if (jsonDocument.isNull()) {
+            handleFileError("加载", fileName, "文件格式无效");
+            return false;
         }
+
+        // 重新初始化节点编辑器以重置ID计数器
+        reinitializeNodeEditor();
+
+        // 加载新数据
+        m_graphModel->load(jsonDocument.object());
+
+        // 重置视图缩放并适应内容
+        if (m_graphicsView) {
+            m_graphicsView->resetTransform();
+            // 延迟适应视图，确保节点已完全加载
+            QMetaObject::invokeMethod(this, [this]() {
+                if (m_graphicsView && m_graphicsScene) {
+                    m_graphicsView->fitInView(m_graphicsScene->itemsBoundingRect(), Qt::KeepAspectRatio);
+                }
+            }, Qt::QueuedConnection);
+        }
+
+        setWindowTitle(QString("%1 - %2").arg(Constants::WINDOW_TITLE_PREFIX, QFileInfo(fileName).baseName()));
+        ui->statusbar->showMessage(tr("流程已加载，点击运行按钮(F5)开始执行"), 0);
+        return true;
     }
-    catch (const std::exception& e)
-    {
-        QMessageBox::critical(this, tr("错误"), tr("加载文件时发生错误: %1").arg(e.what()));
+    catch (const std::exception& e) {
+        handleFileError("加载", fileName, e.what());
+        return false;
     }
 }
 
