@@ -10,7 +10,6 @@
 #include "widget/ADSPanelManager.hpp"
 
 // 前向声明
-class PropertyPanelContainer;
 class NodePalette;
 namespace Ui {
 class MainWindow;
@@ -93,9 +92,6 @@ private:
     
     ModernToolBar* m_modernToolBar;
     ADSPanelManager* m_adsPanelManager;
-    
-    // ADS系统中需要的属性面板引用
-    PropertyPanelContainer* m_propertyPanelContainer;
 
     // 选中状态
     QtNodes::NodeId m_selectedNodeId;

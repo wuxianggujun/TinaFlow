@@ -16,7 +16,6 @@
 #include <QJsonObject>
 #include <QDateTime>
 
-class PropertyPanelContainer;
 class NodePalette;
 class CommandHistoryWidget;
 
@@ -91,7 +90,7 @@ public:
     ads::CDockManager* dockManager() const { return m_dockManager; }
 
     // 面板内容访问
-    PropertyPanelContainer* getPropertyPanelContainer() const { return m_propertyPanelContainer; }
+    class ADSPropertyPanel* getADSPropertyPanel() const { return m_adsPropertyPanel; }
     NodePalette* getNodePalette() const { return m_nodePalette; }
     CommandHistoryWidget* getCommandHistoryWidget() const { return m_commandHistoryWidget; }
 
@@ -133,8 +132,8 @@ private:
     // 布局预设
     QHash<QString, QJsonObject> m_layoutPresets;
     
-    // 原始面板组件（在未集成ADS时使用）
-    PropertyPanelContainer* m_propertyPanelContainer;
+    // 面板组件
+    class ADSPropertyPanel* m_adsPropertyPanel;  // ADS专用的轻量级属性面板
     NodePalette* m_nodePalette;
     CommandHistoryWidget* m_commandHistoryWidget;
     

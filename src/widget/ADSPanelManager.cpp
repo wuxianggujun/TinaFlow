@@ -3,7 +3,7 @@
 //
 
 #include "widget/ADSPanelManager.hpp"
-#include "widget/PropertyPanelContainer.hpp"
+#include "widget/ADSPropertyPanel.hpp"
 #include "widget/CommandHistoryWidget.hpp"
 #include "NodePalette.hpp"
 
@@ -34,7 +34,7 @@ ADSPanelManager::ADSPanelManager(QMainWindow* mainWindow, QObject* parent)
     : QObject(parent)
     , m_mainWindow(mainWindow)
     , m_dockManager(nullptr)
-    , m_propertyPanelContainer(nullptr)
+    , m_adsPropertyPanel(nullptr)
     , m_nodePalette(nullptr)
     , m_commandHistoryWidget(nullptr)
 {
@@ -503,10 +503,10 @@ QWidget* ADSPanelManager::createPanelContent(PanelType type)
 {
     switch (type) {
     case PropertyPanel:
-        if (!m_propertyPanelContainer) {
-            m_propertyPanelContainer = new PropertyPanelContainer(m_mainWindow);
+        if (!m_adsPropertyPanel) {
+            m_adsPropertyPanel = new ADSPropertyPanel(m_mainWindow);
         }
-        return m_propertyPanelContainer;
+        return m_adsPropertyPanel;
         
     case NodePalettePanel:
         if (!m_nodePalette) {

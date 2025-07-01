@@ -13,25 +13,33 @@ PropertyWidget::PropertyWidget(QWidget* parent)
 void PropertyWidget::setEditMode(bool editable)
 {
     if (m_editMode == editable) return;
-    
+
     m_editMode = editable;
     updatePropertyVisibility();
-    
+
+    // 更新按钮状态
+    if (m_viewButton && m_editButton) {
+        m_viewButton->setChecked(!editable);
+        m_editButton->setChecked(editable);
+    }
+
     qDebug() << "PropertyWidget: Switched to" << (editable ? "edit" : "view") << "mode";
 }
 
 void PropertyWidget::addTitle(const QString& title)
 {
     auto* titleLabel = new QLabel(title);
-    titleLabel->setStyleSheet("font-weight: bold; font-size: 14px; color: #333; margin-top: 10px;");
+    titleLabel->setStyleSheet("font-weight: bold; font-size: 14px; color: #333; margin-top: 10px; margin-bottom: 5px;");
+    titleLabel->setWordWrap(true);
     m_layout->addWidget(titleLabel);
 }
 
 void PropertyWidget::addDescription(const QString& description)
 {
     auto* descLabel = new QLabel(description);
-    descLabel->setStyleSheet("color: #666; font-size: 11px; margin-bottom: 10px;");
+    descLabel->setStyleSheet("color: #666; font-size: 11px; margin-bottom: 10px; padding: 5px;");
     descLabel->setWordWrap(true);
+    descLabel->setAlignment(Qt::AlignCenter);
     m_layout->addWidget(descLabel);
 }
 
@@ -46,35 +54,56 @@ void PropertyWidget::addSeparator()
 
 void PropertyWidget::addModeToggleButtons()
 {
-    auto* buttonLayout = new QHBoxLayout();
-    auto* viewButton = new QPushButton("查看模式");
-    auto* editButton = new QPushButton("编辑模式");
+    // 防止重复添加按钮
+    if (m_buttonContainer && m_viewButton && m_editButton) {
+        qDebug() << "PropertyWidget: 切换按钮已存在，跳过添加";
+        return;
+    }
 
-    viewButton->setCheckable(true);
-    editButton->setCheckable(true);
-    viewButton->setChecked(true); // 默认查看模式
-
-    buttonLayout->addWidget(viewButton);
-    buttonLayout->addWidget(editButton);
-    buttonLayout->addStretch();
-
-    m_layout->addLayout(buttonLayout);
+    // 清理可能存在的旧按钮
+    if (m_buttonContainer) {
+        m_buttonContainer->deleteLater();
+        m_buttonContainer = nullptr;
+        m_viewButton = nullptr;
+        m_editButton = nullptr;
+    }
 
     // 添加分隔线
     addSeparator();
 
+    // 创建按钮容器
+    m_buttonContainer = new QWidget();
+    auto* buttonLayout = new QHBoxLayout(m_buttonContainer);
+    buttonLayout->setContentsMargins(0, 0, 0, 0);
+
+    m_viewButton = new QPushButton("查看模式");
+    m_editButton = new QPushButton("编辑模式");
+
+    m_viewButton->setCheckable(true);
+    m_editButton->setCheckable(true);
+    m_viewButton->setChecked(!m_editMode); // 根据当前模式设置
+    m_editButton->setChecked(m_editMode);
+
+    buttonLayout->addWidget(m_viewButton);
+    buttonLayout->addWidget(m_editButton);
+    buttonLayout->addStretch();
+
+    m_layout->addWidget(m_buttonContainer);
+
     // 连接信号
-    connect(editButton, &QPushButton::clicked, [=]() {
-        if (!editButton->isChecked()) return;
-        viewButton->setChecked(false);
+    connect(m_editButton, &QPushButton::clicked, [this]() {
+        if (!m_editButton->isChecked()) return;
+        m_viewButton->setChecked(false);
         setEditMode(true);
     });
 
-    connect(viewButton, &QPushButton::clicked, [=]() {
-        if (!viewButton->isChecked()) return;
-        editButton->setChecked(false);
+    connect(m_viewButton, &QPushButton::clicked, [this]() {
+        if (!m_viewButton->isChecked()) return;
+        m_editButton->setChecked(false);
         setEditMode(false);
     });
+
+    qDebug() << "PropertyWidget: 模式切换按钮已添加";
 }
 
 void PropertyWidget::addTextProperty(const QString& label, const QString& value,
@@ -86,12 +115,14 @@ void PropertyWidget::addTextProperty(const QString& label, const QString& value,
     
     // 标签
     item.label = new QLabel(label + ":");
-    item.label->setStyleSheet("font-weight: bold; margin-top: 5px;");
+    item.label->setStyleSheet("font-weight: bold; margin-top: 8px; margin-bottom: 2px; color: #333;");
     m_layout->addWidget(item.label);
-    
+
     // 查看模式：只读标签
     item.valueLabel = new QLabel(value.isEmpty() ? "未设置" : value);
-    item.valueLabel->setStyleSheet(value.isEmpty() ? "color: #999; font-style: italic;" : "color: #333;");
+    item.valueLabel->setStyleSheet(value.isEmpty() ?
+        "color: #999; font-style: italic; padding: 4px; border: 1px solid #ddd; border-radius: 3px; background: #f9f9f9; margin-bottom: 4px;" :
+        "color: #333; padding: 4px; border: 1px solid #ddd; border-radius: 3px; background: #f9f9f9; margin-bottom: 4px;");
     item.valueLabel->setWordWrap(true);
     item.valueLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     m_layout->addWidget(item.valueLabel);
@@ -99,6 +130,7 @@ void PropertyWidget::addTextProperty(const QString& label, const QString& value,
     // 编辑模式：输入框
     auto* lineEdit = new QLineEdit(value);
     lineEdit->setPlaceholderText(placeholder);
+    lineEdit->setStyleSheet("padding: 4px; border: 1px solid #ccc; border-radius: 3px; margin-bottom: 4px;");
     item.editWidget = lineEdit;
     m_layout->addWidget(item.editWidget);
     
@@ -335,11 +367,20 @@ void PropertyWidget::updatePropertyValue(const QString& propertyName, const QVar
 void PropertyWidget::updatePropertyVisibility()
 {
     for (auto& item : m_properties) {
+        // 标签始终显示
+        if (item.label) {
+            item.label->setVisible(true);
+        }
+
+        // 根据模式显示不同的控件
         if (item.valueLabel) {
             item.valueLabel->setVisible(!m_editMode);
         }
         if (item.editWidget) {
             item.editWidget->setVisible(m_editMode);
+        }
+        if (item.browseButton) {
+            item.browseButton->setVisible(m_editMode);
         }
 
         // 更新显示内容
@@ -347,23 +388,150 @@ void PropertyWidget::updatePropertyVisibility()
             item.updateCallback();
         }
     }
+
+    // 强制更新布局
+    m_layout->update();
 }
 
 void PropertyWidget::clearAllProperties()
 {
-    // 清除所有属性控件
-    QLayoutItem* item;
-    while ((item = m_layout->takeAt(0)) != nullptr) {
-        if (item->widget()) {
-            item->widget()->deleteLater();
-        }
-        delete item;
+    qDebug() << "PropertyWidget: 开始清理属性，当前属性数量:" << m_properties.size();
+
+    // 第一步：清理模式切换按钮
+    if (m_buttonContainer) {
+        m_buttonContainer->disconnect();
+        m_buttonContainer->hide();
+        m_buttonContainer->deleteLater();
+        m_buttonContainer = nullptr;
+        m_viewButton = nullptr;
+        m_editButton = nullptr;
+        qDebug() << "PropertyWidget: 模式切换按钮已清理";
     }
 
-    m_properties.clear();
-    m_editMode = false;  // 重置为查看模式
+    // 第二步：清理属性控件
+    for (auto& item : m_properties) {
+        if (item.label) {
+            item.label->disconnect();
+            item.label->hide();
+            item.label->deleteLater();
+            item.label = nullptr;
+        }
+        if (item.valueLabel) {
+            item.valueLabel->disconnect();
+            item.valueLabel->hide();
+            item.valueLabel->deleteLater();
+            item.valueLabel = nullptr;
+        }
+        if (item.editWidget) {
+            item.editWidget->disconnect();
+            item.editWidget->hide();
+            item.editWidget->deleteLater();
+            item.editWidget = nullptr;
+        }
+        if (item.browseButton) {
+            item.browseButton->disconnect();
+            item.browseButton->hide();
+            item.browseButton->deleteLater();
+            item.browseButton = nullptr;
+        }
+    }
 
-    qDebug() << "PropertyWidget: Cleared all properties";
+    // 第三步：清除布局中剩余的项目
+    while (m_layout->count() > 0) {
+        QLayoutItem* layoutItem = m_layout->takeAt(0);
+        if (layoutItem) {
+            if (layoutItem->widget()) {
+                QWidget* widget = layoutItem->widget();
+                widget->setParent(nullptr);
+                widget->hide();
+                widget->deleteLater();
+            }
+            delete layoutItem;
+        }
+    }
+
+    // 第四步：重置状态
+    m_properties.clear();
+    m_editMode = false;
+
+    // 第五步：强制更新布局
+    m_layout->invalidate();
+    m_layout->update();
+    this->update();
+
+    qDebug() << "PropertyWidget: 属性清理完成，布局项目数量:" << m_layout->count();
+}
+
+void PropertyWidget::forceReset()
+{
+    qDebug() << "PropertyWidget: 开始强制重置";
+
+    // 清理按钮引用
+    m_buttonContainer = nullptr;
+    m_viewButton = nullptr;
+    m_editButton = nullptr;
+
+    // 完全销毁当前布局
+    if (m_layout) {
+        // 移除所有子控件
+        while (m_layout->count() > 0) {
+            QLayoutItem* item = m_layout->takeAt(0);
+            if (item) {
+                if (item->widget()) {
+                    item->widget()->setParent(nullptr);
+                    item->widget()->deleteLater();
+                }
+                delete item;
+            }
+        }
+
+        // 删除布局本身
+        delete m_layout;
+    }
+
+    // 清空属性列表
+    m_properties.clear();
+    m_editMode = false;
+
+    // 重新创建布局
+    m_layout = new QVBoxLayout(this);
+    m_layout->setContentsMargins(0, 0, 0, 0);
+    m_layout->setSpacing(8);
+
+    // 强制更新
+    this->update();
+
+    qDebug() << "PropertyWidget: 强制重置完成";
+}
+
+void PropertyWidget::debugLayoutState() const
+{
+    qDebug() << "=== PropertyWidget 布局状态调试 ===";
+    qDebug() << "布局项目数量:" << m_layout->count();
+    qDebug() << "属性列表大小:" << m_properties.size();
+    qDebug() << "编辑模式:" << m_editMode;
+    qDebug() << "按钮容器存在:" << (m_buttonContainer != nullptr);
+    qDebug() << "查看按钮存在:" << (m_viewButton != nullptr);
+    qDebug() << "编辑按钮存在:" << (m_editButton != nullptr);
+
+    for (int i = 0; i < m_layout->count(); ++i) {
+        QLayoutItem* item = m_layout->itemAt(i);
+        if (item && item->widget()) {
+            QWidget* widget = item->widget();
+            qDebug() << "布局项" << i << ":" << widget->metaObject()->className()
+                     << "可见性:" << widget->isVisible()
+                     << "大小:" << widget->size();
+        }
+    }
+
+    for (int i = 0; i < m_properties.size(); ++i) {
+        const auto& prop = m_properties[i];
+        qDebug() << "属性" << i << "名称:" << prop.name;
+        if (prop.label) qDebug() << "  - 标签可见:" << prop.label->isVisible();
+        if (prop.valueLabel) qDebug() << "  - 值标签可见:" << prop.valueLabel->isVisible();
+        if (prop.editWidget) qDebug() << "  - 编辑控件可见:" << prop.editWidget->isVisible();
+    }
+    qDebug() << "=== 调试结束 ===";
 }
 
 PropertyWidget::PropertyItem* PropertyWidget::findProperty(const QString& name)
@@ -376,10 +544,4 @@ PropertyWidget::PropertyItem* PropertyWidget::findProperty(const QString& name)
     return nullptr;
 }
 
-// PropertyPanelManager 实现
-PropertyWidget* PropertyPanelManager::createPropertyPanel(QVBoxLayout* parent)
-{
-    auto* propertyWidget = new PropertyWidget();
-    parent->addWidget(propertyWidget);
-    return propertyWidget;
-}
+

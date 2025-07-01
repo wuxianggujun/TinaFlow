@@ -119,9 +119,19 @@ public:
     void clearAllProperties();
 
     /**
+     * @brief 强制重置控件（彻底清理）
+     */
+    void forceReset();
+
+    /**
      * @brief 检查是否有属性
      */
     bool hasProperties() const { return !m_properties.isEmpty(); }
+
+    /**
+     * @brief 调试布局状态
+     */
+    void debugLayoutState() const;
 
 signals:
     void propertyChanged(const QString& propertyName, const QVariant& value);
@@ -135,26 +145,18 @@ private:
         QPushButton* browseButton = nullptr; // 文件浏览按钮
         std::function<void()> updateCallback; // 更新显示的回调
     };
-    
+
     QVBoxLayout* m_layout;
     QList<PropertyItem> m_properties;
     bool m_editMode = false;
+
+    // 模式切换按钮管理
+    QWidget* m_buttonContainer = nullptr;
+    QPushButton* m_viewButton = nullptr;
+    QPushButton* m_editButton = nullptr;
     
     void updatePropertyVisibility();
     PropertyItem* findProperty(const QString& name);
 };
 
-/**
- * @brief 属性面板管理器
- * 简化属性面板的创建和管理
- */
-class PropertyPanelManager
-{
-public:
-    /**
-     * @brief 创建属性面板
-     * @param parent 父布局
-     * @return 属性控件指针
-     */
-    static PropertyWidget* createPropertyPanel(QVBoxLayout* parent);
-};
+

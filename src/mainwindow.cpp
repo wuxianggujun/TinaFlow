@@ -26,7 +26,6 @@
 // TinaFlow includes
 #include "CommandManager.hpp"
 #include "NodeCatalog.hpp"
-#include "widget/PropertyPanelContainer.hpp"
 #include "NodePalette.hpp"
 
 // Model includes
@@ -70,6 +69,7 @@
 #include "NodeCommands.hpp"
 #include "widget/ModernToolBar.hpp"
 #include "widget/ADSPanelManager.hpp"
+#include "widget/ADSPropertyPanel.hpp"
 #include "NodeCatalog.hpp"
 
 // QtNodes
@@ -84,6 +84,8 @@
 #include <QJsonObject>
 #include <QStandardPaths>
 #include <QInputDialog>
+#include <QTimer>
+#include <QDateTime>
 #include <limits>
 
 // Qt界面
@@ -1324,47 +1326,76 @@ void MainWindow::updateADSPropertyPanel(QtNodes::NodeId nodeId)
 {
     if (!m_adsPanelManager) return;
 
-    // 确保属性面板引用是最新的
-    updatePropertyPanelReference();
+    // 防止重复更新同一个节点
+    static QtNodes::NodeId lastUpdatedNodeId;
+    static QDateTime lastUpdateTime;
+    QDateTime now = QDateTime::currentDateTime();
+
+    if (lastUpdatedNodeId == nodeId && lastUpdateTime.isValid() &&
+        lastUpdateTime.msecsTo(now) < 200) {  // 200ms内不重复更新
+        return;
+    }
+
+    lastUpdatedNodeId = nodeId;
+    lastUpdateTime = now;
+
+    // 确保属性面板引用是最新的（只在必要时调用）
+    static bool referenceUpdated = false;
+    if (!referenceUpdated) {
+        updatePropertyPanelReference();
+        referenceUpdated = true;
+    }
 
     // 确保属性面板可见
     m_adsPanelManager->showPanel("property_panel");
 
-    // 更新属性面板内容
-    if (m_propertyPanelContainer)
+    // 使用ADS属性面板
+    auto* adsPropertyPanel = m_adsPanelManager->getADSPropertyPanel();
+    if (adsPropertyPanel)
     {
-        m_propertyPanelContainer->updateNodeProperties(nodeId);
+        adsPropertyPanel->updateNodeProperties(nodeId);
 
-        // 获取ADS面板并更新标题
-        if (auto* propertyPanel = m_adsPanelManager->getPanel("property_panel"))
-        {
-            auto nodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(nodeId);
-            if (nodeDelegate)
+        // 获取ADS面板并更新标题（延迟更新避免频繁操作）
+        QTimer::singleShot(50, this, [this, nodeId]() {
+            if (auto* propertyPanel = m_adsPanelManager->getPanel("property_panel"))
             {
-                QString newTitle = QString("🔧 属性面板 - %1").arg(nodeDelegate->caption());
-                propertyPanel->setWindowTitle(newTitle);
+                auto nodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(nodeId);
+                if (nodeDelegate)
+                {
+                    QString newTitle = QString("🔧 属性面板 - %1").arg(nodeDelegate->caption());
+                    propertyPanel->setWindowTitle(newTitle);
+                }
             }
-        }
+        });
+    }
+    else
+    {
+        qWarning() << "MainWindow: ADS属性面板不可用";
     }
 }
 
 void MainWindow::clearADSPropertyPanel()
 {
+    if (!m_adsPanelManager) return;
+
     // 确保属性面板引用是最新的
     updatePropertyPanelReference();
 
-    if (m_propertyPanelContainer)
+    // 使用ADS属性面板
+    auto* adsPropertyPanel = m_adsPanelManager->getADSPropertyPanel();
+    if (adsPropertyPanel)
     {
-        m_propertyPanelContainer->clearProperties();
+        adsPropertyPanel->clearProperties();
+    }
+    else
+    {
+        qWarning() << "MainWindow: ADS属性面板不可用";
+    }
 
-        // 重置ADS面板标题
-        if (m_adsPanelManager)
-        {
-            if (auto* propertyPanel = m_adsPanelManager->getPanel("property_panel"))
-            {
-                propertyPanel->setWindowTitle("🔧 属性面板");
-            }
-        }
+    // 重置ADS面板标题
+    if (auto* propertyPanel = m_adsPanelManager->getPanel("property_panel"))
+    {
+        propertyPanel->setWindowTitle("🔧 属性面板");
     }
 }
 
@@ -1439,34 +1470,27 @@ void MainWindow::updatePropertyPanelReference()
         return;
     }
 
-    // 获取属性面板容器
-
-    // 获取属性面板容器引用
+    // 获取ADS属性面板
     try
     {
-        m_propertyPanelContainer = m_adsPanelManager->getPropertyPanelContainer();
-
-        // 添加空指针检查
-        if (!m_propertyPanelContainer)
+        auto* adsPropertyPanel = m_adsPanelManager->getADSPropertyPanel();
+        if (adsPropertyPanel)
         {
-            qWarning() << "MainWindow: 属性面板容器尚未创建";
-            return;
+            // 检查图形模型
+            if (!m_graphModel)
+            {
+                qWarning() << "MainWindow: 图形模型尚未创建，无法设置到属性面板";
+                return;
+            }
+
+            // 设置图形模型到ADS属性面板
+            adsPropertyPanel->setGraphModel(m_graphModel.get());
+            qDebug() << "MainWindow: ADS属性面板引用同步完成";
         }
-
-        // 属性面板容器引用获取成功
-
-        // 检查图形模型
-        if (!m_graphModel)
+        else
         {
-            qWarning() << "MainWindow: 图形模型尚未创建，无法设置到属性面板";
-            return;
+            qWarning() << "MainWindow: ADS属性面板未创建";
         }
-
-        // 设置图形模型到属性面板
-
-        // 设置图形模型到属性面板
-        m_propertyPanelContainer->setGraphModel(m_graphModel.get());
-        // 属性面板引用同步完成
     }
     catch (const std::exception& e)
     {
