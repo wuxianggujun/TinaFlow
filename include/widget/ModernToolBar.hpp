@@ -29,7 +29,7 @@ class ModernToolBar : public QToolBar
     Q_OBJECT
 
 public:
-    explicit ModernToolBar(MainWindow* parent = nullptr);
+    explicit ModernToolBar(MainWindow* parent = nullptr, bool showFileActions = true);
     
     // 状态更新方法
     void updateExecutionState(bool running);

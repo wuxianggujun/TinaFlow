@@ -63,6 +63,8 @@ private:
     void setupAdvancedPanels();
     void setupKeyboardShortcuts();
     void setupLayoutMenu();
+    void setupFileMenu(QMenuBar* menuBar);
+    void setupViewMenu(QMenuBar* menuBar);
     void setupWindowDisplay();
     
     // ADS面板更新方法

@@ -351,16 +351,28 @@ std::shared_ptr<QtNodes::NodeDelegateModelRegistry> MainWindow::registerDataMode
 
 void MainWindow::setupModernToolbar()
 {
-    // 创建现代化工具栏
-    m_modernToolBar = new ModernToolBar(this);
+    // 创建现代化工具栏（不显示文件操作，因为已移到菜单）
+    m_modernToolBar = new ModernToolBar(this, false);
 
-    // 将工具栏添加到主窗口
-    addToolBar(Qt::TopToolBarArea, m_modernToolBar);
+    // 创建一个容器工具栏来实现居中效果
+    QToolBar* containerToolBar = addToolBar("主工具栏");
+    containerToolBar->setMovable(false);
+    containerToolBar->setFloatable(false);
 
-    // 连接文件操作信号
-    connect(m_modernToolBar, &ModernToolBar::newFileRequested, this, &MainWindow::onNewFile);
-    connect(m_modernToolBar, &ModernToolBar::openFileRequested, this, &MainWindow::onOpenFile);
-    connect(m_modernToolBar, &ModernToolBar::saveFileRequested, this, &MainWindow::onSaveFile);
+    // 创建布局来居中显示工具栏
+    QWidget* centralWidget = new QWidget();
+    QHBoxLayout* layout = new QHBoxLayout(centralWidget);
+    layout->addStretch(); // 左侧弹性空间
+    layout->addWidget(m_modernToolBar);
+    layout->addStretch(); // 右侧弹性空间
+    layout->setContentsMargins(0, 0, 0, 0);
+
+    containerToolBar->addWidget(centralWidget);
+
+    // 移除文件操作信号连接（现在由菜单处理）
+    // connect(m_modernToolBar, &ModernToolBar::newFileRequested, this, &MainWindow::onNewFile);
+    // connect(m_modernToolBar, &ModernToolBar::openFileRequested, this, &MainWindow::onOpenFile);
+    // connect(m_modernToolBar, &ModernToolBar::saveFileRequested, this, &MainWindow::onSaveFile);
 
     // 连接编辑操作信号
     connect(m_modernToolBar, &ModernToolBar::undoRequested, this, &MainWindow::onUndoClicked);
@@ -1590,25 +1602,49 @@ void MainWindow::setupKeyboardShortcuts()
 
 void MainWindow::setupLayoutMenu()
 {
-    // 创建视图菜单（如果不存在）
     QMenuBar* menuBar = this->menuBar();
-    QMenu* viewMenu = nullptr;
 
-    // 查找现有的视图菜单
-    for (QAction* action : menuBar->actions())
-    {
-        if (action->menu() && action->menu()->title() == "视图")
-        {
-            viewMenu = action->menu();
-            break;
-        }
-    }
+    // 1. 创建文件菜单
+    setupFileMenu(menuBar);
 
-    // 如果没有视图菜单，创建一个
-    if (!viewMenu)
-    {
-        viewMenu = menuBar->addMenu("视图");
-    }
+    // 2. 创建视图菜单
+    setupViewMenu(menuBar);
+}
+
+void MainWindow::setupFileMenu(QMenuBar* menuBar)
+{
+    // 创建文件菜单
+    QMenu* fileMenu = menuBar->addMenu("📁 文件");
+
+    // 新建文件
+    QAction* newAction = fileMenu->addAction("🆕 新建");
+    newAction->setShortcut(QKeySequence::New);
+    connect(newAction, &QAction::triggered, this, &MainWindow::onNewFile);
+
+    // 打开文件
+    QAction* openAction = fileMenu->addAction("📂 打开");
+    openAction->setShortcut(QKeySequence::Open);
+    connect(openAction, &QAction::triggered, this, &MainWindow::onOpenFile);
+
+    fileMenu->addSeparator();
+
+    // 保存文件
+    QAction* saveAction = fileMenu->addAction("💾 保存");
+    saveAction->setShortcut(QKeySequence::Save);
+    connect(saveAction, &QAction::triggered, this, &MainWindow::onSaveFile);
+
+    fileMenu->addSeparator();
+
+    // 退出
+    QAction* exitAction = fileMenu->addAction("🚪 退出");
+    exitAction->setShortcut(QKeySequence::Quit);
+    connect(exitAction, &QAction::triggered, this, &QWidget::close);
+}
+
+void MainWindow::setupViewMenu(QMenuBar* menuBar)
+{
+    // 创建视图菜单
+    QMenu* viewMenu = menuBar->addMenu("👁️ 视图");
 
     // 添加ADS布局控制菜单（如果ADS系统已初始化）
     if (m_adsPanelManager)

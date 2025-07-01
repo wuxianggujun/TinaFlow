@@ -6,7 +6,7 @@
 #include <QApplication>
 #include <QStyle>
 
-ModernToolBar::ModernToolBar(MainWindow* parent)
+ModernToolBar::ModernToolBar(MainWindow* parent, bool showFileActions)
     : QToolBar(parent)
     , m_mainWindow(parent)
     , m_isRunning(false)
@@ -15,9 +15,12 @@ ModernToolBar::ModernToolBar(MainWindow* parent)
     setWindowTitle(tr("工具栏"));
     setMovable(false);
     setFloatable(false);
-    
+
     setupLayout();
-    createFileGroup();
+    if (showFileActions) {
+        createFileGroup();
+        addSeparator();
+    }
     createEditGroup();
     createExecutionGroup();
     createViewGroup();
