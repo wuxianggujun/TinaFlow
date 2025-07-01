@@ -113,7 +113,6 @@ MainWindow::MainWindow(QWidget* parent)
       , ui(new Ui::MainWindow)
       , m_modernToolBar(nullptr)
       , m_adsPanelManager(nullptr)
-      , m_propertyPanelContainer(nullptr)
       , m_selectedNodeId(QtNodes::NodeId{})
       , m_selectedConnectionId(QtNodes::ConnectionId{})
 {
@@ -121,32 +120,40 @@ MainWindow::MainWindow(QWidget* parent)
 
     setupNodeEditor();
     setupModernToolbar();
-    setupAdvancedPanels();
-    setupADSLayoutMenu();
-    setupLayoutMenu();
     setupKeyboardShortcuts();
 
-    // 设置窗口属性和显示
+    // 先设置窗口属性，但不显示
+    setMinimumSize(800, 600);
+
+    // 然后初始化ADS系统
+    setupAdvancedPanels();
+    setupLayoutMenu(); // 只调用一次，包含ADS和通用菜单
+
+    // 最后显示窗口
     setupWindowDisplay();
 }
 
 MainWindow::~MainWindow()
 {
+    qDebug() << "MainWindow: 开始析构";
+
+    // 清理ADS面板管理器（必须在UI清理之前）
+    if (m_adsPanelManager)
+    {
+        m_adsPanelManager->disconnect();
+        m_adsPanelManager->shutdown();
+        delete m_adsPanelManager; // 直接删除，不用deleteLater
+        m_adsPanelManager = nullptr;
+    }
+
     // 自动保存窗口布局
     QSettings settings;
     settings.setValue("geometry", saveGeometry());
     settings.setValue("windowState", saveState());
 
-    // 清理ADS面板管理器
-    if (m_adsPanelManager)
-    {
-        m_adsPanelManager->disconnect();
-        m_adsPanelManager->shutdown();
-        m_adsPanelManager->deleteLater();
-        m_adsPanelManager = nullptr;
-    }
-
     delete ui;
+
+    qDebug() << "MainWindow: 析构完成";
 }
 
 void MainWindow::setupNodeEditor()
@@ -189,10 +196,10 @@ void MainWindow::setupNodeEditor()
                     QMetaObject::invokeMethod(this, [this, nodeId]()
                     {
                         // 再次检查节点是否仍然选中，避免无效刷新
-                                                 if (nodeId == m_selectedNodeId)
-                         {
-                             updateADSPropertyPanel(nodeId);
-                         }
+                        if (nodeId == m_selectedNodeId)
+                        {
+                            updateADSPropertyPanel(nodeId);
+                        }
                     }, Qt::QueuedConnection);
                 }
             }, Qt::QueuedConnection);
@@ -1184,13 +1191,6 @@ void MainWindow::setupAdvancedPanels()
                         ui->statusbar->showMessage(tr("面板已创建: %1").arg(panelId), 2000);
                     }
                 });
-
-        connect(m_adsPanelManager, &ADSPanelManager::layoutChanged,
-                this, [this]()
-                {
-                    // ADS布局已更改
-                });
-
         connect(m_adsPanelManager, &ADSPanelManager::panelFocused,
                 this, [this](const QString& panelId)
                 {
@@ -1201,7 +1201,10 @@ void MainWindow::setupAdvancedPanels()
                     }
                 });
 
-        // 关键步骤：设置中央部件
+        qDebug() << "MainWindow: ADS面板管理器初始化完成";
+
+
+        // 设置ADS中央部件
         setupADSCentralWidget();
 
         // 设置默认布局
@@ -1243,84 +1246,6 @@ void MainWindow::setupAdvancedPanels()
     }
 }
 
-void MainWindow::setupADSLayoutMenu()
-{
-    if (!m_adsPanelManager) return;
-
-    // 创建视图菜单（如果不存在）
-    QMenuBar* menuBar = this->menuBar();
-    QMenu* viewMenu = nullptr;
-
-    // 查找现有的视图菜单
-    for (QAction* action : menuBar->actions())
-    {
-        if (action->menu() && action->menu()->title() == "视图")
-        {
-            viewMenu = action->menu();
-            break;
-        }
-    }
-
-    // 如果没有视图菜单，创建一个
-    if (!viewMenu)
-    {
-        viewMenu = menuBar->addMenu("视图");
-    }
-
-    // 添加ADS布局控制菜单
-    QMenu* adsLayoutMenu = viewMenu->addMenu("🎛️ ADS布局");
-
-    // 布局预设
-    QAction* defaultLayoutAction = adsLayoutMenu->addAction("🏠 默认布局");
-    connect(defaultLayoutAction, &QAction::triggered,
-            m_adsPanelManager, &ADSPanelManager::setupDefaultLayout);
-
-    QAction* minimalLayoutAction = adsLayoutMenu->addAction("📦 最小化布局");
-    connect(minimalLayoutAction, &QAction::triggered,
-            m_adsPanelManager, &ADSPanelManager::setupMinimalLayout);
-
-    QAction* developerLayoutAction = adsLayoutMenu->addAction("🛠️ 开发者布局");
-    connect(developerLayoutAction, &QAction::triggered,
-            m_adsPanelManager, &ADSPanelManager::setupDeveloperLayout);
-
-    QAction* designerLayoutAction = adsLayoutMenu->addAction("🎨 设计师布局");
-    connect(designerLayoutAction, &QAction::triggered,
-            m_adsPanelManager, &ADSPanelManager::setupDesignerLayout);
-
-    adsLayoutMenu->addSeparator();
-
-    // 面板控制
-    QAction* showPropertyAction = adsLayoutMenu->addAction("🔧 显示属性面板");
-    connect(showPropertyAction, &QAction::triggered,
-            [this]() { m_adsPanelManager->showPanel("property_panel"); });
-
-    QAction* showNodePaletteAction = adsLayoutMenu->addAction("🗂️ 显示节点面板");
-    connect(showNodePaletteAction, &QAction::triggered,
-            [this]() { m_adsPanelManager->showPanel("node_palette"); });
-
-    QAction* showOutputAction = adsLayoutMenu->addAction("💻 显示输出控制台");
-    connect(showOutputAction, &QAction::triggered,
-            [this]() { m_adsPanelManager->showPanel("output_console"); });
-
-    adsLayoutMenu->addSeparator();
-
-    // 布局管理
-    QAction* saveLayoutAction = adsLayoutMenu->addAction("💾 保存当前布局");
-    connect(saveLayoutAction, &QAction::triggered,
-            [this]()
-            {
-                QString layoutName = QString("user_layout_%1").arg(
-                    QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss"));
-                m_adsPanelManager->saveLayoutPreset(layoutName);
-                ui->statusbar->showMessage(tr("布局已保存: %1").arg(layoutName), 3000);
-            });
-
-    QAction* resetLayoutAction = adsLayoutMenu->addAction("🔄 重置到默认布局");
-    connect(resetLayoutAction, &QAction::triggered,
-            m_adsPanelManager, &ADSPanelManager::resetToDefaultLayout);
-
-    // ADS布局菜单设置完成
-}
 
 void MainWindow::updateADSPropertyPanel(QtNodes::NodeId nodeId)
 {
@@ -1332,7 +1257,9 @@ void MainWindow::updateADSPropertyPanel(QtNodes::NodeId nodeId)
     QDateTime now = QDateTime::currentDateTime();
 
     if (lastUpdatedNodeId == nodeId && lastUpdateTime.isValid() &&
-        lastUpdateTime.msecsTo(now) < 200) {  // 200ms内不重复更新
+        lastUpdateTime.msecsTo(now) < 200)
+    {
+        // 200ms内不重复更新
         return;
     }
 
@@ -1341,7 +1268,8 @@ void MainWindow::updateADSPropertyPanel(QtNodes::NodeId nodeId)
 
     // 确保属性面板引用是最新的（只在必要时调用）
     static bool referenceUpdated = false;
-    if (!referenceUpdated) {
+    if (!referenceUpdated)
+    {
         updatePropertyPanelReference();
         referenceUpdated = true;
     }
@@ -1356,7 +1284,8 @@ void MainWindow::updateADSPropertyPanel(QtNodes::NodeId nodeId)
         adsPropertyPanel->updateNodeProperties(nodeId);
 
         // 获取ADS面板并更新标题（延迟更新避免频繁操作）
-        QTimer::singleShot(50, this, [this, nodeId]() {
+        QTimer::singleShot(50, this, [this, nodeId]()
+        {
             if (auto* propertyPanel = m_adsPanelManager->getPanel("property_panel"))
             {
                 auto nodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(nodeId);
@@ -1401,7 +1330,7 @@ void MainWindow::clearADSPropertyPanel()
 
 void MainWindow::setupADSCentralWidget()
 {
-    // 设置ADS中央部件
+    // 正确设置ADS中央部件，避免创建独立窗口
 
     if (!m_adsPanelManager)
     {
@@ -1422,41 +1351,27 @@ void MainWindow::setupADSCentralWidget()
         return;
     }
 
-    // 按照ADS标准方式：CDockManager已经接管了MainWindow
-    // 现在只需要创建中央部件并设置给DockManager
-
-    // 创建中央停靠部件
-    auto* centralDockWidget = new ads::CDockWidget("节点编辑器", dockManager);
+    // 关键修复：创建中央停靠部件时，不设置标题，并隐藏标题栏
+    auto* centralDockWidget = new ads::CDockWidget("", dockManager);
     centralDockWidget->setWidget(m_graphicsView);
     centralDockWidget->setObjectName("central_editor");
 
-    // 设置中央部件属性（不可关闭、不可移动、不可浮动）
+    // 设置中央部件属性 - 关键：禁用所有可能导致独立窗口的功能
     centralDockWidget->setFeature(ads::CDockWidget::DockWidgetClosable, false);
     centralDockWidget->setFeature(ads::CDockWidget::DockWidgetMovable, false);
     centralDockWidget->setFeature(ads::CDockWidget::DockWidgetFloatable, false);
+    centralDockWidget->setFeature(ads::CDockWidget::DockWidgetPinnable, false);
 
-    // 中央停靠部件已创建
+    // 最重要：隐藏标题栏，让它看起来像普通的中央部件
+    centralDockWidget->setFeature(ads::CDockWidget::NoTab, true);
 
-    // 使用ADS的setCentralWidget API
-    auto* centralArea = dockManager->setCentralWidget(centralDockWidget);
+    // 确保它不会作为独立窗口显示
+    centralDockWidget->setWindowFlags(Qt::Widget);
 
-    if (centralArea)
-    {
-        // ADS中央部件设置成功
+    // 设置为ADS中央部件
+    dockManager->setCentralWidget(centralDockWidget);
 
-        // 设置中央区域的允许停靠区域
-        centralArea->setAllowedAreas(ads::DockWidgetArea::OuterDockAreas);
-
-        // 确保组件正确显示
-        centralDockWidget->show();
-        m_graphicsView->show();
-
-        // ADS中央部件设置完成
-    }
-    else
-    {
-        qCritical() << "MainWindow: 设置ADS中央部件失败";
-    }
+    qDebug() << "MainWindow: ADS中央部件设置完成";
 }
 
 void MainWindow::updatePropertyPanelReference()
@@ -1636,7 +1551,7 @@ void MainWindow::setupLayoutMenu()
     // 创建视图菜单（如果不存在）
     QMenuBar* menuBar = this->menuBar();
     QMenu* viewMenu = nullptr;
-    
+
     // 查找现有的视图菜单
     for (QAction* action : menuBar->actions())
     {
@@ -1646,16 +1561,58 @@ void MainWindow::setupLayoutMenu()
             break;
         }
     }
-    
+
     // 如果没有视图菜单，创建一个
     if (!viewMenu)
     {
         viewMenu = menuBar->addMenu("视图");
     }
-    
-    // 只添加窗口管理功能，面板控制由ADS系统处理
+
+    // 添加ADS布局控制菜单（如果ADS系统已初始化）
+    if (m_adsPanelManager)
+    {
+        QMenu* adsLayoutMenu = viewMenu->addMenu("🎛️ ADS布局");
+
+        // 布局预设
+        QAction* defaultLayoutAction = adsLayoutMenu->addAction("🏠 默认布局");
+        connect(defaultLayoutAction, &QAction::triggered,
+                m_adsPanelManager, &ADSPanelManager::setupDefaultLayout);
+
+        adsLayoutMenu->addSeparator();
+
+        // 面板控制
+        QAction* showPropertyAction = adsLayoutMenu->addAction("🔧 显示属性面板");
+        connect(showPropertyAction, &QAction::triggered,
+                [this]() { m_adsPanelManager->showPanel("property_panel"); });
+
+        QAction* showNodePaletteAction = adsLayoutMenu->addAction("🗂️ 显示节点面板");
+        connect(showNodePaletteAction, &QAction::triggered,
+                [this]() { m_adsPanelManager->showPanel("node_palette"); });
+
+        QAction* showOutputAction = adsLayoutMenu->addAction("💻 显示输出控制台");
+        connect(showOutputAction, &QAction::triggered,
+                [this]() { m_adsPanelManager->showPanel("output_console"); });
+
+        adsLayoutMenu->addSeparator();
+
+        // 布局管理
+        QAction* saveLayoutAction = adsLayoutMenu->addAction("💾 保存当前布局");
+        connect(saveLayoutAction, &QAction::triggered,
+                [this]()
+                {
+                    QString layoutName = QString("user_layout_%1").arg(
+                        QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss"));
+                    m_adsPanelManager->saveLayoutPreset(layoutName);
+                    ui->statusbar->showMessage(tr("布局已保存: %1").arg(layoutName), 3000);
+                });
+
+        QAction* resetLayoutAction = adsLayoutMenu->addAction("🔄 重置到默认布局");
+        connect(resetLayoutAction, &QAction::triggered,
+                m_adsPanelManager, &ADSPanelManager::resetToDefaultLayout);
+    }
+
     viewMenu->addSeparator();
-    
+
     // 全屏控制
     QAction* fullScreenAction = viewMenu->addAction("🖥️ 全屏");
     fullScreenAction->setCheckable(true);
@@ -1671,22 +1628,22 @@ void MainWindow::setupLayoutMenu()
             showNormal();
         }
     });
-    
-    // 布局菜单设置完成（几何恢复已移至setupWindowDisplay）
+
+    // 布局菜单设置完成
 }
 
 void MainWindow::setupWindowDisplay()
 {
     // 设置窗口标题
     setWindowTitle("TinaFlow - 节点流程编辑器");
-    
+
     // 设置窗口图标（如果有的话）
     // setWindowIcon(QIcon(":/icons/tinaflow.png"));
-    
+
     // 尝试从设置中恢复窗口几何
     QSettings settings;
     bool geometryRestored = false;
-    
+
     if (settings.contains("geometry"))
     {
         QByteArray geometry = settings.value("geometry").toByteArray();
@@ -1696,7 +1653,7 @@ void MainWindow::setupWindowDisplay()
             qDebug() << "MainWindow: 窗口几何已从设置恢复";
         }
     }
-    
+
     // 如果没有恢复几何信息，设置默认大小和位置
     if (!geometryRestored)
     {
@@ -1705,13 +1662,13 @@ void MainWindow::setupWindowDisplay()
         if (screen)
         {
             QRect screenGeometry = screen->availableGeometry();
-            
+
             // 设置窗口为屏幕的80%大小，居中显示
             int width = static_cast<int>(screenGeometry.width() * 0.8);
             int height = static_cast<int>(screenGeometry.height() * 0.8);
             int x = (screenGeometry.width() - width) / 2;
             int y = (screenGeometry.height() - height) / 2;
-            
+
             setGeometry(x, y, width, height);
             qDebug() << "MainWindow: 设置默认窗口大小" << width << "x" << height;
         }
@@ -1722,21 +1679,20 @@ void MainWindow::setupWindowDisplay()
             qDebug() << "MainWindow: 设置备用默认窗口大小 1200x800";
         }
     }
-    
-    // 设置最小窗口大小，确保界面可用
-    setMinimumSize(800, 600);
-    
+
+    // 最小窗口大小已在构造函数中设置
+
     // 确保窗口状态正确
     if (settings.contains("windowState"))
     {
         QByteArray state = settings.value("windowState").toByteArray();
         restoreState(state);
     }
-    
+
     // 确保窗口正确显示
     show();
     raise();
     activateWindow();
-    
+
     qDebug() << "MainWindow: 窗口显示设置完成，最终大小:" << size();
 }

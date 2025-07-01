@@ -203,44 +203,6 @@ void PropertyWidget::addComboProperty(const QString& label, const QStringList& o
     updatePropertyVisibility();
 }
 
-void PropertyWidget::addCheckBoxProperty(const QString& label, bool checked,
-                                        const QString& propertyName,
-                                        std::function<void(bool)> callback)
-{
-    PropertyItem item;
-    item.name = propertyName;
-    
-    // 查看模式：标签显示
-    item.valueLabel = new QLabel(QString("%1: %2").arg(label).arg(checked ? "是" : "否"));
-    item.valueLabel->setStyleSheet("color: #333; margin-top: 5px;");
-    m_layout->addWidget(item.valueLabel);
-    
-    // 编辑模式：复选框
-    auto* checkBox = new QCheckBox(label);
-    checkBox->setChecked(checked);
-    item.editWidget = checkBox;
-    m_layout->addWidget(item.editWidget);
-    
-    // 连接信号
-    if (callback) {
-        connect(checkBox, &QCheckBox::toggled, [this, propertyName, callback](bool checked) {
-            callback(checked);
-            emit propertyChanged(propertyName, checked);
-        });
-    }
-    
-    // 更新回调
-    item.updateCallback = [item, label]() {
-        if (auto* check = qobject_cast<QCheckBox*>(item.editWidget)) {
-            bool checked = check->isChecked();
-            item.valueLabel->setText(QString("%1: %2").arg(label).arg(checked ? "是" : "否"));
-        }
-    };
-    
-    m_properties.append(item);
-    updatePropertyVisibility();
-}
-
 void PropertyWidget::addFilePathProperty(const QString& label, const QString& path,
                                         const QString& propertyName, const QString& filter,
                                         bool saveMode, std::function<void(const QString&)> callback)
@@ -250,30 +212,34 @@ void PropertyWidget::addFilePathProperty(const QString& label, const QString& pa
 
     // 标签
     item.label = new QLabel(label + ":");
-    item.label->setStyleSheet("font-weight: bold; margin-top: 5px;");
+    item.label->setStyleSheet("font-weight: bold; margin-top: 8px; margin-bottom: 2px; color: #333;");
     m_layout->addWidget(item.label);
 
     // 查看模式：显示路径
     item.valueLabel = new QLabel(path.isEmpty() ? "未设置" : path);
-    item.valueLabel->setStyleSheet(path.isEmpty() ? "color: #999; font-style: italic;" : "color: #333;");
+    item.valueLabel->setStyleSheet(path.isEmpty() ?
+        "color: #999; font-style: italic; padding: 4px; border: 1px solid #ddd; border-radius: 3px; background: #f9f9f9; margin-bottom: 4px;" :
+        "color: #333; padding: 4px; border: 1px solid #ddd; border-radius: 3px; background: #f9f9f9; margin-bottom: 4px;");
     item.valueLabel->setWordWrap(true);
     item.valueLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     m_layout->addWidget(item.valueLabel);
 
     // 编辑模式：输入框 + 浏览按钮
-    auto* editContainer = new QWidget();
-    auto* editLayout = new QHBoxLayout(editContainer);
-    editLayout->setContentsMargins(0, 0, 0, 0);
+    auto* container = new QWidget();
+    auto* layout = new QHBoxLayout(container);
+    layout->setContentsMargins(0, 0, 0, 0);
 
     auto* lineEdit = new QLineEdit(path);
-    lineEdit->setPlaceholderText("输入路径或点击浏览...");
-    editLayout->addWidget(lineEdit);
+    lineEdit->setPlaceholderText("选择文件路径");
+    lineEdit->setStyleSheet("padding: 4px; border: 1px solid #ccc; border-radius: 3px;");
+    layout->addWidget(lineEdit);
 
     auto* browseButton = new QPushButton("浏览...");
-    editLayout->addWidget(browseButton);
+    browseButton->setMaximumWidth(80);
+    layout->addWidget(browseButton);
     item.browseButton = browseButton;
 
-    item.editWidget = editContainer;
+    item.editWidget = container;
     m_layout->addWidget(item.editWidget);
 
     // 连接浏览按钮
@@ -313,7 +279,8 @@ void PropertyWidget::addFilePathProperty(const QString& label, const QString& pa
                 QString text = lineEdit->text();
                 item.valueLabel->setText(text.isEmpty() ? "未设置" : text);
                 item.valueLabel->setStyleSheet(text.isEmpty() ?
-                    "color: #999; font-style: italic;" : "color: #333;");
+                    "color: #999; font-style: italic; padding: 4px; border: 1px solid #ddd; border-radius: 3px; background: #f9f9f9; margin-bottom: 4px;" :
+                    "color: #333; padding: 4px; border: 1px solid #ddd; border-radius: 3px; background: #f9f9f9; margin-bottom: 4px;");
             }
         }
     };
@@ -321,6 +288,46 @@ void PropertyWidget::addFilePathProperty(const QString& label, const QString& pa
     m_properties.append(item);
     updatePropertyVisibility();
 }
+
+void PropertyWidget::addCheckBoxProperty(const QString& label, bool checked,
+                                        const QString& propertyName,
+                                        std::function<void(bool)> callback)
+{
+    PropertyItem item;
+    item.name = propertyName;
+    
+    // 查看模式：标签显示
+    item.valueLabel = new QLabel(QString("%1: %2").arg(label).arg(checked ? "是" : "否"));
+    item.valueLabel->setStyleSheet("color: #333; margin-top: 5px;");
+    m_layout->addWidget(item.valueLabel);
+    
+    // 编辑模式：复选框
+    auto* checkBox = new QCheckBox(label);
+    checkBox->setChecked(checked);
+    item.editWidget = checkBox;
+    m_layout->addWidget(item.editWidget);
+    
+    // 连接信号
+    if (callback) {
+        connect(checkBox, &QCheckBox::toggled, [this, propertyName, callback](bool checked) {
+            callback(checked);
+            emit propertyChanged(propertyName, checked);
+        });
+    }
+    
+    // 更新回调
+    item.updateCallback = [item, label]() {
+        if (auto* check = qobject_cast<QCheckBox*>(item.editWidget)) {
+            bool checked = check->isChecked();
+            item.valueLabel->setText(QString("%1: %2").arg(label).arg(checked ? "是" : "否"));
+        }
+    };
+    
+    m_properties.append(item);
+    updatePropertyVisibility();
+}
+
+
 
 void PropertyWidget::addInfoProperty(const QString& label, const QString& value, const QString& style)
 {
@@ -330,39 +337,7 @@ void PropertyWidget::addInfoProperty(const QString& label, const QString& value,
     m_layout->addWidget(infoLabel);
 }
 
-void PropertyWidget::updatePropertyValue(const QString& propertyName, const QVariant& value)
-{
-    PropertyItem* item = findProperty(propertyName);
-    if (!item) return;
 
-    // 更新编辑控件的值（不触发信号）
-    if (auto* lineEdit = qobject_cast<QLineEdit*>(item->editWidget)) {
-        lineEdit->blockSignals(true);
-        lineEdit->setText(value.toString());
-        lineEdit->blockSignals(false);
-    } else if (auto* comboBox = qobject_cast<QComboBox*>(item->editWidget)) {
-        comboBox->blockSignals(true);
-        comboBox->setCurrentIndex(value.toInt());
-        comboBox->blockSignals(false);
-    } else if (auto* checkBox = qobject_cast<QCheckBox*>(item->editWidget)) {
-        checkBox->blockSignals(true);
-        checkBox->setChecked(value.toBool());
-        checkBox->blockSignals(false);
-    } else if (item->editWidget) {
-        // 文件路径控件
-        auto* lineEdit = item->editWidget->findChild<QLineEdit*>();
-        if (lineEdit) {
-            lineEdit->blockSignals(true);
-            lineEdit->setText(value.toString());
-            lineEdit->blockSignals(false);
-        }
-    }
-
-    // 更新显示
-    if (item->updateCallback) {
-        item->updateCallback();
-    }
-}
 
 void PropertyWidget::updatePropertyVisibility()
 {
@@ -462,77 +437,9 @@ void PropertyWidget::clearAllProperties()
     qDebug() << "PropertyWidget: 属性清理完成，布局项目数量:" << m_layout->count();
 }
 
-void PropertyWidget::forceReset()
-{
-    qDebug() << "PropertyWidget: 开始强制重置";
 
-    // 清理按钮引用
-    m_buttonContainer = nullptr;
-    m_viewButton = nullptr;
-    m_editButton = nullptr;
 
-    // 完全销毁当前布局
-    if (m_layout) {
-        // 移除所有子控件
-        while (m_layout->count() > 0) {
-            QLayoutItem* item = m_layout->takeAt(0);
-            if (item) {
-                if (item->widget()) {
-                    item->widget()->setParent(nullptr);
-                    item->widget()->deleteLater();
-                }
-                delete item;
-            }
-        }
 
-        // 删除布局本身
-        delete m_layout;
-    }
-
-    // 清空属性列表
-    m_properties.clear();
-    m_editMode = false;
-
-    // 重新创建布局
-    m_layout = new QVBoxLayout(this);
-    m_layout->setContentsMargins(0, 0, 0, 0);
-    m_layout->setSpacing(8);
-
-    // 强制更新
-    this->update();
-
-    qDebug() << "PropertyWidget: 强制重置完成";
-}
-
-void PropertyWidget::debugLayoutState() const
-{
-    qDebug() << "=== PropertyWidget 布局状态调试 ===";
-    qDebug() << "布局项目数量:" << m_layout->count();
-    qDebug() << "属性列表大小:" << m_properties.size();
-    qDebug() << "编辑模式:" << m_editMode;
-    qDebug() << "按钮容器存在:" << (m_buttonContainer != nullptr);
-    qDebug() << "查看按钮存在:" << (m_viewButton != nullptr);
-    qDebug() << "编辑按钮存在:" << (m_editButton != nullptr);
-
-    for (int i = 0; i < m_layout->count(); ++i) {
-        QLayoutItem* item = m_layout->itemAt(i);
-        if (item && item->widget()) {
-            QWidget* widget = item->widget();
-            qDebug() << "布局项" << i << ":" << widget->metaObject()->className()
-                     << "可见性:" << widget->isVisible()
-                     << "大小:" << widget->size();
-        }
-    }
-
-    for (int i = 0; i < m_properties.size(); ++i) {
-        const auto& prop = m_properties[i];
-        qDebug() << "属性" << i << "名称:" << prop.name;
-        if (prop.label) qDebug() << "  - 标签可见:" << prop.label->isVisible();
-        if (prop.valueLabel) qDebug() << "  - 值标签可见:" << prop.valueLabel->isVisible();
-        if (prop.editWidget) qDebug() << "  - 编辑控件可见:" << prop.editWidget->isVisible();
-    }
-    qDebug() << "=== 调试结束 ===";
-}
 
 PropertyWidget::PropertyItem* PropertyWidget::findProperty(const QString& name)
 {

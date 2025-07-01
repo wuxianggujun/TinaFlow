@@ -66,7 +66,7 @@ ADSPanelManager::~ADSPanelManager()
         m_panelTypes.clear();
         
         // 重置指针
-        m_propertyPanelContainer = nullptr;
+        m_adsPropertyPanel = nullptr;
         m_nodePalette = nullptr;
         m_commandHistoryWidget = nullptr;
     }
@@ -95,13 +95,23 @@ void ADSPanelManager::shutdown()
     if (m_dockManager) {
         // 保存当前布局
         saveLayoutPresets();
-        
-        // 清理面板
+
+        // 断开所有信号连接
+        m_dockManager->disconnect();
+
+        // 清理面板注册表
         m_panels.clear();
         m_panelTypes.clear();
-        
+
+        // 重置组件指针
+        m_adsPropertyPanel = nullptr;
+        m_nodePalette = nullptr;
+        m_commandHistoryWidget = nullptr;
+
         // ADS会自动清理其子组件
         m_dockManager = nullptr;
+
+        qDebug() << "ADSPanelManager: 系统已关闭";
     }
 }
 
@@ -112,17 +122,18 @@ void ADSPanelManager::setupDockManager()
     ads::CDockManager::setConfigFlag(ads::CDockManager::XmlCompressionEnabled, false);
     ads::CDockManager::setConfigFlag(ads::CDockManager::FocusHighlighting, true);
     
-    // 启用高级功能
+    // 配置ADS以避免创建独立窗口
     ads::CDockManager::setConfigFlag(ads::CDockManager::DragPreviewIsDynamic, true);
-    ads::CDockManager::setConfigFlag(ads::CDockManager::DragPreviewShowsContentPixmap, true);
+    ads::CDockManager::setConfigFlag(ads::CDockManager::DragPreviewShowsContentPixmap, false);  // 禁用内容预览
     ads::CDockManager::setConfigFlag(ads::CDockManager::DragPreviewHasWindowFrame, false);
-    
+    ads::CDockManager::setConfigFlag(ads::CDockManager::AlwaysShowTabs, false);  // 不总是显示标签
+
     // 启用Auto-Hide功能
     ads::CDockManager::setAutoHideConfigFlag(ads::CDockManager::AutoHideFeatureEnabled, true);
     ads::CDockManager::setConfigFlag(ads::CDockManager::DockAreaHideDisabledButtons, true);
     ads::CDockManager::setConfigFlag(ads::CDockManager::DockAreaDynamicTabsMenuButtonVisibility, true);
     
-    // 关键修复：CDockManager应该直接接管MainWindow，而不是作为子部件
+    // 让ADS接管MainWindow
     m_dockManager = new ads::CDockManager(m_mainWindow);
     
     // 设置样式
@@ -254,6 +265,8 @@ void ADSPanelManager::setupPanelConnections()
                 emit panelDestroyed(panelId);
                 qDebug() << "ADSPanelManager: 面板移除" << panelId;
             });
+
+
 }
 
 ads::CDockWidget* ADSPanelManager::createPanel(PanelType type, const QString& panelId, const QString& title)
@@ -275,7 +288,7 @@ ads::CDockWidget* ADSPanelManager::createPanel(PanelType type, const QString& pa
     dockWidget->setObjectName(panelId);
     dockWidget->setWidget(content);
     dockWidget->setIcon(getPanelIcon(type));
-    
+
     // 配置面板属性
     configurePanelProperties(dockWidget, type);
     
@@ -288,11 +301,13 @@ ads::CDockWidget* ADSPanelManager::createPanel(PanelType type, const QString& pa
             this, [this, panelId](bool visible) {
                 emit panelVisibilityChanged(panelId, visible);
             });
-    
+
     connect(dockWidget, &ads::CDockWidget::closed,
             this, [this, dockWidget]() {
                 onPanelClosed(dockWidget);
             });
+    
+
     
     qDebug() << "ADSPanelManager: 创建面板" << panelId << title;
     return dockWidget;
@@ -389,34 +404,39 @@ void ADSPanelManager::setupDefaultLayout()
     
     qDebug() << "ADSPanelManager: 所有面板创建成功，开始添加到布局";
     
-    // 按布局添加面板
+    // 按布局添加面板 - 确保不创建独立窗口
     try {
         // 左侧：节点面板
-        m_dockManager->addDockWidget(ads::LeftDockWidgetArea, nodePanel);
+        auto* nodeArea = m_dockManager->addDockWidget(ads::LeftDockWidgetArea, nodePanel);
+        // 确保面板不会浮动
+        nodePanel->setFeature(ads::CDockWidget::DockWidgetFloatable, false);
         qDebug() << "ADSPanelManager: 节点面板添加完成";
-        
+
         // 右侧：属性面板
-        m_dockManager->addDockWidget(ads::RightDockWidgetArea, propertyPanel);
+        auto* propertyArea = m_dockManager->addDockWidget(ads::RightDockWidgetArea, propertyPanel);
+        // 确保面板不会浮动
+        propertyPanel->setFeature(ads::CDockWidget::DockWidgetFloatable, false);
         qDebug() << "ADSPanelManager: 属性面板添加完成";
-        
+
         // 右侧：命令历史面板（添加到属性面板的同一区域作为标签页）
         m_dockManager->addDockWidgetTabToArea(historyPanel, propertyPanel->dockAreaWidget());
+        // 确保面板不会浮动
+        historyPanel->setFeature(ads::CDockWidget::DockWidgetFloatable, false);
         qDebug() << "ADSPanelManager: 命令历史面板添加完成";
-        
+
         // 底部：输出面板
-        m_dockManager->addDockWidget(ads::BottomDockWidgetArea, outputPanel);
+        auto* outputArea = m_dockManager->addDockWidget(ads::BottomDockWidgetArea, outputPanel);
+        // 确保面板不会浮动
+        outputPanel->setFeature(ads::CDockWidget::DockWidgetFloatable, false);
         qDebug() << "ADSPanelManager: 输出面板添加完成";
-        
+
         // 设置默认激活的标签页
         if (propertyPanel->dockAreaWidget()) {
             propertyPanel->dockAreaWidget()->setCurrentDockWidget(propertyPanel);
         }
-        
-        // 确保所有面板可见
-        propertyPanel->show();
-        nodePanel->show();
-        historyPanel->show();
-        outputPanel->show();
+
+        // 不调用show()方法，让ADS系统自己管理显示
+        // 这样可以避免创建独立窗口
         
         qDebug() << "ADSPanelManager: 默认布局设置完成";
         
@@ -427,76 +447,11 @@ void ADSPanelManager::setupDefaultLayout()
     }
 }
 
-void ADSPanelManager::setupMinimalLayout()
-{
-    if (!m_dockManager) return;
-    
-    // 只创建核心面板
-    auto* propertyPanel = createPropertyPanel();
-    auto* nodePanel = createNodePalettePanel();
-    
-    m_dockManager->addDockWidget(ads::LeftDockWidgetArea, nodePanel);
-    m_dockManager->addDockWidget(ads::RightDockWidgetArea, propertyPanel);
-    
-    // 其他面板设为Auto-Hide
-    auto* historyPanel = createCommandHistoryPanel();
-    auto* outputPanel = createOutputConsolePanel();
-    
-    m_dockManager->addAutoHideDockWidget(ads::SideBarBottom, historyPanel);
-    m_dockManager->addAutoHideDockWidget(ads::SideBarBottom, outputPanel);
-    
-    qDebug() << "ADSPanelManager: 最小化布局设置完成";
-}
 
-void ADSPanelManager::setupDeveloperLayout()
-{
-    if (!m_dockManager) return;
-    
-    // 开发者布局 - 更多调试面板
-    auto* propertyPanel = createPropertyPanel();
-    auto* nodePanel = createNodePalettePanel();
-    auto* historyPanel = createCommandHistoryPanel();
-    auto* outputPanel = createOutputConsolePanel();
-    auto* explorerPanel = createProjectExplorerPanel();
-    
-    // 左侧：节点面板 + 项目浏览器
-    m_dockManager->addDockWidget(ads::LeftDockWidgetArea, nodePanel);
-    m_dockManager->addDockWidget(ads::LeftDockWidgetArea, explorerPanel);
-    
-    // 右侧：属性面板
-    m_dockManager->addDockWidget(ads::RightDockWidgetArea, propertyPanel);
-    
-    // 底部：输出控制台 + 命令历史
-    m_dockManager->addDockWidget(ads::BottomDockWidgetArea, outputPanel);
-    m_dockManager->addDockWidgetTabToArea(historyPanel, outputPanel->dockAreaWidget());
-    
-    qDebug() << "ADSPanelManager: 开发者布局设置完成";
-}
 
-void ADSPanelManager::setupDesignerLayout()
-{
-    if (!m_dockManager) return;
-    
-    // 设计师布局 - 突出视觉编辑
-    auto* propertyPanel = createPropertyPanel();
-    auto* nodePanel = createNodePalettePanel();
-    
-    // 主要工作区域最大化，面板最小化
-    m_dockManager->addDockWidget(ads::LeftDockWidgetArea, nodePanel);
-    m_dockManager->addDockWidget(ads::RightDockWidgetArea, propertyPanel);
-    
-    // 其他面板都设为Auto-Hide
-    auto* historyPanel = createCommandHistoryPanel();
-    auto* outputPanel = createOutputConsolePanel();
-    
-    m_dockManager->addAutoHideDockWidget(ads::SideBarBottom, historyPanel);
-    m_dockManager->addAutoHideDockWidget(ads::SideBarBottom, outputPanel);
-    
-    // 调整面板大小比例
-    propertyPanel->dockAreaWidget()->setCurrentIndex(0);
-    
-    qDebug() << "ADSPanelManager: 设计师布局设置完成";
-}
+
+
+
 
 // 面板内容创建实现
 QWidget* ADSPanelManager::createPanelContent(PanelType type)
@@ -602,66 +557,7 @@ QWidget* ADSPanelManager::createProjectExplorerWidget()
     return widget;
 }
 
-void ADSPanelManager::configurePanelProperties(ads::CDockWidget* panel, PanelType type)
-{
-    if (!panel) return;
-    
-    switch (type) {
-    case PropertyPanel:
-        panel->setFeature(ads::CDockWidget::DockWidgetClosable, true);
-        panel->setFeature(ads::CDockWidget::DockWidgetMovable, true);
-        panel->setFeature(ads::CDockWidget::DockWidgetFloatable, true);
-        break;
-        
-    case NodePalettePanel:
-        panel->setFeature(ads::CDockWidget::DockWidgetClosable, false); // 节点面板不可关闭
-        panel->setFeature(ads::CDockWidget::DockWidgetMovable, true);
-        panel->setFeature(ads::CDockWidget::DockWidgetFloatable, true);
-        break;
-        
-    case CommandHistory:
-        panel->setFeature(ads::CDockWidget::DockWidgetClosable, true);
-        panel->setFeature(ads::CDockWidget::DockWidgetMovable, true);
-        panel->setFeature(ads::CDockWidget::DockWidgetFloatable, true);
-        break;
-        
-    case OutputConsole:
-        panel->setFeature(ads::CDockWidget::DockWidgetClosable, true);
-        panel->setFeature(ads::CDockWidget::DockWidgetMovable, true);
-        panel->setFeature(ads::CDockWidget::DockWidgetFloatable, true);
-        break;
-        
-    case ProjectExplorer:
-        panel->setFeature(ads::CDockWidget::DockWidgetClosable, true);
-        panel->setFeature(ads::CDockWidget::DockWidgetMovable, true);
-        panel->setFeature(ads::CDockWidget::DockWidgetFloatable, true);
-        break;
-        
-    default:
-        break;
-    }
-}
 
-QString ADSPanelManager::getPanelTitle(PanelType type) const
-{
-    switch (type) {
-    case PropertyPanel: return "🔧 属性面板";
-    case NodePalettePanel: return "🗂️ 节点面板";
-    case CommandHistory: return "📜 命令历史";
-    case OutputConsole: return "💻 输出控制台";
-    case ProjectExplorer: return "📁 项目浏览器";
-    case DebugConsole: return "🐛 调试控制台";
-    default: return "自定义面板";
-    }
-}
-
-QIcon ADSPanelManager::getPanelIcon(PanelType type) const
-{
-    // 这里可以加载真实的图标文件
-    // 暂时返回空图标
-    Q_UNUSED(type);
-    return QIcon();
-}
 
 // 面板控制实现
 void ADSPanelManager::showPanel(const QString& panelId)
@@ -822,22 +718,76 @@ void ADSPanelManager::resetToDefaultLayout()
     }
 }
 
-void ADSPanelManager::saveCurrentLayout()
-{
-    QString name = QString("auto_save_%1").arg(QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss"));
-    saveLayoutPreset(name);
-}
 
-void ADSPanelManager::restoreLastLayout()
+
+
+
+// 面板配置实现
+void ADSPanelManager::configurePanelProperties(ads::CDockWidget* panel, PanelType type)
 {
-    QStringList presets = getLayoutPresets();
-    if (!presets.isEmpty()) {
-        // 加载最新的预设
-        std::sort(presets.begin(), presets.end(), std::greater<QString>());
-        loadLayoutPreset(presets.first());
+    if (!panel) return;
+
+    // 默认配置：禁用浮动功能以避免创建独立窗口
+    switch (type) {
+    case PropertyPanel:
+        panel->setFeature(ads::CDockWidget::DockWidgetClosable, true);
+        panel->setFeature(ads::CDockWidget::DockWidgetMovable, true);
+        panel->setFeature(ads::CDockWidget::DockWidgetFloatable, false);  // 禁用浮动
+        break;
+
+    case NodePalettePanel:
+        panel->setFeature(ads::CDockWidget::DockWidgetClosable, false); // 节点面板不可关闭
+        panel->setFeature(ads::CDockWidget::DockWidgetMovable, true);
+        panel->setFeature(ads::CDockWidget::DockWidgetFloatable, false);  // 禁用浮动
+        break;
+
+    case CommandHistory:
+        panel->setFeature(ads::CDockWidget::DockWidgetClosable, true);
+        panel->setFeature(ads::CDockWidget::DockWidgetMovable, true);
+        panel->setFeature(ads::CDockWidget::DockWidgetFloatable, false);  // 禁用浮动
+        break;
+
+    case OutputConsole:
+        panel->setFeature(ads::CDockWidget::DockWidgetClosable, true);
+        panel->setFeature(ads::CDockWidget::DockWidgetMovable, true);
+        panel->setFeature(ads::CDockWidget::DockWidgetFloatable, false);  // 禁用浮动
+        break;
+
+    case ProjectExplorer:
+        panel->setFeature(ads::CDockWidget::DockWidgetClosable, true);
+        panel->setFeature(ads::CDockWidget::DockWidgetMovable, true);
+        panel->setFeature(ads::CDockWidget::DockWidgetFloatable, false);  // 禁用浮动
+        break;
+
+    default:
+        // 默认配置：禁用浮动
+        panel->setFeature(ads::CDockWidget::DockWidgetFloatable, false);
+        break;
     }
 }
 
+QString ADSPanelManager::getPanelTitle(PanelType type) const
+{
+    switch (type) {
+    case PropertyPanel: return "🔧 属性面板";
+    case NodePalettePanel: return "🗂️ 节点面板";
+    case CommandHistory: return "📜 命令历史";
+    case OutputConsole: return "💻 输出控制台";
+    case ProjectExplorer: return "📁 项目浏览器";
+    case DebugConsole: return "🐛 调试控制台";
+    default: return "自定义面板";
+    }
+}
+
+QIcon ADSPanelManager::getPanelIcon(PanelType type) const
+{
+    // 这里可以加载真实的图标文件
+    // 暂时返回空图标
+    Q_UNUSED(type);
+    return QIcon();
+}
+
+// 插槽实现
 void ADSPanelManager::onPanelClosed(ads::CDockWidget* panel)
 {
     if (panel) {
@@ -863,4 +813,4 @@ void ADSPanelManager::onFocusChanged(ads::CDockWidget* panel)
         emit panelFocused(panelId);
         qDebug() << "ADSPanelManager: 面板获得焦点" << panelId;
     }
-} 
+}

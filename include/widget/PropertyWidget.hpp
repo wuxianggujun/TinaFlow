@@ -85,6 +85,8 @@ public:
                             const QString& propertyName,
                             std::function<void(bool)> callback = nullptr);
     
+
+    
     /**
      * @brief 添加文件路径属性
      * @param label 标签文本
@@ -98,40 +100,31 @@ public:
                             const QString& propertyName, const QString& filter = "",
                             bool saveMode = false,
                             std::function<void(const QString&)> callback = nullptr);
-    
+
     /**
      * @brief 添加只读信息
      * @param label 标签文本
      * @param value 显示值
      * @param style 样式（可选）
      */
-    void addInfoProperty(const QString& label, const QString& value, 
+    void addInfoProperty(const QString& label, const QString& value,
                         const QString& style = "");
     
-    /**
-     * @brief 更新属性值（不触发回调）
-     */
-    void updatePropertyValue(const QString& propertyName, const QVariant& value);
+
 
     /**
      * @brief 清空所有属性（复用控件）
      */
     void clearAllProperties();
 
-    /**
-     * @brief 强制重置控件（彻底清理）
-     */
-    void forceReset();
+
 
     /**
      * @brief 检查是否有属性
      */
     bool hasProperties() const { return !m_properties.isEmpty(); }
 
-    /**
-     * @brief 调试布局状态
-     */
-    void debugLayoutState() const;
+
 
 signals:
     void propertyChanged(const QString& propertyName, const QVariant& value);

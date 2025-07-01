@@ -66,9 +66,6 @@ public:
 
     // 布局管理
     void setupDefaultLayout();
-    void setupMinimalLayout();
-    void setupDeveloperLayout();
-    void setupDesignerLayout();
 
     // 布局预设
     void saveLayoutPreset(const QString& name);
@@ -94,19 +91,13 @@ public:
     NodePalette* getNodePalette() const { return m_nodePalette; }
     CommandHistoryWidget* getCommandHistoryWidget() const { return m_commandHistoryWidget; }
 
-    // 配置选项
-    void setAutoHideEnabled(bool enabled);
-    void setTabsClosable(bool closable);
-    void setDragPreviewEnabled(bool enabled);
-    void setOpaqueResize(bool opaque);
+
     
     // 样式设置
     void setupADSStyle();
 
 public slots:
     void resetToDefaultLayout();
-    void saveCurrentLayout();
-    void restoreLastLayout();
 
 signals:
     void panelCreated(const QString& panelId, PanelType type);
@@ -144,10 +135,9 @@ private:
     void saveLayoutPresets();
     
     // 辅助方法
-    QString generatePanelId(PanelType type) const;
     QString getPanelTitle(PanelType type) const;
     QIcon getPanelIcon(PanelType type) const;
-    
+
     // 面板创建辅助
     QWidget* createPanelContent(PanelType type);
     void configurePanelProperties(ads::CDockWidget* panel, PanelType type);

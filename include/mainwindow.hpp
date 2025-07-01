@@ -56,7 +56,6 @@ private:
     void reinitializeNodeEditor();
     void setupModernToolbar();
     void setupAdvancedPanels();
-    void setupADSLayoutMenu();
     void setupKeyboardShortcuts();
     void setupLayoutMenu();
     void setupWindowDisplay();
