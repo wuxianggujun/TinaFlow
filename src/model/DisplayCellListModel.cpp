@@ -2,7 +2,7 @@
 // Created by wuxianggujun on 25-6-29.
 //
 
-#include "DisplayCellListModel.hpp"
+#include "model/DisplayCellListModel.hpp"
 
 DisplayCellListModel::DisplayCellListModel()
 {

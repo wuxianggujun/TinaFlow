@@ -8,7 +8,7 @@
 #include "BaseNodeModel.hpp"
 #include "data/SheetData.hpp"
 #include "data/WorkbookData.hpp"
-#include "PropertyWidget.hpp"
+#include "widget/PropertyWidget.hpp"
 
 #include <QComboBox>
 #include <qgraphicsproxywidget.h>

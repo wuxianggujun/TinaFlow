@@ -1,4 +1,4 @@
-#include "PropertyWidget.hpp"
+#include "widget/PropertyWidget.hpp"
 #include <QFileDialog>
 #include <QDebug>
 

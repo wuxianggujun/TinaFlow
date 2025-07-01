@@ -11,8 +11,8 @@
 #include <QtNodes/DataFlowGraphicsScene>
 #include <QtNodes/ConnectionIdUtils>
 #include "TinaFlowGraphicsView.hpp"
-#include "CommandHistoryWidget.hpp"
-#include "ModernToolBar.hpp"
+#include "widget/CommandHistoryWidget.hpp"
+#include "widget/ModernToolBar.hpp"
 #include "NodePalette.hpp"
 
 namespace Ui {

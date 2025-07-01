@@ -5,7 +5,7 @@
 #pragma once
 
 #include "BaseNodeModel.hpp"
-#include "PropertyWidget.hpp"
+#include "widget/PropertyWidget.hpp"
 #include <QDebug>
 #include <memory>
 

@@ -16,7 +16,7 @@
 
 #include "XLDocument.hpp"
 #include "data/WorkbookData.hpp"
-#include "PropertyWidget.hpp"
+#include "widget/PropertyWidget.hpp"
 #include "ErrorHandler.hpp"
 #include "DataValidator.hpp"
 #include "PerformanceProfiler.hpp"

@@ -7,7 +7,7 @@
 #include "BaseNodeModel.hpp"
 #include "data/SheetData.hpp"
 #include "data/CellData.hpp"
-#include "PropertyWidget.hpp"
+#include "widget/PropertyWidget.hpp"
 #include "ErrorHandler.hpp"
 #include "DataValidator.hpp"
 

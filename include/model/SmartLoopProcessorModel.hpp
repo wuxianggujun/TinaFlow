@@ -20,7 +20,7 @@
 #include <QDebug>
 
 #include "BaseNodeModel.hpp"
-#include "PropertyWidget.hpp"
+#include "widget/PropertyWidget.hpp"
 #include "data/RangeData.hpp"
 #include "data/RowData.hpp"
 #include "data/CellData.hpp"

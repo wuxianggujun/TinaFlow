@@ -2,30 +2,30 @@
 #include "ui_mainwindow.h"
 
 // 核心节点模型
-#include "OpenExcelModel.hpp"
-#include "SelectSheetModel.hpp"
-#include "ReadCellModel.hpp"
-#include "ReadRangeModel.hpp"
-#include "SaveExcelModel.hpp"
-#include "SmartLoopProcessorModel.hpp"
-#include "StringCompareModel.hpp"
+#include "model/OpenExcelModel.hpp"
+#include "model/SelectSheetModel.hpp"
+#include "model/ReadCellModel.hpp"
+#include "model/ReadRangeModel.hpp"
+#include "model/SaveExcelModel.hpp"
+#include "model/SmartLoopProcessorModel.hpp"
+#include "model/StringCompareModel.hpp"
 
 // 显示节点模型
-#include "DisplayCellModel.hpp"
-#include "DisplayRangeModel.hpp"
-#include "DisplayBooleanModel.hpp"
-#include "DisplayRowModel.hpp"
-#include "DisplayCellListModel.hpp"
-#include "RangeInfoModel.hpp"
+#include "model/DisplayCellModel.hpp"
+#include "model/DisplayRangeModel.hpp"
+#include "model/DisplayBooleanModel.hpp"
+#include "model/DisplayRowModel.hpp"
+#include "model/DisplayCellListModel.hpp"
+#include "model/RangeInfoModel.hpp"
 
 // 系统组件
 #include "IPropertyProvider.hpp"
-#include "PropertyWidget.hpp"
+#include "widget/PropertyWidget.hpp"
 #include "ErrorHandler.hpp"
 #include "DataValidator.hpp"
 #include "CommandManager.hpp"
 #include "NodeCommands.hpp"
-#include "ModernToolBar.hpp"
+#include "widget/ModernToolBar.hpp"
 #include "NodeCatalog.hpp"
 
 // QtNodes

@@ -2,7 +2,7 @@
 // Created by wuxianggujun on 25-6-29.
 //
 
-#include "SmartLoopProcessorModel.hpp"
+#include "model/SmartLoopProcessorModel.hpp"
 #include <QtCore/qglobal.h>
 
 SmartLoopProcessorModel::SmartLoopProcessorModel()

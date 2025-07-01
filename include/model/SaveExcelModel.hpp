@@ -7,7 +7,7 @@
 #include "BaseNodeModel.hpp"
 #include "data/RangeData.hpp"
 #include "data/BooleanData.hpp"
-#include "PropertyWidget.hpp"
+#include "widget/PropertyWidget.hpp"
 #include "ErrorHandler.hpp"
 #include "DataValidator.hpp"
 

@@ -1,4 +1,4 @@
-#include "CommandHistoryWidget.hpp"
+#include "widget/CommandHistoryWidget.hpp"
 #include <QHBoxLayout>
 #include <QGroupBox>
 #include <QHeaderView>
