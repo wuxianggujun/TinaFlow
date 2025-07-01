@@ -38,12 +38,12 @@ ADSPanelManager::ADSPanelManager(QMainWindow* mainWindow, QObject* parent)
     , m_nodePalette(nullptr)
     , m_commandHistoryWidget(nullptr)
 {
-    qDebug() << "ADSPanelManager: 创建面板管理器";
+
 }
 
 ADSPanelManager::~ADSPanelManager()
 {
-    qDebug() << "ADSPanelManager: 开始销毁面板管理器";
+
     
     // 安全关闭所有面板
     if (m_dockManager) {
@@ -70,13 +70,10 @@ ADSPanelManager::~ADSPanelManager()
         m_nodePalette = nullptr;
         m_commandHistoryWidget = nullptr;
     }
-    
-    qDebug() << "ADSPanelManager: 面板管理器销毁完成";
 }
 
 void ADSPanelManager::initialize()
 {
-    qDebug() << "ADSPanelManager: 初始化ADS系统";
     
     // 创建ADS停靠管理器
     setupDockManager();
@@ -111,7 +108,7 @@ void ADSPanelManager::shutdown()
         // ADS会自动清理其子组件
         m_dockManager = nullptr;
 
-        qDebug() << "ADSPanelManager: 系统已关闭";
+
     }
 }
 
@@ -138,8 +135,6 @@ void ADSPanelManager::setupDockManager()
     
     // 设置样式
     setupADSStyle();
-    
-    qDebug() << "ADSPanelManager: ADS停靠管理器创建完成，已接管主窗口";
 }
 
 void ADSPanelManager::setupADSStyle()
@@ -254,7 +249,7 @@ void ADSPanelManager::setupPanelConnections()
                 QString panelId = dockWidget->objectName();
                 PanelType type = m_panelTypes.value(panelId, CustomPanel);
                 emit panelCreated(panelId, type);
-                qDebug() << "ADSPanelManager: 面板添加" << panelId;
+
             });
     
     connect(m_dockManager, &ads::CDockManager::dockWidgetRemoved,
@@ -263,7 +258,7 @@ void ADSPanelManager::setupPanelConnections()
                 m_panels.remove(panelId);
                 m_panelTypes.remove(panelId);
                 emit panelDestroyed(panelId);
-                qDebug() << "ADSPanelManager: 面板移除" << panelId;
+
             });
 
 
@@ -309,7 +304,6 @@ ads::CDockWidget* ADSPanelManager::createPanel(PanelType type, const QString& pa
     
 
     
-    qDebug() << "ADSPanelManager: 创建面板" << panelId << title;
     return dockWidget;
 }
 
@@ -327,7 +321,7 @@ void ADSPanelManager::removePanel(const QString& panelId)
     m_panels.remove(panelId);
     m_panelTypes.remove(panelId);
     
-    qDebug() << "ADSPanelManager: 移除面板" << panelId;
+
 }
 
 ads::CDockWidget* ADSPanelManager::getPanel(const QString& panelId) const
@@ -374,7 +368,7 @@ void ADSPanelManager::setupDefaultLayout()
         return;
     }
     
-    qDebug() << "ADSPanelManager: 开始设置默认布局";
+
     
     // 清理现有面板（安全删除）
     QStringList panelIds = m_panels.keys();
@@ -402,33 +396,25 @@ void ADSPanelManager::setupDefaultLayout()
         return;
     }
     
-    qDebug() << "ADSPanelManager: 所有面板创建成功，开始添加到布局";
+
     
     // 按布局添加面板 - 确保不创建独立窗口
     try {
         // 左侧：节点面板
         auto* nodeArea = m_dockManager->addDockWidget(ads::LeftDockWidgetArea, nodePanel);
-        // 确保面板不会浮动
         nodePanel->setFeature(ads::CDockWidget::DockWidgetFloatable, false);
-        qDebug() << "ADSPanelManager: 节点面板添加完成";
 
         // 右侧：属性面板
         auto* propertyArea = m_dockManager->addDockWidget(ads::RightDockWidgetArea, propertyPanel);
-        // 确保面板不会浮动
         propertyPanel->setFeature(ads::CDockWidget::DockWidgetFloatable, false);
-        qDebug() << "ADSPanelManager: 属性面板添加完成";
 
         // 右侧：命令历史面板（添加到属性面板的同一区域作为标签页）
         m_dockManager->addDockWidgetTabToArea(historyPanel, propertyPanel->dockAreaWidget());
-        // 确保面板不会浮动
         historyPanel->setFeature(ads::CDockWidget::DockWidgetFloatable, false);
-        qDebug() << "ADSPanelManager: 命令历史面板添加完成";
 
         // 底部：输出面板
         auto* outputArea = m_dockManager->addDockWidget(ads::BottomDockWidgetArea, outputPanel);
-        // 确保面板不会浮动
         outputPanel->setFeature(ads::CDockWidget::DockWidgetFloatable, false);
-        qDebug() << "ADSPanelManager: 输出面板添加完成";
 
         // 设置默认激活的标签页
         if (propertyPanel->dockAreaWidget()) {
@@ -437,8 +423,6 @@ void ADSPanelManager::setupDefaultLayout()
 
         // 不调用show()方法，让ADS系统自己管理显示
         // 这样可以避免创建独立窗口
-        
-        qDebug() << "ADSPanelManager: 默认布局设置完成";
         
     } catch (const std::exception& e) {
         qCritical() << "ADSPanelManager: 设置布局时发生异常:" << e.what();
@@ -793,7 +777,7 @@ void ADSPanelManager::onPanelClosed(ads::CDockWidget* panel)
     if (panel) {
         QString panelId = panel->objectName();
         emit panelVisibilityChanged(panelId, false);
-        qDebug() << "ADSPanelManager: 面板关闭" << panelId;
+
     }
 }
 
@@ -802,7 +786,7 @@ void ADSPanelManager::onPanelOpened(ads::CDockWidget* panel)
     if (panel) {
         QString panelId = panel->objectName();
         emit panelVisibilityChanged(panelId, true);
-        qDebug() << "ADSPanelManager: 面板打开" << panelId;
+
     }
 }
 
@@ -811,6 +795,6 @@ void ADSPanelManager::onFocusChanged(ads::CDockWidget* panel)
     if (panel) {
         QString panelId = panel->objectName();
         emit panelFocused(panelId);
-        qDebug() << "ADSPanelManager: 面板获得焦点" << panelId;
+
     }
 }

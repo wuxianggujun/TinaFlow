@@ -135,7 +135,7 @@ MainWindow::MainWindow(QWidget* parent)
 
 MainWindow::~MainWindow()
 {
-    qDebug() << "MainWindow: 开始析构";
+
 
     // 清理ADS面板管理器（必须在UI清理之前）
     if (m_adsPanelManager)
@@ -153,7 +153,7 @@ MainWindow::~MainWindow()
 
     delete ui;
 
-    qDebug() << "MainWindow: 析构完成";
+
 }
 
 void MainWindow::setupNodeEditor()
@@ -235,11 +235,20 @@ void MainWindow::setupNodeEditor()
 
 void MainWindow::reinitializeNodeEditor()
 {
-    // 删除旧的组件（ADS系统会自动管理视图的父子关系）
+    // 简化方法：不直接操作ADS中央部件，让setupADSCentralWidget处理
+
+    // 安全地删除旧的组件
     if (m_graphicsView)
     {
-        delete m_graphicsView;
-        delete m_graphicsScene;
+        m_graphicsView->setParent(nullptr);  // 先移除父子关系
+        m_graphicsView->deleteLater();       // 使用deleteLater避免立即删除
+        m_graphicsView = nullptr;
+    }
+
+    if (m_graphicsScene)
+    {
+        m_graphicsScene->deleteLater();      // 使用deleteLater避免立即删除
+        m_graphicsScene = nullptr;
     }
 
     // 重新创建所有组件
@@ -306,7 +315,7 @@ void MainWindow::reinitializeNodeEditor()
                 }
             }, Qt::QueuedConnection);
 
-    // 重新设置ADS中央部件
+    // 直接重新设置ADS中央部件
     setupADSCentralWidget();
 
     // 更新属性面板容器的图形模型
@@ -1201,7 +1210,7 @@ void MainWindow::setupAdvancedPanels()
                     }
                 });
 
-        qDebug() << "MainWindow: ADS面板管理器初始化完成";
+
 
 
         // 设置ADS中央部件
@@ -1351,7 +1360,16 @@ void MainWindow::setupADSCentralWidget()
         return;
     }
 
-    // 关键修复：创建中央停靠部件时，不设置标题，并隐藏标题栏
+    // 检查是否已经有中央部件
+    auto* existingCentralWidget = dockManager->centralWidget();
+    if (existingCentralWidget)
+    {
+        // 如果已经有中央部件，只需要更新其内容
+        existingCentralWidget->setWidget(m_graphicsView);
+        return;
+    }
+
+    // 如果没有中央部件，创建一个新的
     auto* centralDockWidget = new ads::CDockWidget("", dockManager);
     centralDockWidget->setWidget(m_graphicsView);
     centralDockWidget->setObjectName("central_editor");
@@ -1370,8 +1388,6 @@ void MainWindow::setupADSCentralWidget()
 
     // 设置为ADS中央部件
     dockManager->setCentralWidget(centralDockWidget);
-
-    qDebug() << "MainWindow: ADS中央部件设置完成";
 }
 
 void MainWindow::updatePropertyPanelReference()
@@ -1400,7 +1416,7 @@ void MainWindow::updatePropertyPanelReference()
 
             // 设置图形模型到ADS属性面板
             adsPropertyPanel->setGraphModel(m_graphModel.get());
-            qDebug() << "MainWindow: ADS属性面板引用同步完成";
+
         }
         else
         {
@@ -1650,7 +1666,7 @@ void MainWindow::setupWindowDisplay()
         if (restoreGeometry(geometry))
         {
             geometryRestored = true;
-            qDebug() << "MainWindow: 窗口几何已从设置恢复";
+
         }
     }
 
@@ -1670,13 +1686,13 @@ void MainWindow::setupWindowDisplay()
             int y = (screenGeometry.height() - height) / 2;
 
             setGeometry(x, y, width, height);
-            qDebug() << "MainWindow: 设置默认窗口大小" << width << "x" << height;
+
         }
         else
         {
             // 备用默认大小
             resize(1200, 800);
-            qDebug() << "MainWindow: 设置备用默认窗口大小 1200x800";
+
         }
     }
 
@@ -1694,5 +1710,5 @@ void MainWindow::setupWindowDisplay()
     raise();
     activateWindow();
 
-    qDebug() << "MainWindow: 窗口显示设置完成，最终大小:" << size();
+
 }

@@ -23,7 +23,7 @@ void PropertyWidget::setEditMode(bool editable)
         m_editButton->setChecked(editable);
     }
 
-    qDebug() << "PropertyWidget: Switched to" << (editable ? "edit" : "view") << "mode";
+
 }
 
 void PropertyWidget::addTitle(const QString& title)
@@ -56,7 +56,7 @@ void PropertyWidget::addModeToggleButtons()
 {
     // 防止重复添加按钮
     if (m_buttonContainer && m_viewButton && m_editButton) {
-        qDebug() << "PropertyWidget: 切换按钮已存在，跳过添加";
+
         return;
     }
 
@@ -103,7 +103,7 @@ void PropertyWidget::addModeToggleButtons()
         setEditMode(false);
     });
 
-    qDebug() << "PropertyWidget: 模式切换按钮已添加";
+
 }
 
 void PropertyWidget::addTextProperty(const QString& label, const QString& value,
@@ -370,7 +370,7 @@ void PropertyWidget::updatePropertyVisibility()
 
 void PropertyWidget::clearAllProperties()
 {
-    qDebug() << "PropertyWidget: 开始清理属性，当前属性数量:" << m_properties.size();
+
 
     // 第一步：清理模式切换按钮
     if (m_buttonContainer) {
@@ -380,7 +380,7 @@ void PropertyWidget::clearAllProperties()
         m_buttonContainer = nullptr;
         m_viewButton = nullptr;
         m_editButton = nullptr;
-        qDebug() << "PropertyWidget: 模式切换按钮已清理";
+
     }
 
     // 第二步：清理属性控件
@@ -434,7 +434,7 @@ void PropertyWidget::clearAllProperties()
     m_layout->update();
     this->update();
 
-    qDebug() << "PropertyWidget: 属性清理完成，布局项目数量:" << m_layout->count();
+
 }
 
 

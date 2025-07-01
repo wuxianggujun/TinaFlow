@@ -51,7 +51,7 @@ void ADSPropertyPanel::setupUI()
     m_scrollArea->setWidget(m_propertyWidget);
     layout->addWidget(m_scrollArea);
     
-    qDebug() << "ADSPropertyPanel: 轻量级UI设置完成";
+
 }
 
 void ADSPropertyPanel::connectSignals()
@@ -73,14 +73,14 @@ void ADSPropertyPanel::showDefaultContent()
 void ADSPropertyPanel::setGraphModel(QtNodes::DataFlowGraphModel* model)
 {
     m_graphModel = model;
-    qDebug() << "ADSPropertyPanel: 图形模型已设置";
+
 }
 
 void ADSPropertyPanel::updateNodeProperties(QtNodes::NodeId nodeId)
 {
     // 防止重复更新同一个节点
     if (m_nodeId == nodeId && m_propertyWidget && m_propertyWidget->hasProperties()) {
-        qDebug() << "ADSPropertyPanel: 跳过重复更新节点" << nodeId;
+
         return;
     }
 
@@ -102,7 +102,7 @@ void ADSPropertyPanel::updateNodeProperties(QtNodes::NodeId nodeId)
     QString nodeName = nodeDelegate->name();
     QString nodeCaption = nodeDelegate->caption();
 
-    qDebug() << "ADSPropertyPanel: 开始更新节点属性" << nodeId << "(" << nodeCaption << ")";
+
 
     // 简单清空属性
     if (m_propertyWidget) {
@@ -121,7 +121,7 @@ void ADSPropertyPanel::updateNodeProperties(QtNodes::NodeId nodeId)
             auto* propertyProvider = dynamic_cast<IPropertyProvider*>(nodeModel);
             if (propertyProvider) {
                 hasProperties = propertyProvider->createPropertyPanel(m_propertyWidget);
-                qDebug() << "ADSPropertyPanel: 使用PropertyWidget系统，节点" << nodeId;
+
             }
         }
 
@@ -136,7 +136,7 @@ void ADSPropertyPanel::updateNodeProperties(QtNodes::NodeId nodeId)
             }
         }
 
-        qDebug() << "ADSPropertyPanel: 更新节点属性完成" << nodeId << "(" << nodeCaption << ")";
+
     }
 }
 
@@ -145,7 +145,7 @@ void ADSPropertyPanel::clearProperties()
     m_nodeId = QtNodes::NodeId{};
     showDefaultContent();
 
-    qDebug() << "ADSPropertyPanel: 属性已清空";
+
 }
 
 bool ADSPropertyPanel::isEditableNodeType(const QString& nodeTypeName) const
@@ -174,17 +174,16 @@ bool ADSPropertyPanel::isEditableNodeType(const QString& nodeTypeName) const
 
     // 如果是显示类节点，明确返回false
     if (displayOnlyNodeTypes.contains(nodeTypeName)) {
-        qDebug() << "ADSPropertyPanel: 节点" << nodeTypeName << "是显示类节点，不需要编辑模式";
+
         return false;
     }
 
     // 如果是可编辑节点，返回true
     if (editableNodeTypes.contains(nodeTypeName)) {
-        qDebug() << "ADSPropertyPanel: 节点" << nodeTypeName << "需要编辑模式";
+
         return true;
     }
 
     // 默认情况：如果不确定，不添加编辑按钮（更安全）
-    qDebug() << "ADSPropertyPanel: 节点" << nodeTypeName << "类型未知，默认不添加编辑按钮";
     return false;
 }
