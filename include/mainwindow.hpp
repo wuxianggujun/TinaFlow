@@ -80,6 +80,7 @@ private:
     void createGraphicsComponents();
     void connectNodeEditorSignals();
     void connectDataUpdateSignals();
+    void setupNodeUpdateConnections(); // 统一的节点更新连接设置
     void reinitializeNodeEditor();
     void cleanupGraphicsComponents();
 

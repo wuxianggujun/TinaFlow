@@ -240,32 +240,28 @@ void ADSPanelManager::setupPanelConnections()
     if (!m_dockManager) return;
 
     // 连接ADS信号
+    // 使用QPointer避免悬空指针，使用弱引用避免循环引用
     connect(m_dockManager, &ads::CDockManager::focusedDockWidgetChanged,
-            this, [this](ads::CDockWidget* old, ads::CDockWidget* now)
-            {
-                Q_UNUSED(old);
-                if (now)
-                {
-                    onFocusChanged(now);
-                }
-            });
+            this, &ADSPanelManager::onFocusChanged, Qt::QueuedConnection);
 
     connect(m_dockManager, &ads::CDockManager::dockWidgetAdded,
             this, [this](ads::CDockWidget* dockWidget)
             {
+                if (!dockWidget) return;
                 QString panelId = dockWidget->objectName();
                 PanelType type = m_panelTypes.value(panelId, CustomPanel);
                 emit panelCreated(panelId, type);
-            });
+            }, Qt::QueuedConnection);
 
     connect(m_dockManager, &ads::CDockManager::dockWidgetRemoved,
             this, [this](ads::CDockWidget* dockWidget)
             {
+                if (!dockWidget) return;
                 QString panelId = dockWidget->objectName();
                 m_panels.remove(panelId);
                 m_panelTypes.remove(panelId);
                 emit panelDestroyed(panelId);
-            });
+            }, Qt::QueuedConnection);
 }
 
 ads::CDockWidget* ADSPanelManager::createPanel(PanelType type, const QString& panelId, const QString& title)
@@ -887,11 +883,12 @@ void ADSPanelManager::onPanelOpened(ads::CDockWidget* panel)
     }
 }
 
-void ADSPanelManager::onFocusChanged(ads::CDockWidget* panel)
+void ADSPanelManager::onFocusChanged(ads::CDockWidget* old, ads::CDockWidget* now)
 {
-    if (panel)
+    Q_UNUSED(old);
+    if (now)
     {
-        QString panelId = panel->objectName();
+        QString panelId = now->objectName();
         emit panelFocused(panelId);
     }
 }

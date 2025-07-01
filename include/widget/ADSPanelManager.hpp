@@ -111,7 +111,7 @@ signals:
 private slots:
     void onPanelClosed(ads::CDockWidget* panel);
     void onPanelOpened(ads::CDockWidget* panel);
-    void onFocusChanged(ads::CDockWidget* panel);
+    void onFocusChanged(ads::CDockWidget* old, ads::CDockWidget* now);
 
 private:
     QMainWindow* m_mainWindow;

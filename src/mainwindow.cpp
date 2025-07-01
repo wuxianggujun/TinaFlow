@@ -13,6 +13,7 @@
 #include <QInputDialog>
 #include <QDateTime>
 #include <QTimer>
+#include <QElapsedTimer>
 #include <limits>
 
 // Qt Widgets
@@ -174,33 +175,53 @@ void MainWindow::setupNodeEditor()
                 }
             }, Qt::QueuedConnection);
 
-    // 重新启用节点更新事件，但只处理真正需要刷新的情况
+    // 只在必要时更新属性面板 - 事件驱动而非定时器驱动
     connect(m_graphModel.get(), &QtNodes::DataFlowGraphModel::nodeUpdated,
             this, [this](QtNodes::NodeId nodeId)
             {
-                // 只有当节点已经选中一段时间后才刷新，避免创建时的频繁更新
+                // 只有当节点是选中状态且是显示类型节点时才更新属性面板
                 if (nodeId == m_selectedNodeId && m_selectedNodeId != QtNodes::NodeId{})
                 {
-                    static QDateTime lastUpdate;
-                    QDateTime now = QDateTime::currentDateTime();
-                    // 限制刷新频率，避免过于频繁的更新
-                    if (lastUpdate.isNull() || lastUpdate.msecsTo(now) > 100)
+                    auto nodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(nodeId);
+                    if (nodeDelegate)
                     {
-                        lastUpdate = now;
-                        QMetaObject::invokeMethod(this, [this, nodeId]()
+                        QString nodeName = nodeDelegate->name();
+                        // 只有显示类型的节点需要实时更新（因为它们显示计算结果）
+                        if (nodeName.startsWith("Display") || nodeName.contains("Info"))
                         {
-                            // 再次检查节点是否仍然选中
-                            if (nodeId == m_selectedNodeId)
-                            {
-                                updateADSPropertyPanel(nodeId);
-                            }
-                        }, Qt::QueuedConnection);
+                            updateADSPropertyPanel(nodeId);
+                        }
                     }
                 }
             }, Qt::QueuedConnection);
 
     // 核心视图将直接由ADS系统管理，不再添加到传统容器
     // m_graphicsView会在setupADSCentralWidget()中被设置为ADS中央部件
+}
+
+void MainWindow::setupNodeUpdateConnections()
+{
+    if (!m_graphModel) return;
+
+    // 事件驱动的属性面板更新 - 只在真正需要时更新
+    connect(m_graphModel.get(), &QtNodes::DataFlowGraphModel::nodeUpdated,
+            this, [this](QtNodes::NodeId nodeId)
+            {
+                // 只有当节点是选中状态且是显示类型节点时才更新属性面板
+                if (nodeId == m_selectedNodeId && m_selectedNodeId != QtNodes::NodeId{})
+                {
+                    auto nodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(nodeId);
+                    if (nodeDelegate)
+                    {
+                        QString nodeName = nodeDelegate->name();
+                        // 只有显示类型的节点需要实时更新（因为它们显示计算结果）
+                        if (nodeName.startsWith("Display") || nodeName.contains("Info"))
+                        {
+                            updateADSPropertyPanel(nodeId);
+                        }
+                    }
+                }
+            }, Qt::QueuedConnection);
 }
 
 void MainWindow::reinitializeNodeEditor()
@@ -251,26 +272,8 @@ void MainWindow::reinitializeNodeEditor()
                 }
             }, Qt::QueuedConnection);
 
-    connect(m_graphModel.get(), &QtNodes::DataFlowGraphModel::nodeUpdated,
-            this, [this](QtNodes::NodeId nodeId)
-            {
-                if (nodeId == m_selectedNodeId && m_selectedNodeId != QtNodes::NodeId{})
-                {
-                    static QDateTime lastUpdate;
-                    QDateTime now = QDateTime::currentDateTime();
-                    if (lastUpdate.isNull() || lastUpdate.msecsTo(now) > 100)
-                    {
-                        lastUpdate = now;
-                        QMetaObject::invokeMethod(this, [this, nodeId]()
-                        {
-                            if (nodeId == m_selectedNodeId)
-                            {
-                                updateADSPropertyPanel(nodeId);
-                            }
-                        }, Qt::QueuedConnection);
-                    }
-                }
-            }, Qt::QueuedConnection);
+    // 使用统一的节点更新连接方法
+    setupNodeUpdateConnections();
 
     // 直接重新设置ADS中央部件
     setupADSCentralWidget();
@@ -734,6 +737,13 @@ void MainWindow::showNodeContextMenu(QtNodes::NodeId nodeId, const QPointF& pos)
 
     // 转换坐标并显示菜单
     QPoint globalPos = m_graphicsView->mapToGlobal(m_graphicsView->mapFromScene(pos));
+
+    // 确保菜单在屏幕范围内
+    QRect screenGeometry = QApplication::primaryScreen()->geometry();
+    if (!screenGeometry.contains(globalPos)) {
+        globalPos = QCursor::pos(); // 使用鼠标当前位置作为备选
+    }
+
     contextMenu.exec(globalPos);
 }
 
@@ -777,7 +787,10 @@ void MainWindow::showConnectionContextMenu(QtNodes::ConnectionId connectionId, c
 
 void MainWindow::deleteSelectedNode()
 {
-    if (m_selectedNodeId != QtNodes::NodeId{})
+    // 检查节点是否存在于图模型中
+    bool nodeExists = m_graphModel && m_graphModel->allNodeIds().contains(m_selectedNodeId);
+
+    if (nodeExists)
     {
         // 获取节点信息用于反馈
         QString nodeInfo = "未知节点";
@@ -1300,21 +1313,6 @@ void MainWindow::updateADSPropertyPanel(QtNodes::NodeId nodeId)
 {
     if (!m_adsPanelManager) return;
 
-    // 防止重复更新同一个节点
-    static QtNodes::NodeId lastUpdatedNodeId;
-    static QDateTime lastUpdateTime;
-    QDateTime now = QDateTime::currentDateTime();
-
-    if (lastUpdatedNodeId == nodeId && lastUpdateTime.isValid() &&
-        lastUpdateTime.msecsTo(now) < 200)
-    {
-        // 200ms内不重复更新
-        return;
-    }
-
-    lastUpdatedNodeId = nodeId;
-    lastUpdateTime = now;
-
     // 确保属性面板引用是最新的（只在必要时调用）
     static bool referenceUpdated = false;
     if (!referenceUpdated)
@@ -1332,19 +1330,16 @@ void MainWindow::updateADSPropertyPanel(QtNodes::NodeId nodeId)
     {
         adsPropertyPanel->updateNodeProperties(nodeId);
 
-        // 获取ADS面板并更新标题（延迟更新避免频繁操作）
-        QTimer::singleShot(50, this, [this, nodeId]()
+        // 立即更新面板标题
+        if (auto* propertyPanel = m_adsPanelManager->getPanel("property_panel"))
         {
-            if (auto* propertyPanel = m_adsPanelManager->getPanel("property_panel"))
+            auto nodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(nodeId);
+            if (nodeDelegate)
             {
-                auto nodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(nodeId);
-                if (nodeDelegate)
-                {
-                    QString newTitle = QString("🔧 属性面板 - %1").arg(nodeDelegate->caption());
-                    propertyPanel->setWindowTitle(newTitle);
-                }
+                QString newTitle = QString("🔧 属性面板 - %1").arg(nodeDelegate->caption());
+                propertyPanel->setWindowTitle(newTitle);
             }
-        });
+        }
     }
     else
     {
@@ -1459,7 +1454,13 @@ void MainWindow::updatePropertyPanelReference()
     // 检查ADS面板管理器
     if (!m_adsPanelManager)
     {
-        qWarning() << "MainWindow: ADS面板管理器不存在";
+        qWarning() << "MainWindow: ADS面板管理器不存在，尝试重新初始化";
+        // 尝试重新初始化ADS系统
+        QTimer::singleShot(100, this, [this]() {
+            if (!m_adsPanelManager) {
+                setupAdvancedPanels();
+            }
+        });
         return;
     }
 
