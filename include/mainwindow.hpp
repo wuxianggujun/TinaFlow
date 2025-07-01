@@ -60,10 +60,12 @@ private slots:
 
 private:
     void setupNodeEditor();
+    void reinitializeNodeEditor();
     void setupModernToolbar();
     void setupPropertyPanel();
     void setupNodePalette();
     void setupKeyboardShortcuts();
+    void setupLayoutMenu();
     void setupCustomStyles();
     void saveToFile(const QString& fileName);
     void loadFromFile(const QString& fileName);
@@ -96,12 +98,14 @@ private:
     
     // 命令历史面板
     CommandHistoryWidget* m_commandHistoryWidget;
+    QDockWidget* m_commandHistoryDock;
     
     // 现代化工具栏
     ModernToolBar* m_modernToolBar;
     
     // 节点面板
     NodePalette* m_nodePalette;
+    QDockWidget* m_nodePaletteDock;
 
     // 右键菜单相关
     QtNodes::NodeId m_selectedNodeId;

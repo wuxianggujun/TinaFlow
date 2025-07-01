@@ -55,6 +55,8 @@
 #include <QShortcut>
 #include <QDockWidget>
 #include <QCursor>
+#include <QMenuBar>
+#include <QSettings>
 
 // 静态成员变量定义
 bool MainWindow::s_globalExecutionEnabled = false;
@@ -69,11 +71,18 @@ MainWindow::MainWindow(QWidget* parent)
     setupModernToolbar();
     setupPropertyPanel();
     setupNodePalette();
+    setupLayoutMenu();
     setupKeyboardShortcuts();
 }
 
 MainWindow::~MainWindow()
 {
+    // 自动保存窗口布局
+    QSettings settings;
+    settings.setValue("geometry", saveGeometry());
+    settings.setValue("windowState", saveState());
+    qDebug() << "MainWindow: Layout saved on exit";
+    
     delete ui;
 }
 
@@ -149,7 +158,84 @@ void MainWindow::setupNodeEditor()
         containerLayout->setContentsMargins(0, 0, 0, 0);
     }
     containerLayout->addWidget(m_graphicsView);
+}
+
+void MainWindow::reinitializeNodeEditor()
+{
+    // 从布局中移除旧的视图
+    if (m_graphicsView) {
+        QLayout* containerLayout = ui->nodeEditorHost->layout();
+        if (containerLayout) {
+            containerLayout->removeWidget(m_graphicsView);
+        }
+        
+        // 删除旧的组件
+        delete m_graphicsView;
+        delete m_graphicsScene;
+    }
     
+    // 重新创建所有组件
+    std::shared_ptr<QtNodes::NodeDelegateModelRegistry> modelRegistry = registerDataModels();
+    m_graphModel = std::make_unique<QtNodes::DataFlowGraphModel>(modelRegistry);
+    m_graphicsScene = new QtNodes::DataFlowGraphicsScene(*m_graphModel, this);
+    m_graphicsView = new TinaFlowGraphicsView(m_graphicsScene, this);
+
+    // 应用自定义样式
+    setupCustomStyles();
+
+    // 重新连接节点选择事件
+    connect(m_graphicsScene, &QtNodes::DataFlowGraphicsScene::nodeSelected,
+            this, &MainWindow::onNodeSelected, Qt::QueuedConnection);
+    connect(m_graphicsScene, &QtNodes::DataFlowGraphicsScene::nodeClicked,
+            this, &MainWindow::onNodeSelected, Qt::QueuedConnection);
+
+    // 重新连接右键菜单事件
+    connect(m_graphicsView, &TinaFlowGraphicsView::nodeContextMenuRequested,
+            this, &MainWindow::showNodeContextMenu);
+    connect(m_graphicsView, &TinaFlowGraphicsView::connectionContextMenuRequested,
+            this, &MainWindow::showConnectionContextMenu);
+    connect(m_graphicsView, &TinaFlowGraphicsView::sceneContextMenuRequested,
+            this, &MainWindow::showImprovedSceneContextMenu);
+    
+    // 重新连接拖拽事件
+    connect(m_graphicsView, &TinaFlowGraphicsView::nodeCreationFromDragRequested,
+            this, &MainWindow::createNodeFromPalette);
+
+    // 重新连接数据更新事件
+    connect(m_graphModel.get(), &QtNodes::DataFlowGraphModel::inPortDataWasSet,
+            this, [this](QtNodes::NodeId nodeId, QtNodes::PortType, QtNodes::PortIndex) {
+                if (nodeId == m_selectedNodeId) {
+                    QMetaObject::invokeMethod(this, [this, nodeId]() {
+                        if (nodeId == m_selectedNodeId) {
+                            refreshCurrentPropertyPanel();
+                        }
+                    }, Qt::QueuedConnection);
+                }
+            }, Qt::QueuedConnection);
+
+    connect(m_graphModel.get(), &QtNodes::DataFlowGraphModel::nodeUpdated,
+            this, [this](QtNodes::NodeId nodeId) {
+                if (nodeId == m_selectedNodeId && m_selectedNodeId != QtNodes::NodeId{}) {
+                    static QDateTime lastUpdate;
+                    QDateTime now = QDateTime::currentDateTime();
+                    if (lastUpdate.isNull() || lastUpdate.msecsTo(now) > 100) {
+                        lastUpdate = now;
+                        QMetaObject::invokeMethod(this, [this, nodeId]() {
+                            if (nodeId == m_selectedNodeId) {
+                                refreshCurrentPropertyPanel();
+                            }
+                        }, Qt::QueuedConnection);
+                    }
+                }
+            }, Qt::QueuedConnection);
+    
+    // 将新视图添加到布局中
+    QLayout* containerLayout = ui->nodeEditorHost->layout();
+    if (containerLayout) {
+        containerLayout->addWidget(m_graphicsView);
+    }
+    
+    qDebug() << "MainWindow: Node editor reinitialized with fresh model";
 }
 
 std::shared_ptr<QtNodes::NodeDelegateModelRegistry> MainWindow::registerDataModels()
@@ -261,24 +347,49 @@ void MainWindow::setupPropertyPanel()
     // 属性面板已经在UI文件中设计好了，这里只需要初始化
     m_currentPropertyWidget = nullptr;
     
-    // 创建命令历史标签页
+    // 创建命令历史停靠窗口，而不是标签页
     m_commandHistoryWidget = new CommandHistoryWidget(this);
-    ui->rightTab->addTab(m_commandHistoryWidget, "命令历史");
+    m_commandHistoryDock = new QDockWidget("📜 命令历史", this);
+    m_commandHistoryDock->setWidget(m_commandHistoryWidget);
+    m_commandHistoryDock->setAllowedAreas(Qt::AllDockWidgetAreas);
+    m_commandHistoryDock->setFeatures(
+        QDockWidget::DockWidgetMovable | 
+        QDockWidget::DockWidgetFloatable | 
+        QDockWidget::DockWidgetClosable
+    );
     
-    qDebug() << "MainWindow: Property panel setup completed using UI design";
+    // 设置命令历史停靠窗口样式
+    m_commandHistoryDock->setStyleSheet(
+        "QDockWidget {"
+        "background-color: #f8f9fa;"
+        "border: 1px solid #dee2e6;"
+        "border-radius: 6px;"
+        "}"
+        "QDockWidget::title {"
+        "background-color: #e9ecef;"
+        "padding: 8px;"
+        "border-top-left-radius: 6px;"
+        "border-top-right-radius: 6px;"
+        "font-weight: bold;"
+        "color: #495057;"
+        "}"
+    );
+    
+    // 将命令历史面板添加到右侧
+    addDockWidget(Qt::RightDockWidgetArea, m_commandHistoryDock);
+    
+    // 可以与属性面板组合成标签页（如果需要的话）
+    // tabifyDockWidget(ui->rightTab->parentWidget(), m_commandHistoryDock);
+    
+    qDebug() << "MainWindow: Property panel setup completed with dockable command history";
 }
 
 
 
 void MainWindow::onNewFile()
 {
-    // 清空当前图形 - 删除所有节点
-    if (m_graphModel) {
-        auto nodeIds = m_graphModel->allNodeIds();
-        for (const auto& nodeId : nodeIds) {
-            m_graphModel->deleteNode(nodeId);
-        }
-    }
+    // 完全重新初始化节点编辑器以重置ID计数器
+    reinitializeNodeEditor();
     
     // 清空命令历史 - 新文件不应该有撤销重做历史
     auto& commandManager = CommandManager::instance();
@@ -294,9 +405,9 @@ void MainWindow::onNewFile()
     }
     
     setWindowTitle("TinaFlow - 新建");
-    ui->statusbar->showMessage(tr("新建流程，拖拽节点开始设计"), 0);
+    ui->statusbar->showMessage(tr("新建流程，拖拽节点开始设计 (节点ID已重置)"), 3000);
     
-    qDebug() << "MainWindow: New file created, cleared all history";
+    qDebug() << "MainWindow: New file created with fresh graph model, node IDs reset";
 }
 
 void MainWindow::onOpenFile()
@@ -373,12 +484,9 @@ void MainWindow::loadFromFile(const QString& fileName)
                 return;
             }
 
-            // 清空当前场景 - 删除所有节点
-            auto nodeIds = m_graphModel->allNodeIds();
-            for (const auto& nodeId : nodeIds) {
-                m_graphModel->deleteNode(nodeId);
-            }
-
+            // 重新初始化节点编辑器以重置ID计数器
+            reinitializeNodeEditor();
+            
             // 加载新数据
             m_graphModel->load(jsonDocument.object());
             
@@ -1127,13 +1235,45 @@ void MainWindow::setupNodePalette()
     m_nodePalette = new NodePalette(this);
     
     // 创建节点面板的停靠窗口
-    QDockWidget* nodePaletteDock = new QDockWidget("节点面板", this);
-    nodePaletteDock->setWidget(m_nodePalette);
-    nodePaletteDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
-    nodePaletteDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
+    m_nodePaletteDock = new QDockWidget("🗂️ 节点面板", this);
+    m_nodePaletteDock->setWidget(m_nodePalette);
+    
+    // 设置停靠窗口功能 - 支持所有功能
+    m_nodePaletteDock->setAllowedAreas(Qt::AllDockWidgetAreas);
+    m_nodePaletteDock->setFeatures(
+        QDockWidget::DockWidgetMovable | 
+        QDockWidget::DockWidgetFloatable | 
+        QDockWidget::DockWidgetClosable
+    );
+    
+    // 设置停靠窗口样式
+    m_nodePaletteDock->setStyleSheet(
+        "QDockWidget {"
+        "background-color: #f8f9fa;"
+        "border: 1px solid #dee2e6;"
+        "border-radius: 6px;"
+        "}"
+        "QDockWidget::title {"
+        "background-color: #e9ecef;"
+        "padding: 8px;"
+        "border-top-left-radius: 6px;"
+        "border-top-right-radius: 6px;"
+        "font-weight: bold;"
+        "color: #495057;"
+        "}"
+        "QDockWidget::close-button, QDockWidget::float-button {"
+        "border: none;"
+        "background-color: transparent;"
+        "padding: 2px;"
+        "}"
+        "QDockWidget::close-button:hover, QDockWidget::float-button:hover {"
+        "background-color: #dee2e6;"
+        "border-radius: 3px;"
+        "}"
+    );
     
     // 将停靠窗口添加到左侧
-    addDockWidget(Qt::LeftDockWidgetArea, nodePaletteDock);
+    addDockWidget(Qt::LeftDockWidgetArea, m_nodePaletteDock);
     
     // 连接节点面板信号
     connect(m_nodePalette, &NodePalette::nodeCreationRequested, 
@@ -1141,7 +1281,17 @@ void MainWindow::setupNodePalette()
     connect(m_nodePalette, &NodePalette::nodeSelectionChanged, 
             this, &MainWindow::onNodePaletteSelectionChanged);
     
-    qDebug() << "MainWindow: Node palette setup completed";
+    // 连接停靠窗口信号，处理显示/隐藏
+    connect(m_nodePaletteDock, &QDockWidget::visibilityChanged, 
+            this, [this](bool visible) {
+                qDebug() << "NodePalette visibility changed:" << visible;
+            });
+    
+    // 启用停靠窗口的Tabify功能
+    setTabPosition(Qt::AllDockWidgetAreas, QTabWidget::North);
+    setDockOptions(QMainWindow::AnimatedDocks | QMainWindow::AllowNestedDocks | QMainWindow::AllowTabbedDocks);
+    
+    qDebug() << "MainWindow: Node palette setup completed with enhanced docking";
 }
 
 void MainWindow::setupKeyboardShortcuts()
@@ -1178,6 +1328,128 @@ void MainWindow::setupKeyboardShortcuts()
     });
     
     qDebug() << "MainWindow: Keyboard shortcuts setup completed";
+}
+
+void MainWindow::setupLayoutMenu()
+{
+    // 创建视图菜单（如果不存在）
+    QMenuBar* menuBar = this->menuBar();
+    QMenu* viewMenu = nullptr;
+    
+    // 查找现有的视图菜单
+    for (QAction* action : menuBar->actions()) {
+        if (action->menu() && action->menu()->title() == "视图") {
+            viewMenu = action->menu();
+            break;
+        }
+    }
+    
+    // 如果没有视图菜单，创建一个
+    if (!viewMenu) {
+        viewMenu = menuBar->addMenu("视图");
+    }
+    
+    // 添加面板控制子菜单
+    QMenu* panelsMenu = viewMenu->addMenu("📋 面板");
+    
+    // 节点面板控制
+    QAction* toggleNodePaletteAction = panelsMenu->addAction("🗂️ 节点面板");
+    toggleNodePaletteAction->setCheckable(true);
+    toggleNodePaletteAction->setChecked(true);
+    connect(toggleNodePaletteAction, &QAction::toggled, m_nodePaletteDock, &QDockWidget::setVisible);
+    connect(m_nodePaletteDock, &QDockWidget::visibilityChanged, toggleNodePaletteAction, &QAction::setChecked);
+    
+    // 命令历史面板控制
+    QAction* toggleCommandHistoryAction = panelsMenu->addAction("📜 命令历史");
+    toggleCommandHistoryAction->setCheckable(true);
+    toggleCommandHistoryAction->setChecked(true);
+    connect(toggleCommandHistoryAction, &QAction::toggled, m_commandHistoryDock, &QDockWidget::setVisible);
+    connect(m_commandHistoryDock, &QDockWidget::visibilityChanged, toggleCommandHistoryAction, &QAction::setChecked);
+    
+    panelsMenu->addSeparator();
+    
+    // 面板组合功能
+    QAction* tabifyPanelsAction = panelsMenu->addAction("📑 面板组合模式");
+    tabifyPanelsAction->setCheckable(true);
+    connect(tabifyPanelsAction, &QAction::toggled, this, [this](bool enabled) {
+        if (enabled) {
+            // 将命令历史面板与节点面板组合成标签页
+            tabifyDockWidget(m_nodePaletteDock, m_commandHistoryDock);
+            ui->statusbar->showMessage(tr("面板已组合成标签页"), 2000);
+        } else {
+            // 分离面板到独立位置
+            removeDockWidget(m_commandHistoryDock);
+            addDockWidget(Qt::RightDockWidgetArea, m_commandHistoryDock);
+            ui->statusbar->showMessage(tr("面板已分离"), 2000);
+        }
+    });
+    
+    panelsMenu->addSeparator();
+    
+    // 布局控制
+    QAction* resetLayoutAction = panelsMenu->addAction("🔄 重置布局");
+    connect(resetLayoutAction, &QAction::triggered, this, [this]() {
+        // 重置所有停靠窗口到默认位置
+        removeDockWidget(m_nodePaletteDock);
+        removeDockWidget(m_commandHistoryDock);
+        
+        // 重新添加到默认位置
+        addDockWidget(Qt::LeftDockWidgetArea, m_nodePaletteDock);
+        addDockWidget(Qt::RightDockWidgetArea, m_commandHistoryDock);
+        
+        // 确保都显示
+        m_nodePaletteDock->show();
+        m_commandHistoryDock->show();
+        
+        // 可选：将命令历史与属性面板组合（注释掉以保持独立）
+        // tabifyDockWidget(m_nodePaletteDock, m_commandHistoryDock);
+        
+        ui->statusbar->showMessage(tr("布局已重置"), 2000);
+        qDebug() << "MainWindow: Layout reset to default";
+    });
+    
+    QAction* saveLayoutAction = panelsMenu->addAction("💾 保存布局");
+    connect(saveLayoutAction, &QAction::triggered, this, [this]() {
+        // 保存当前窗口状态
+        QSettings settings;
+        settings.setValue("geometry", saveGeometry());
+        settings.setValue("windowState", saveState());
+        ui->statusbar->showMessage(tr("布局已保存"), 2000);
+        qDebug() << "MainWindow: Layout saved";
+    });
+    
+    QAction* loadLayoutAction = panelsMenu->addAction("📂 恢复布局");
+    connect(loadLayoutAction, &QAction::triggered, this, [this]() {
+        // 恢复保存的窗口状态
+        QSettings settings;
+        restoreGeometry(settings.value("geometry").toByteArray());
+        restoreState(settings.value("windowState").toByteArray());
+        ui->statusbar->showMessage(tr("布局已恢复"), 2000);
+        qDebug() << "MainWindow: Layout restored";
+    });
+    
+    // 窗口管理
+    viewMenu->addSeparator();
+    QAction* fullScreenAction = viewMenu->addAction("🖥️ 全屏");
+    fullScreenAction->setCheckable(true);
+    fullScreenAction->setShortcut(QKeySequence("F11"));
+    connect(fullScreenAction, &QAction::toggled, this, [this](bool fullScreen) {
+        if (fullScreen) {
+            showFullScreen();
+        } else {
+            showNormal();
+        }
+    });
+    
+    // 启动时自动恢复布局
+    QSettings settings;
+    if (settings.contains("geometry")) {
+        restoreGeometry(settings.value("geometry").toByteArray());
+        restoreState(settings.value("windowState").toByteArray());
+        qDebug() << "MainWindow: Layout restored from settings";
+    }
+    
+    qDebug() << "MainWindow: Layout menu setup completed";
 }
 
 // 节点面板信号处理
