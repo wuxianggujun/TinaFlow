@@ -39,12 +39,12 @@ bool CommandManager::executeCommand(std::unique_ptr<Command> command)
     // 尝试与上一个命令合并
     if (m_mergeEnabled && !m_undoStack.empty() && m_mergeTimer->remainingTime() > 0) {
         if (tryMergeCommand(command.get())) {
-            qDebug() << "CommandManager: Command merged with previous command";
+        qDebug() << "CommandManager: Command merged with previous command";
             // 重新启动合并计时器
             if (m_mergeTimeout > 0) {
                 m_mergeTimer->start(m_mergeTimeout);
             }
-            return true;
+        return true;
         }
     }
     
@@ -301,7 +301,7 @@ QStringList CommandManager::getUndoHistory(int maxCount) const
     QMutexLocker locker(&m_mutex);
 
     QStringList history;
-    
+
     // 简化实现：只返回当前可撤销的命令描述
     if (!m_undoStack.empty() && maxCount > 0) {
         history.append(m_undoStack.top()->getDescription());
@@ -315,7 +315,7 @@ QStringList CommandManager::getRedoHistory(int maxCount) const
     QMutexLocker locker(&m_mutex);
 
     QStringList history;
-    
+
     // 简化实现：只返回当前可重做的命令描述
     if (!m_redoStack.empty() && maxCount > 0) {
         history.append(m_redoStack.top()->getDescription());
@@ -357,7 +357,7 @@ void CommandManager::updateSignals()
 {
     bool canUndoNow = !m_undoStack.empty();
     bool canRedoNow = !m_redoStack.empty();
-    
+
     // 直接计算文本，避免重复加锁
     QString undoText;
     QString redoText;
@@ -385,13 +385,13 @@ void CommandManager::trimUndoStack()
 
     // 使用deque进行高效的操作
     std::deque<std::unique_ptr<Command>> commands;
-    
+
     // 将所有命令移动到deque中
     while (!m_undoStack.empty()) {
         commands.push_front(std::move(const_cast<std::unique_ptr<Command>&>(m_undoStack.top())));
-        m_undoStack.pop();
-    }
-    
+            m_undoStack.pop();
+        }
+
     // 计算需要删除的命令数量
     int toRemove = currentSize - m_undoLimit;
     
@@ -399,14 +399,14 @@ void CommandManager::trimUndoStack()
     for (int i = 0; i < toRemove; ++i) {
         commands.pop_front();
         // 调整保存点索引
-        if (m_savePointIndex > 0) {
-            m_savePointIndex--;
+            if (m_savePointIndex > 0) {
+                m_savePointIndex--;
         } else {
             // 如果保存点被删除，标记为有未保存更改
             m_hasUnsavedChanges = true;
         }
-    }
-    
+        }
+
     // 将剩余命令重新放回栈中
     for (auto it = commands.rbegin(); it != commands.rend(); ++it) {
         m_undoStack.push(std::move(*it));

@@ -13,6 +13,7 @@
 #include "TinaFlowGraphicsView.hpp"
 #include "widget/CommandHistoryWidget.hpp"
 #include "widget/ModernToolBar.hpp"
+#include "widget/PropertyPanelContainer.hpp"
 #include "NodePalette.hpp"
 
 namespace Ui {
@@ -95,6 +96,10 @@ private:
 
     // 属性面板相关（使用UI中现有的tab_properties）
     QWidget* m_currentPropertyWidget;
+    
+    // 新的属性面板容器
+    PropertyPanelContainer* m_propertyPanelContainer;
+    QDockWidget* m_propertyPanelDock;
     
     // 命令历史面板
     CommandHistoryWidget* m_commandHistoryWidget;

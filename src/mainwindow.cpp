@@ -123,9 +123,9 @@ void MainWindow::setupNodeEditor()
                 if (nodeId == m_selectedNodeId) {
                     QMetaObject::invokeMethod(this, [this, nodeId]() {
                         // 再次检查节点是否仍然选中，避免无效刷新
-                        if (nodeId == m_selectedNodeId) {
-                            refreshCurrentPropertyPanel();
-                        }
+                if (nodeId == m_selectedNodeId) {
+                    refreshCurrentPropertyPanel();
+                }
                     }, Qt::QueuedConnection);
                 }
             }, Qt::QueuedConnection);
@@ -142,9 +142,9 @@ void MainWindow::setupNodeEditor()
                         lastUpdate = now;
                         QMetaObject::invokeMethod(this, [this, nodeId]() {
                             // 再次检查节点是否仍然选中
-                            if (nodeId == m_selectedNodeId) {
-                                refreshCurrentPropertyPanel();
-                            }
+                if (nodeId == m_selectedNodeId) {
+                    refreshCurrentPropertyPanel();
+                }
                         }, Qt::QueuedConnection);
                     }
                 }
@@ -235,6 +235,11 @@ void MainWindow::reinitializeNodeEditor()
         containerLayout->addWidget(m_graphicsView);
     }
     
+    // 更新属性面板容器的图形模型
+    if (m_propertyPanelContainer) {
+        m_propertyPanelContainer->setGraphModel(m_graphModel.get());
+    }
+    
     qDebug() << "MainWindow: Node editor reinitialized with fresh model";
 }
 
@@ -303,7 +308,7 @@ void MainWindow::setupModernToolbar()
                 m_graphicsView->scale(zoomFactor, zoomFactor);
                 double newScale = currentScale * zoomFactor;
                 ui->statusbar->showMessage(tr("缩放: %1%").arg(qRound(newScale * 100)), 1000);
-            } else {
+        } else {
                 ui->statusbar->showMessage(tr("已达到最大缩放比例 (500%)"), 2000);
             }
         }
@@ -322,7 +327,7 @@ void MainWindow::setupModernToolbar()
                 m_graphicsView->scale(zoomFactor, zoomFactor);
                 double newScale = currentScale * zoomFactor;
                 ui->statusbar->showMessage(tr("缩放: %1%").arg(qRound(newScale * 100)), 1000);
-            } else {
+        } else {
                 ui->statusbar->showMessage(tr("已达到最小缩放比例 (10%)"), 2000);
             }
         }
@@ -346,6 +351,40 @@ void MainWindow::setupPropertyPanel()
 {
     // 属性面板已经在UI文件中设计好了，这里只需要初始化
     m_currentPropertyWidget = nullptr;
+    
+    // 创建新的属性面板容器
+    m_propertyPanelContainer = new PropertyPanelContainer(this);
+    m_propertyPanelContainer->setGraphModel(m_graphModel.get());
+    
+    // 创建新属性面板的停靠窗口
+    m_propertyPanelDock = new QDockWidget("🔧 新属性面板 (测试)", this);
+    m_propertyPanelDock->setWidget(m_propertyPanelContainer);
+    m_propertyPanelDock->setAllowedAreas(Qt::AllDockWidgetAreas);
+    m_propertyPanelDock->setFeatures(
+        QDockWidget::DockWidgetMovable | 
+        QDockWidget::DockWidgetFloatable | 
+        QDockWidget::DockWidgetClosable
+    );
+    
+    // 设置新属性面板停靠窗口样式
+    m_propertyPanelDock->setStyleSheet(
+        "QDockWidget {"
+        "background-color: #f1f8ff;"
+        "border: 2px solid #007acc;"
+        "border-radius: 6px;"
+        "}"
+        "QDockWidget::title {"
+        "background-color: #007acc;"
+        "padding: 8px;"
+        "border-top-left-radius: 6px;"
+        "border-top-right-radius: 6px;"
+        "font-weight: bold;"
+        "color: white;"
+        "}"
+    );
+    
+    // 将新属性面板添加到右侧
+    addDockWidget(Qt::RightDockWidgetArea, m_propertyPanelDock);
     
     // 创建命令历史停靠窗口，而不是标签页
     m_commandHistoryWidget = new CommandHistoryWidget(this);
@@ -378,10 +417,13 @@ void MainWindow::setupPropertyPanel()
     // 将命令历史面板添加到右侧
     addDockWidget(Qt::RightDockWidgetArea, m_commandHistoryDock);
     
-    // 可以与属性面板组合成标签页（如果需要的话）
-    // tabifyDockWidget(ui->rightTab->parentWidget(), m_commandHistoryDock);
+    // 将新属性面板和命令历史面板组合成标签页（可选）
+    tabifyDockWidget(m_propertyPanelDock, m_commandHistoryDock);
     
-    qDebug() << "MainWindow: Property panel setup completed with dockable command history";
+    // 默认显示新属性面板
+    m_propertyPanelDock->raise();
+    
+    qDebug() << "MainWindow: Property panel setup completed with new PropertyPanelContainer";
 }
 
 
@@ -486,7 +528,7 @@ void MainWindow::loadFromFile(const QString& fileName)
 
             // 重新初始化节点编辑器以重置ID计数器
             reinitializeNodeEditor();
-            
+
             // 加载新数据
             m_graphModel->load(jsonDocument.object());
             
@@ -678,6 +720,11 @@ void MainWindow::updatePropertyPanel(QtNodes::NodeId nodeId)
     // 切换到属性tab
     ui->rightTab->setCurrentWidget(ui->tab_properties);
 
+    // 同时更新新的属性面板容器
+    if (m_propertyPanelContainer) {
+        m_propertyPanelContainer->updateNodeProperties(nodeId);
+    }
+
     qDebug() << "MainWindow: Updated property panel for node" << nodeId << "(" << nodeCaption << ")";
 }
 
@@ -706,6 +753,11 @@ void MainWindow::clearPropertyPanel()
 
     // 添加弹性空间
     contentLayout->addStretch();
+
+    // 同时清除新的属性面板容器
+    if (m_propertyPanelContainer) {
+        m_propertyPanelContainer->clearProperties();
+    }
 
     qDebug() << "MainWindow: Cleared property panel";
 }
@@ -1048,23 +1100,23 @@ void MainWindow::showAllConnectionsForDeletion()
         unsigned int outputPorts = nodeDelegate->nPorts(QtNodes::PortType::Out);
         for (unsigned int portIndex = 0; portIndex < outputPorts; ++portIndex) {
             auto nodeConnections = m_graphModel->connections(nodeId, QtNodes::PortType::Out, portIndex);
-            for (auto connectionId : nodeConnections) {
-                auto outNodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(connectionId.outNodeId);
-                auto inNodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(connectionId.inNodeId);
+        for (auto connectionId : nodeConnections) {
+            auto outNodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(connectionId.outNodeId);
+            auto inNodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(connectionId.inNodeId);
 
-                if (outNodeDelegate && inNodeDelegate) {
-                    QString outPortType = getPortTypeDescription(outNodeDelegate, QtNodes::PortType::Out, connectionId.outPortIndex);
-                    QString inPortType = getPortTypeDescription(inNodeDelegate, QtNodes::PortType::In, connectionId.inPortIndex);
+            if (outNodeDelegate && inNodeDelegate) {
+                QString outPortType = getPortTypeDescription(outNodeDelegate, QtNodes::PortType::Out, connectionId.outPortIndex);
+                QString inPortType = getPortTypeDescription(inNodeDelegate, QtNodes::PortType::In, connectionId.inPortIndex);
 
-                    QString description = QString("%1[%2:%3] → %4[%5:%6]")
-                        .arg(outNodeDelegate->name())
-                        .arg(connectionId.outPortIndex)
-                        .arg(outPortType)
-                        .arg(inNodeDelegate->name())
-                        .arg(connectionId.inPortIndex)
-                        .arg(inPortType);
-                    connectionList.append(description);
-                    connections.append(connectionId);
+                QString description = QString("%1[%2:%3] → %4[%5:%6]")
+                    .arg(outNodeDelegate->name())
+                    .arg(connectionId.outPortIndex)
+                    .arg(outPortType)
+                    .arg(inNodeDelegate->name())
+                    .arg(connectionId.inPortIndex)
+                    .arg(inPortType);
+                connectionList.append(description);
+                connections.append(connectionId);
                 }
             }
         }
@@ -1100,11 +1152,11 @@ void MainWindow::duplicateSelectedNode()
 
         // 获取节点的真实类型
         QString nodeType = nodeDelegate->name();
-        
-        // 获取原节点位置并偏移
-        QVariant posVariant = m_graphModel->nodeData(m_selectedNodeId, QtNodes::NodeRole::Position);
-        QPointF originalPos = posVariant.toPointF();
-        QPointF newPos = originalPos + QPointF(50, 50); // 偏移50像素
+
+            // 获取原节点位置并偏移
+            QVariant posVariant = m_graphModel->nodeData(m_selectedNodeId, QtNodes::NodeRole::Position);
+            QPointF originalPos = posVariant.toPointF();
+            QPointF newPos = originalPos + QPointF(50, 50); // 偏移50像素
         
         qDebug() << "MainWindow: Duplicating node of type:" << nodeType << "at position:" << newPos;
         
@@ -1359,6 +1411,13 @@ void MainWindow::setupLayoutMenu()
     connect(toggleNodePaletteAction, &QAction::toggled, m_nodePaletteDock, &QDockWidget::setVisible);
     connect(m_nodePaletteDock, &QDockWidget::visibilityChanged, toggleNodePaletteAction, &QAction::setChecked);
     
+    // 新属性面板控制
+    QAction* toggleNewPropertyPanelAction = panelsMenu->addAction("🔧 新属性面板");
+    toggleNewPropertyPanelAction->setCheckable(true);
+    toggleNewPropertyPanelAction->setChecked(true);
+    connect(toggleNewPropertyPanelAction, &QAction::toggled, m_propertyPanelDock, &QDockWidget::setVisible);
+    connect(m_propertyPanelDock, &QDockWidget::visibilityChanged, toggleNewPropertyPanelAction, &QAction::setChecked);
+
     // 命令历史面板控制
     QAction* toggleCommandHistoryAction = panelsMenu->addAction("📜 命令历史");
     toggleCommandHistoryAction->setCheckable(true);
@@ -1391,18 +1450,22 @@ void MainWindow::setupLayoutMenu()
     connect(resetLayoutAction, &QAction::triggered, this, [this]() {
         // 重置所有停靠窗口到默认位置
         removeDockWidget(m_nodePaletteDock);
+        removeDockWidget(m_propertyPanelDock);
         removeDockWidget(m_commandHistoryDock);
         
         // 重新添加到默认位置
         addDockWidget(Qt::LeftDockWidgetArea, m_nodePaletteDock);
+        addDockWidget(Qt::RightDockWidgetArea, m_propertyPanelDock);
         addDockWidget(Qt::RightDockWidgetArea, m_commandHistoryDock);
         
         // 确保都显示
         m_nodePaletteDock->show();
+        m_propertyPanelDock->show();
         m_commandHistoryDock->show();
         
-        // 可选：将命令历史与属性面板组合（注释掉以保持独立）
-        // tabifyDockWidget(m_nodePaletteDock, m_commandHistoryDock);
+        // 将新属性面板和命令历史组合成标签页
+        tabifyDockWidget(m_propertyPanelDock, m_commandHistoryDock);
+        m_propertyPanelDock->raise();
         
         ui->statusbar->showMessage(tr("布局已重置"), 2000);
         qDebug() << "MainWindow: Layout reset to default";
