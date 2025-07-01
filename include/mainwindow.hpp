@@ -89,7 +89,6 @@ private:
     void setupKeyboardShortcuts();
     void setupLayoutMenu();
     void setupFileMenu();
-    void setupEditMenu();
     void setupViewMenu();
     void createADSLayoutMenu(QMenu* parentMenu);
     void createViewControlMenu(QMenu* parentMenu);

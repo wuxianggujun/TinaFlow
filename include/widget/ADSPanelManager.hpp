@@ -66,6 +66,7 @@ public:
 
     // 布局管理
     void setupDefaultLayout();
+    void restoreDefaultLayout(); // 恢复默认布局（不重新创建面板）
 
     // 布局预设
     void saveLayoutPreset(const QString& name);
@@ -122,6 +123,7 @@ private:
     
     // 布局预设
     QHash<QString, QJsonObject> m_layoutPresets;
+    QByteArray m_defaultLayoutState; // 保存默认布局状态
     
     // 面板组件
     class ADSPropertyPanel* m_adsPropertyPanel;  // ADS专用的轻量级属性面板

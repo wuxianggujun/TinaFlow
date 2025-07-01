@@ -1646,7 +1646,6 @@ void MainWindow::setupKeyboardShortcuts()
 void MainWindow::setupLayoutMenu()
 {
     setupFileMenu();
-    setupEditMenu();
     setupViewMenu();
 }
 
@@ -1681,36 +1680,7 @@ void MainWindow::setupFileMenu()
     }
 }
 
-void MainWindow::setupEditMenu()
-{
-    QMenu* editMenu = menuBar()->addMenu("✏️ 编辑");
 
-    // 使用结构化数据定义编辑菜单项
-    struct EditMenuAction {
-        QString text;
-        QKeySequence shortcut;
-        std::function<void()> slot;
-        bool addSeparatorAfter = false;
-    };
-
-    QVector<EditMenuAction> editActions = {
-        {"↶ 撤销", QKeySequence::Undo, [this]() { onUndoClicked(); }},
-        {"↷ 重做", QKeySequence::Redo, [this]() { onRedoClicked(); }, true},
-        {"📋 复制节点", QKeySequence("Ctrl+D"), [this]() { duplicateSelectedNode(); }},
-        {"🗑️ 删除节点", QKeySequence::Delete, [this]() { deleteSelectedNode(); }}
-    };
-
-    // 批量创建编辑菜单项
-    for (const auto& actionData : editActions) {
-        QAction* action = editMenu->addAction(actionData.text);
-        action->setShortcut(actionData.shortcut);
-        connect(action, &QAction::triggered, this, actionData.slot);
-
-        if (actionData.addSeparatorAfter) {
-            editMenu->addSeparator();
-        }
-    }
-}
 
 void MainWindow::setupViewMenu()
 {
@@ -1730,31 +1700,86 @@ void MainWindow::createADSLayoutMenu(QMenu* parentMenu)
 {
     QMenu* adsLayoutMenu = parentMenu->addMenu("🎛️ ADS布局");
 
-    // 使用结构化数据定义ADS菜单项
-    struct ADSMenuAction {
-        QString text;
-        std::function<void()> slot;
-        bool addSeparatorAfter = false;
-    };
-
-    QVector<ADSMenuAction> adsActions = {
-        {"🏠 默认布局", [this]() { m_adsPanelManager->setupDefaultLayout(); }, true},
-        {"🔧 显示属性面板", [this]() { m_adsPanelManager->showPanel("property_panel"); }},
-        {"🗂️ 显示节点面板", [this]() { m_adsPanelManager->showPanel("node_palette"); }},
-        {"💻 显示输出控制台", [this]() { m_adsPanelManager->showPanel("output_console"); }, true},
-        {"💾 保存当前布局", [this]() { saveCurrentLayout(); }},
-        {"🔄 重置到默认布局", [this]() { m_adsPanelManager->resetToDefaultLayout(); }}
-    };
-
-    // 批量创建ADS菜单项
-    for (const auto& actionData : adsActions) {
-        QAction* action = adsLayoutMenu->addAction(actionData.text);
-        connect(action, &QAction::triggered, this, actionData.slot);
-
-        if (actionData.addSeparatorAfter) {
-            adsLayoutMenu->addSeparator();
-        }
+    // 检查ADS管理器是否可用
+    if (!m_adsPanelManager) {
+        QAction* errorAction = adsLayoutMenu->addAction("❌ ADS系统未初始化");
+        errorAction->setEnabled(false);
+        return;
     }
+
+    // 布局控制
+    QAction* defaultLayoutAction = adsLayoutMenu->addAction("🏠 恢复默认布局");
+    connect(defaultLayoutAction, &QAction::triggered, this, [this]() {
+        if (m_adsPanelManager) {
+            m_adsPanelManager->restoreDefaultLayout();
+            ui->statusbar->showMessage("已恢复默认布局", 2000);
+        }
+    });
+
+    QAction* resetLayoutAction = adsLayoutMenu->addAction("🔄 重置布局");
+    connect(resetLayoutAction, &QAction::triggered, this, [this]() {
+        if (m_adsPanelManager) {
+            m_adsPanelManager->resetToDefaultLayout();
+            ui->statusbar->showMessage("已重置布局", 2000);
+        }
+    });
+
+    adsLayoutMenu->addSeparator();
+
+    // 面板显示/隐藏
+    QAction* propertyPanelAction = adsLayoutMenu->addAction("🔧 属性面板");
+    propertyPanelAction->setCheckable(true);
+    connect(propertyPanelAction, &QAction::triggered, this, [this](bool checked) {
+        if (m_adsPanelManager) {
+            if (checked) {
+                m_adsPanelManager->showPanel("property_panel");
+            } else {
+                m_adsPanelManager->hidePanel("property_panel");
+            }
+        }
+    });
+
+    QAction* nodePaletteAction = adsLayoutMenu->addAction("🗂️ 节点面板");
+    nodePaletteAction->setCheckable(true);
+    connect(nodePaletteAction, &QAction::triggered, this, [this](bool checked) {
+        if (m_adsPanelManager) {
+            if (checked) {
+                m_adsPanelManager->showPanel("node_palette");
+            } else {
+                m_adsPanelManager->hidePanel("node_palette");
+            }
+        }
+    });
+
+    QAction* outputConsoleAction = adsLayoutMenu->addAction("💻 输出控制台");
+    outputConsoleAction->setCheckable(true);
+    connect(outputConsoleAction, &QAction::triggered, this, [this](bool checked) {
+        if (m_adsPanelManager) {
+            if (checked) {
+                m_adsPanelManager->showPanel("output_console");
+            } else {
+                m_adsPanelManager->hidePanel("output_console");
+            }
+        }
+    });
+
+    QAction* commandHistoryAction = adsLayoutMenu->addAction("📜 命令历史");
+    commandHistoryAction->setCheckable(true);
+    connect(commandHistoryAction, &QAction::triggered, this, [this](bool checked) {
+        if (m_adsPanelManager) {
+            if (checked) {
+                m_adsPanelManager->showPanel("command_history");
+            } else {
+                m_adsPanelManager->hidePanel("command_history");
+            }
+        }
+    });
+
+    adsLayoutMenu->addSeparator();
+
+    // 布局保存
+    QAction* saveLayoutAction = adsLayoutMenu->addAction("💾 保存当前布局");
+    connect(saveLayoutAction, &QAction::triggered, this, &MainWindow::saveCurrentLayout);
 }
 
 void MainWindow::createViewControlMenu(QMenu* parentMenu)

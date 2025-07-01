@@ -124,6 +124,11 @@ void ADSPanelManager::setupDockManager()
     ads::CDockManager::setConfigFlag(ads::CDockManager::DragPreviewHasWindowFrame, false);
     ads::CDockManager::setConfigFlag(ads::CDockManager::AlwaysShowTabs, false); // 不总是显示标签
 
+    // 额外配置以防止浮动窗口
+    ads::CDockManager::setConfigFlag(ads::CDockManager::FloatingContainerHasWidgetTitle, false);
+    ads::CDockManager::setConfigFlag(ads::CDockManager::FloatingContainerHasWidgetIcon, false);
+    ads::CDockManager::setConfigFlag(ads::CDockManager::HideSingleCentralWidgetTitleBar, true);
+
     // 启用Auto-Hide功能
     ads::CDockManager::setAutoHideConfigFlag(ads::CDockManager::AutoHideFeatureEnabled, true);
     ads::CDockManager::setConfigFlag(ads::CDockManager::DockAreaHideDisabledButtons, true);
@@ -370,6 +375,7 @@ void ADSPanelManager::setupDefaultLayout()
         return;
     }
 
+    qDebug() << "ADSPanelManager: 开始设置默认布局";
 
     // 清理现有面板（安全删除）
     QStringList panelIds = m_panels.keys();
@@ -401,7 +407,6 @@ void ADSPanelManager::setupDefaultLayout()
         return;
     }
 
-
     // 按布局添加面板 - 确保不创建独立窗口
     try
     {
@@ -427,8 +432,10 @@ void ADSPanelManager::setupDefaultLayout()
             propertyPanel->dockAreaWidget()->setCurrentDockWidget(propertyPanel);
         }
 
-        // 不调用show()方法，让ADS系统自己管理显示
-        // 这样可以避免创建独立窗口
+        // 保存默认布局状态
+        m_defaultLayoutState = m_dockManager->saveState();
+
+        qDebug() << "ADSPanelManager: 默认布局设置完成，状态已保存";
     }
     catch (const std::exception& e)
     {
@@ -436,6 +443,45 @@ void ADSPanelManager::setupDefaultLayout()
     } catch (...)
     {
         qCritical() << "ADSPanelManager: 设置布局时发生未知异常";
+    }
+}
+
+void ADSPanelManager::restoreDefaultLayout()
+{
+    if (!m_dockManager)
+    {
+        qCritical() << "ADSPanelManager: DockManager 不存在，无法恢复布局";
+        return;
+    }
+
+    if (m_defaultLayoutState.isEmpty())
+    {
+        qWarning() << "ADSPanelManager: 默认布局状态未保存，无法恢复";
+        return;
+    }
+
+    qDebug() << "ADSPanelManager: 开始恢复默认布局";
+
+    try
+    {
+        // 使用ADS内置的状态恢复功能
+        bool success = m_dockManager->restoreState(m_defaultLayoutState);
+
+        if (success)
+        {
+            qDebug() << "ADSPanelManager: 默认布局恢复成功";
+        }
+        else
+        {
+            qWarning() << "ADSPanelManager: 默认布局恢复失败";
+        }
+    }
+    catch (const std::exception& e)
+    {
+        qCritical() << "ADSPanelManager: 恢复布局时发生异常:" << e.what();
+    } catch (...)
+    {
+        qCritical() << "ADSPanelManager: 恢复布局时发生未知异常";
     }
 }
 
@@ -711,15 +757,45 @@ void ADSPanelManager::restoreState(const QJsonObject& state)
 // 插槽实现
 void ADSPanelManager::resetToDefaultLayout()
 {
-    if (m_dockManager)
+    if (!m_dockManager)
     {
-        // 清除当前布局
-        for (auto* panel : m_panels.values())
-        {
-            m_dockManager->removeDockWidget(panel);
-        }
+        qCritical() << "ADSPanelManager: DockManager 不存在，无法重置布局";
+        return;
+    }
 
-        // 重新设置默认布局
+    if (m_defaultLayoutState.isEmpty())
+    {
+        qWarning() << "ADSPanelManager: 默认布局状态未保存，使用重新创建方式";
+        // 如果没有保存的状态，重新创建布局
+        setupDefaultLayout();
+        return;
+    }
+
+    qDebug() << "ADSPanelManager: 开始重置到默认布局";
+
+    try
+    {
+        // 使用保存的默认状态重置布局
+        bool success = m_dockManager->restoreState(m_defaultLayoutState);
+
+        if (success)
+        {
+            qDebug() << "ADSPanelManager: 布局重置成功";
+        }
+        else
+        {
+            qWarning() << "ADSPanelManager: 布局重置失败，尝试重新创建";
+            setupDefaultLayout();
+        }
+    }
+    catch (const std::exception& e)
+    {
+        qCritical() << "ADSPanelManager: 重置布局时发生异常:" << e.what();
+        // 异常情况下尝试重新创建
+        setupDefaultLayout();
+    } catch (...)
+    {
+        qCritical() << "ADSPanelManager: 重置布局时发生未知异常";
         setupDefaultLayout();
     }
 }
