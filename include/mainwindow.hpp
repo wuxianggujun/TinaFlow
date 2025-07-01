@@ -47,7 +47,7 @@ private slots:
     // 右键菜单相关
     void showNodeContextMenu(QtNodes::NodeId nodeId, const QPointF& pos);
     void showConnectionContextMenu(QtNodes::ConnectionId connectionId, const QPointF& pos);
-    void showSceneContextMenu(const QPointF& pos);
+
     void deleteSelectedNode();
     void deleteSelectedConnection();
     void showAllConnectionsForDeletion();
@@ -75,6 +75,8 @@ private:
     void updateADSPropertyPanel(QtNodes::NodeId nodeId);
     void clearADSPropertyPanel();
     void updatePropertyPanelReference(); // 同步属性面板引用
+    void connectADSNodePaletteSignals(); // 连接ADS节点面板信号
+    void setupADSCentralWidget(); // 设置ADS中央部件
     void setupCustomStyles();
     void saveToFile(const QString& fileName);
     void loadFromFile(const QString& fileName);
@@ -83,12 +85,11 @@ private:
     void updatePropertyPanel(QtNodes::NodeId nodeId);
     void refreshCurrentPropertyPanel(); // 刷新当前选中节点的属性面板
     void clearPropertyPanel();
-    void createNodeWithCommand(const QString& nodeType, const QPointF& position);
 
 
-
+    
     static std::shared_ptr<QtNodes::NodeDelegateModelRegistry> registerDataModels();
-    static void setStyle();
+
 
 public:
     static bool isGlobalExecutionEnabled() { return s_globalExecutionEnabled; }
@@ -102,16 +103,11 @@ private:
     TinaFlowGraphicsView* m_graphicsView;
     QtNodes::DataFlowGraphicsScene* m_graphicsScene;
 
-    // 属性面板相关（使用UI中现有的tab_properties）
+    // 属性面板相关（完全由ADS系统管理）
     QWidget* m_currentPropertyWidget;
     
-    // 新的属性面板容器
+    // ADS属性面板容器（由ADSPanelManager管理）
     PropertyPanelContainer* m_propertyPanelContainer;
-    QDockWidget* m_propertyPanelDock;
-    
-    // 命令历史面板
-    CommandHistoryWidget* m_commandHistoryWidget;
-    QDockWidget* m_commandHistoryDock;
     
     // 现代化工具栏
     ModernToolBar* m_modernToolBar;
@@ -119,9 +115,8 @@ private:
     // ADS面板管理器
     ADSPanelManager* m_adsPanelManager;
     
-    // 节点面板
+    // 节点面板（由ADS管理）
     NodePalette* m_nodePalette;
-    QDockWidget* m_nodePaletteDock;
 
     // 右键菜单相关
     QtNodes::NodeId m_selectedNodeId;

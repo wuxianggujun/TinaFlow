@@ -58,6 +58,7 @@
 #include <QCursor>
 #include <QMenuBar>
 #include <QSettings>
+#include <QTimer>
 
 // 静态成员变量定义
 bool MainWindow::s_globalExecutionEnabled = false;
@@ -65,7 +66,13 @@ bool MainWindow::s_globalExecutionEnabled = false;
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
       , ui(new Ui::MainWindow)
+      , m_currentPropertyWidget(nullptr)
+      , m_propertyPanelContainer(nullptr)
+      , m_modernToolBar(nullptr)
       , m_adsPanelManager(nullptr)
+      , m_nodePalette(nullptr)
+      , m_selectedNodeId(QtNodes::NodeId{})
+      , m_selectedConnectionId(QtNodes::ConnectionId{})
 {
     ui->setupUi(this);
     
@@ -160,26 +167,14 @@ void MainWindow::setupNodeEditor()
                 }
             }, Qt::QueuedConnection);
     
-
-    
-    QLayout* containerLayout = ui->nodeEditorHost->layout();
-    if (!containerLayout) {
-        containerLayout = new QVBoxLayout(ui->nodeEditorHost);
-        containerLayout->setContentsMargins(0, 0, 0, 0);
-    }
-    containerLayout->addWidget(m_graphicsView);
+    // 核心视图将直接由ADS系统管理，不再添加到传统容器
+    // m_graphicsView会在setupADSCentralWidget()中被设置为ADS中央部件
 }
 
 void MainWindow::reinitializeNodeEditor()
 {
-    // 从布局中移除旧的视图
+    // 删除旧的组件（ADS系统会自动管理视图的父子关系）
     if (m_graphicsView) {
-        QLayout* containerLayout = ui->nodeEditorHost->layout();
-        if (containerLayout) {
-            containerLayout->removeWidget(m_graphicsView);
-        }
-        
-        // 删除旧的组件
         delete m_graphicsView;
         delete m_graphicsScene;
     }
@@ -239,11 +234,8 @@ void MainWindow::reinitializeNodeEditor()
                 }
             }, Qt::QueuedConnection);
     
-    // 将新视图添加到布局中
-    QLayout* containerLayout = ui->nodeEditorHost->layout();
-    if (containerLayout) {
-        containerLayout->addWidget(m_graphicsView);
-    }
+    // 重新设置ADS中央部件
+    setupADSCentralWidget();
     
     // 更新属性面板容器的图形模型
     updatePropertyPanelReference();
@@ -358,15 +350,11 @@ void MainWindow::setupModernToolbar()
 void MainWindow::setupPropertyPanel()
 {
     // 注意：当使用ADS面板系统时，属性面板由ADSPanelManager管理
-    // 这里只初始化传统的UI面板作为备用
+    // 这里只保留传统UI面板的初始化，新面板由ADS系统管理
     m_currentPropertyWidget = nullptr;
     
-    // 属性面板容器将由ADS系统创建和管理
-    // 这里不再创建独立的QDockWidget实例，避免与ADS系统冲突
+    // 属性面板容器将由ADS系统创建和管理，这里确保引用为空
     m_propertyPanelContainer = nullptr;
-    m_propertyPanelDock = nullptr;
-    m_commandHistoryWidget = nullptr; 
-    m_commandHistoryDock = nullptr;
     
     qDebug() << "MainWindow: Property panel setup completed - will be managed by ADS system";
 }
@@ -603,125 +591,17 @@ void MainWindow::refreshCurrentPropertyPanel()
 
 void MainWindow::updatePropertyPanel(QtNodes::NodeId nodeId)
 {
-    if (!m_graphModel) {
-        clearPropertyPanel();
-        return;
-    }
-
-    auto nodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(nodeId);
-    if (!nodeDelegate) {
-        clearPropertyPanel();
-        return;
-    }
-
-    QString nodeName = nodeDelegate->name();
-    QString nodeCaption = nodeDelegate->caption();
-
-    // 更新标题
-    ui->nodeTitle->setText(QString("%1 属性").arg(nodeCaption));
-
-    // 清除滚动区域的内容
-    QWidget* scrollContent = ui->scrollAreaWidgetContents;
-    QVBoxLayout* contentLayout = ui->propertyContentLayout;
-
-    // 清除旧内容
-    QLayoutItem* item;
-    while ((item = contentLayout->takeAt(0)) != nullptr) {
-        if (item->widget()) {
-            item->widget()->deleteLater();
-        }
-        delete item;
-    }
-
-    // 基本信息
-    QLabel* infoLabel = new QLabel(QString("节点类型: %1\nID: %2").arg(nodeName).arg(nodeId));
-    infoLabel->setStyleSheet("color: #666666; font-size: 11px; padding: 4px;");
-    contentLayout->addWidget(infoLabel);
-
-    // 尝试使用新的属性提供系统
-    bool hasProperties = false;
-
-    // 获取节点模型并检查是否实现了IPropertyProvider接口
-    auto* nodeModel = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(nodeId);
-    if (nodeModel) {
-        auto* propertyProvider = dynamic_cast<IPropertyProvider*>(nodeModel);
-        if (propertyProvider) {
-            // 使用新的PropertyWidget系统
-            auto* propertyWidget = PropertyPanelManager::createPropertyPanel(contentLayout);
-            hasProperties = propertyProvider->createPropertyPanel(propertyWidget);
-            qDebug() << "MainWindow: Used PropertyWidget system for node" << nodeId;
-        }
-    }
-
-    // 如果没有属性提供者，显示默认消息
-    if (!hasProperties) {
-        QLabel* genericLabel = new QLabel(tr("此节点暂无可编辑属性"));
-        genericLabel->setAlignment(Qt::AlignCenter);
-        genericLabel->setStyleSheet("color: #999999; padding: 20px;");
-        contentLayout->addWidget(genericLabel);
-    }
-
-    // 添加弹性空间
-    contentLayout->addStretch();
-
-    // 切换到属性tab
-    ui->rightTab->setCurrentWidget(ui->tab_properties);
-
-    // 同时更新ADS属性面板容器
+    // 传统属性面板已被ADS系统取代，直接委托给ADS属性面板
     updateADSPropertyPanel(nodeId);
-
-    qDebug() << "MainWindow: Updated property panel for node" << nodeId << "(" << nodeCaption << ")";
+    qDebug() << "MainWindow: Delegated property panel update to ADS system for node" << nodeId;
 }
 
 void MainWindow::clearPropertyPanel()
 {
-    // 重置标题
-    ui->nodeTitle->setText(tr("未选择节点"));
-
-    // 清除滚动区域的内容
-    QVBoxLayout* contentLayout = ui->propertyContentLayout;
-
-    // 清除旧内容
-    QLayoutItem* item;
-    while ((item = contentLayout->takeAt(0)) != nullptr) {
-        if (item->widget()) {
-            item->widget()->deleteLater();
-        }
-        delete item;
-    }
-
-    // 添加默认内容
-    QLabel* defaultLabel = new QLabel(tr("点击节点查看和编辑属性"));
-    defaultLabel->setAlignment(Qt::AlignCenter);
-    defaultLabel->setStyleSheet("color: #666666; padding: 20px;");
-    contentLayout->addWidget(defaultLabel);
-
-    // 添加弹性空间
-    contentLayout->addStretch();
-
-    // 同时清除ADS属性面板容器
+    // 传统属性面板已被ADS系统取代，直接委托给ADS属性面板
     clearADSPropertyPanel();
-
-    qDebug() << "MainWindow: Cleared property panel";
+    qDebug() << "MainWindow: Delegated property panel clear to ADS system";
 }
-
-void MainWindow::createNodeWithCommand(const QString& nodeType, const QPointF& position)
-{
-    auto command = std::make_unique<CreateNodeCommand>(m_graphicsScene, nodeType, position);
-    auto& commandManager = CommandManager::instance();
-    
-    if (commandManager.executeCommand(std::move(command))) {
-        ui->statusbar->showMessage(tr("已创建 %1 节点").arg(nodeType), 2000);
-    } else {
-        ui->statusbar->showMessage(tr("创建节点失败"), 2000);
-    }
-}
-
-
-
-
-
-
 
 void MainWindow::setupCustomStyles()
 {
@@ -856,116 +736,6 @@ void MainWindow::showConnectionContextMenu(QtNodes::ConnectionId connectionId, c
 }
 
 // 删除了不稳定的位置查找方法
-
-void MainWindow::showSceneContextMenu(const QPointF& pos)
-{
-    QMenu contextMenu(this);
-
-    // 添加节点子菜单
-    QMenu* addNodeMenu = contextMenu.addMenu("添加节点");
-    addNodeMenu->setIcon(QIcon(":/icons/add.png"));
-
-    // 数据源节点
-    QMenu* dataSourceMenu = addNodeMenu->addMenu("数据源");
-    QAction* addExcelAction = dataSourceMenu->addAction("Excel文件");
-    connect(addExcelAction, &QAction::triggered, [this, pos]() {
-        createNodeWithCommand("OpenExcel", pos);
-    });
-
-    QAction* addSelectSheetAction = dataSourceMenu->addAction("选择工作表");
-    connect(addSelectSheetAction, &QAction::triggered, [this, pos]() {
-        createNodeWithCommand("SelectSheet", pos);
-    });
-
-    QAction* addReadRangeAction = dataSourceMenu->addAction("读取范围");
-    connect(addReadRangeAction, &QAction::triggered, [this, pos]() {
-        createNodeWithCommand("ReadRange", pos);
-    });
-
-    QAction* addReadCellAction = dataSourceMenu->addAction("读取单元格");
-    connect(addReadCellAction, &QAction::triggered, [this, pos]() {
-        createNodeWithCommand("ReadCell", pos);
-    });
-
-    dataSourceMenu->addSeparator();
-
-    QAction* addSaveExcelAction = dataSourceMenu->addAction("保存Excel");
-    connect(addSaveExcelAction, &QAction::triggered, [this, pos]() {
-        createNodeWithCommand("SaveExcel", pos);
-    });
-
-    // 处理节点
-    QMenu* processMenu = addNodeMenu->addMenu("数据处理");
-    QAction* addSmartLoopAction = processMenu->addAction("智能循环处理器");
-    connect(addSmartLoopAction, &QAction::triggered, [this, pos]() {
-        createNodeWithCommand("SmartLoopProcessor", pos);
-    });
-
-    QAction* addStringCompareAction = processMenu->addAction("字符串比较");
-    connect(addStringCompareAction, &QAction::triggered, [this, pos]() {
-        createNodeWithCommand("StringCompare", pos);
-    });
-
-    // 显示节点
-    QMenu* displayMenu = addNodeMenu->addMenu("显示");
-    QAction* addDisplayRowAction = displayMenu->addAction("显示行");
-    connect(addDisplayRowAction, &QAction::triggered, [this, pos]() {
-        createNodeWithCommand("DisplayRow", pos);
-    });
-
-    QAction* addDisplayBooleanAction = displayMenu->addAction("显示布尔值");
-    connect(addDisplayBooleanAction, &QAction::triggered, [this, pos]() {
-        createNodeWithCommand("DisplayBoolean", pos);
-    });
-
-    QAction* addDisplayCellAction = displayMenu->addAction("显示单元格");
-    connect(addDisplayCellAction, &QAction::triggered, [this, pos]() {
-        createNodeWithCommand("DisplayCell", pos);
-    });
-
-    QAction* addDisplayCellListAction = displayMenu->addAction("显示单元格列表");
-    connect(addDisplayCellListAction, &QAction::triggered, [this, pos]() {
-        createNodeWithCommand("DisplayCellList", pos);
-    });
-
-    QAction* addDisplayRangeAction = displayMenu->addAction("显示范围");
-    connect(addDisplayRangeAction, &QAction::triggered, [this, pos]() {
-        createNodeWithCommand("DisplayRange", pos);
-    });
-
-    QAction* addRangeInfoAction = displayMenu->addAction("范围信息");
-    connect(addRangeInfoAction, &QAction::triggered, [this, pos]() {
-        createNodeWithCommand("RangeInfo", pos);
-    });
-
-    contextMenu.addSeparator();
-
-    // 画布操作
-    QAction* clearAllAction = contextMenu.addAction("清空画布");
-    clearAllAction->setIcon(QIcon(":/icons/clear.png"));
-    connect(clearAllAction, &QAction::triggered, [this]() {
-        if (QMessageBox::question(this, "确认", "确定要清空所有节点吗？") == QMessageBox::Yes) {
-            auto nodeIds = m_graphModel->allNodeIds();
-            if (!nodeIds.empty()) {
-                // 使用宏命令批量删除所有节点
-                auto& commandManager = CommandManager::instance();
-                commandManager.beginMacro("清空画布");
-                
-            for (auto nodeId : nodeIds) {
-                    auto command = std::make_unique<DeleteNodeCommand>(m_graphicsScene, nodeId);
-                    commandManager.executeCommand(std::move(command));
-                }
-                
-                commandManager.endMacro();
-                ui->statusbar->showMessage(tr("已清空画布，删除了 %1 个节点").arg(nodeIds.size()), 3000);
-            }
-        }
-    });
-
-    // 转换坐标并显示菜单
-    QPoint globalPos = m_graphicsView->mapToGlobal(m_graphicsView->mapFromScene(pos));
-    contextMenu.exec(globalPos);
-}
 
 void MainWindow::deleteSelectedNode()
 {
@@ -1202,91 +972,13 @@ void MainWindow::triggerDataFlow()
     }
 }
 
-void MainWindow::setStyle()
-{
-    QtNodes::ConnectionStyle::setConnectionStyle(
-        R"(
-  {
-    "ConnectionStyle": {
-      "ConstructionColor": "#808080",
-      "NormalColor": "#2A82E4",
-      "SelectedColor": "#FFA500",
-      "SelectedHaloColor": "#91D7FF",
-      "HoveredColor": "#1C73C5",
-      
-      "LineWidth": 3.0,
-      "ConstructionLineWidth": 2.0,
-      "PointDiameter": 10.0,
-      
-      "UseDataDefinedColors": true
-    }
-  }
-  )");
-}
-
 void MainWindow::setupNodePalette()
 {
-    // 创建节点面板
-    m_nodePalette = new NodePalette(this);
+    // 节点面板现在由ADS系统管理，这里不再创建传统的QDockWidget
+    // 所有面板都统一通过ADSPanelManager创建和管理
+    m_nodePalette = nullptr;
     
-    // 创建节点面板的停靠窗口
-    m_nodePaletteDock = new QDockWidget("🗂️ 节点面板", this);
-    m_nodePaletteDock->setWidget(m_nodePalette);
-    
-    // 设置停靠窗口功能 - 支持所有功能
-    m_nodePaletteDock->setAllowedAreas(Qt::AllDockWidgetAreas);
-    m_nodePaletteDock->setFeatures(
-        QDockWidget::DockWidgetMovable | 
-        QDockWidget::DockWidgetFloatable | 
-        QDockWidget::DockWidgetClosable
-    );
-    
-    // 设置停靠窗口样式
-    m_nodePaletteDock->setStyleSheet(
-        "QDockWidget {"
-        "background-color: #f8f9fa;"
-        "border: 1px solid #dee2e6;"
-        "border-radius: 6px;"
-        "}"
-        "QDockWidget::title {"
-        "background-color: #e9ecef;"
-        "padding: 8px;"
-        "border-top-left-radius: 6px;"
-        "border-top-right-radius: 6px;"
-        "font-weight: bold;"
-        "color: #495057;"
-        "}"
-        "QDockWidget::close-button, QDockWidget::float-button {"
-        "border: none;"
-        "background-color: transparent;"
-        "padding: 2px;"
-        "}"
-        "QDockWidget::close-button:hover, QDockWidget::float-button:hover {"
-        "background-color: #dee2e6;"
-        "border-radius: 3px;"
-        "}"
-    );
-    
-    // 将停靠窗口添加到左侧
-    addDockWidget(Qt::LeftDockWidgetArea, m_nodePaletteDock);
-    
-    // 连接节点面板信号
-    connect(m_nodePalette, &NodePalette::nodeCreationRequested, 
-            this, &MainWindow::onNodePaletteCreationRequested);
-    connect(m_nodePalette, &NodePalette::nodeSelectionChanged, 
-            this, &MainWindow::onNodePaletteSelectionChanged);
-    
-    // 连接停靠窗口信号，处理显示/隐藏
-    connect(m_nodePaletteDock, &QDockWidget::visibilityChanged, 
-            this, [this](bool visible) {
-                qDebug() << "NodePalette visibility changed:" << visible;
-            });
-    
-    // 启用停靠窗口的Tabify功能
-    setTabPosition(Qt::AllDockWidgetAreas, QTabWidget::North);
-    setDockOptions(QMainWindow::AnimatedDocks | QMainWindow::AllowNestedDocks | QMainWindow::AllowTabbedDocks);
-    
-    qDebug() << "MainWindow: Node palette setup completed with enhanced docking";
+    qDebug() << "MainWindow: Node palette will be managed by ADS system";
 }
 
 void MainWindow::setupKeyboardShortcuts()
@@ -1347,18 +1039,25 @@ void MainWindow::setupLayoutMenu()
     // 添加面板控制子菜单
     QMenu* panelsMenu = viewMenu->addMenu("📋 面板");
     
-    // 节点面板控制
+    // ADS节点面板控制
     QAction* toggleNodePaletteAction = panelsMenu->addAction("🗂️ 节点面板");
     toggleNodePaletteAction->setCheckable(true);
     toggleNodePaletteAction->setChecked(true);
-    connect(toggleNodePaletteAction, &QAction::toggled, m_nodePaletteDock, &QDockWidget::setVisible);
-    connect(m_nodePaletteDock, &QDockWidget::visibilityChanged, toggleNodePaletteAction, &QAction::setChecked);
+    connect(toggleNodePaletteAction, &QAction::toggled, [this](bool visible) {
+        if (m_adsPanelManager) {
+            if (visible) {
+                m_adsPanelManager->showPanel("node_palette");
+            } else {
+                m_adsPanelManager->hidePanel("node_palette");
+            }
+        }
+    });
     
     // ADS属性面板控制
-    QAction* toggleADSPropertyPanelAction = panelsMenu->addAction("🔧 ADS属性面板");
-    toggleADSPropertyPanelAction->setCheckable(true);
-    toggleADSPropertyPanelAction->setChecked(true);
-    connect(toggleADSPropertyPanelAction, &QAction::toggled, [this](bool visible) {
+    QAction* togglePropertyPanelAction = panelsMenu->addAction("🔧 属性面板");
+    togglePropertyPanelAction->setCheckable(true);
+    togglePropertyPanelAction->setChecked(true);
+    connect(togglePropertyPanelAction, &QAction::toggled, [this](bool visible) {
         if (m_adsPanelManager) {
             if (visible) {
                 m_adsPanelManager->showPanel("property_panel");
@@ -1369,10 +1068,10 @@ void MainWindow::setupLayoutMenu()
     });
 
     // ADS命令历史面板控制
-    QAction* toggleADSCommandHistoryAction = panelsMenu->addAction("📜 ADS命令历史");
-    toggleADSCommandHistoryAction->setCheckable(true);
-    toggleADSCommandHistoryAction->setChecked(true);
-    connect(toggleADSCommandHistoryAction, &QAction::toggled, [this](bool visible) {
+    QAction* toggleCommandHistoryAction = panelsMenu->addAction("📜 命令历史");
+    toggleCommandHistoryAction->setCheckable(true);
+    toggleCommandHistoryAction->setChecked(true);
+    connect(toggleCommandHistoryAction, &QAction::toggled, [this](bool visible) {
         if (m_adsPanelManager) {
             if (visible) {
                 m_adsPanelManager->showPanel("command_history");
@@ -1382,18 +1081,41 @@ void MainWindow::setupLayoutMenu()
         }
     });
     
-    panelsMenu->addSeparator();
-    
-    // 面板组合功能
-    QAction* tabifyPanelsAction = panelsMenu->addAction("📑 面板组合模式");
-    tabifyPanelsAction->setCheckable(true);
-    connect(tabifyPanelsAction, &QAction::toggled, this, [this](bool enabled) {
-        // ADS系统自动管理面板组合，这里暂时禁用
-        Q_UNUSED(enabled);
-        ui->statusbar->showMessage(tr("ADS系统自动管理面板布局"), 2000);
+    // ADS输出控制台控制
+    QAction* toggleOutputConsoleAction = panelsMenu->addAction("💻 输出控制台");
+    toggleOutputConsoleAction->setCheckable(true);
+    toggleOutputConsoleAction->setChecked(true);
+    connect(toggleOutputConsoleAction, &QAction::toggled, [this](bool visible) {
+        if (m_adsPanelManager) {
+            if (visible) {
+                m_adsPanelManager->showPanel("output_console");
+            } else {
+                m_adsPanelManager->hidePanel("output_console");
+            }
+        }
     });
     
     panelsMenu->addSeparator();
+    
+    // ADS布局预设快速访问
+    panelsMenu->addSeparator();
+    QAction* defaultLayoutAction = panelsMenu->addAction("🏠 默认布局");
+    connect(defaultLayoutAction, &QAction::triggered, [this]() {
+        if (m_adsPanelManager) {
+            m_adsPanelManager->setupDefaultLayout();
+            ui->statusbar->showMessage(tr("已切换到默认布局"), 2000);
+        }
+    });
+    
+    QAction* minimalLayoutAction = panelsMenu->addAction("📦 紧凑布局");
+    connect(minimalLayoutAction, &QAction::triggered, [this]() {
+        if (m_adsPanelManager) {
+            m_adsPanelManager->setupMinimalLayout();
+            ui->statusbar->showMessage(tr("已切换到紧凑布局"), 2000);
+        }
+    });
+    
+         panelsMenu->addSeparator();
     
     // 布局控制
     QAction* resetLayoutAction = panelsMenu->addAction("🔄 重置布局");
@@ -1401,37 +1123,34 @@ void MainWindow::setupLayoutMenu()
         // 使用ADS系统重置布局
         if (m_adsPanelManager) {
             m_adsPanelManager->resetToDefaultLayout();
+            ui->statusbar->showMessage(tr("布局已重置"), 2000);
+            qDebug() << "MainWindow: ADS layout reset to default";
         }
-        
-        // 重置节点面板（传统系统）
-        if (m_nodePaletteDock) {
-            removeDockWidget(m_nodePaletteDock);
-            addDockWidget(Qt::LeftDockWidgetArea, m_nodePaletteDock);
-            m_nodePaletteDock->show();
-        }
-        
-        ui->statusbar->showMessage(tr("布局已重置"), 2000);
-        qDebug() << "MainWindow: Layout reset to default";
     });
     
-    QAction* saveLayoutAction = panelsMenu->addAction("💾 保存布局");
+    QAction* saveLayoutAction = panelsMenu->addAction("💾 保存ADS布局");
     connect(saveLayoutAction, &QAction::triggered, this, [this]() {
-        // 保存当前窗口状态
+        // 保存ADS布局
+        if (m_adsPanelManager) {
+            QString layoutName = QString("manual_save_%1").arg(
+                QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss"));
+            m_adsPanelManager->saveLayoutPreset(layoutName);
+            ui->statusbar->showMessage(tr("ADS布局已保存: %1").arg(layoutName), 3000);
+        }
+        
+        // 同时保存窗口几何信息
         QSettings settings;
         settings.setValue("geometry", saveGeometry());
-        settings.setValue("windowState", saveState());
-        ui->statusbar->showMessage(tr("布局已保存"), 2000);
-        qDebug() << "MainWindow: Layout saved";
+        qDebug() << "MainWindow: ADS layout and geometry saved";
     });
     
-    QAction* loadLayoutAction = panelsMenu->addAction("📂 恢复布局");
+    QAction* loadLayoutAction = panelsMenu->addAction("📂 恢复几何布局");
     connect(loadLayoutAction, &QAction::triggered, this, [this]() {
-        // 恢复保存的窗口状态
+        // 只恢复窗口几何信息，ADS布局通过专门的菜单管理
         QSettings settings;
         restoreGeometry(settings.value("geometry").toByteArray());
-        restoreState(settings.value("windowState").toByteArray());
-        ui->statusbar->showMessage(tr("布局已恢复"), 2000);
-        qDebug() << "MainWindow: Layout restored";
+        ui->statusbar->showMessage(tr("窗口几何布局已恢复"), 2000);
+        qDebug() << "MainWindow: Window geometry restored";
     });
     
     // 窗口管理
@@ -1447,12 +1166,11 @@ void MainWindow::setupLayoutMenu()
         }
     });
     
-    // 启动时自动恢复布局
+    // 启动时自动恢复窗口几何布局
     QSettings settings;
     if (settings.contains("geometry")) {
         restoreGeometry(settings.value("geometry").toByteArray());
-        restoreState(settings.value("windowState").toByteArray());
-        qDebug() << "MainWindow: Layout restored from settings";
+        qDebug() << "MainWindow: Window geometry restored from settings";
     }
     
     qDebug() << "MainWindow: Layout menu setup completed";
@@ -1481,6 +1199,41 @@ void MainWindow::onNodePaletteSelectionChanged(const QString& nodeId)
     if (!nodeInfo.id.isEmpty()) {
         ui->statusbar->showMessage(
             QString("选中节点: %1 - %2").arg(nodeInfo.displayName).arg(nodeInfo.description), 3000);
+    }
+}
+
+void MainWindow::connectADSNodePaletteSignals()
+{
+    qDebug() << "MainWindow: 开始连接ADS节点面板信号";
+    
+    // 连接ADS节点面板的信号
+    if (!m_adsPanelManager) {
+        qWarning() << "MainWindow: ADS面板管理器不存在，无法连接节点面板信号";
+        return;
+    }
+    
+    qDebug() << "MainWindow: ADS面板管理器存在，获取节点面板";
+    
+    try {
+        auto* nodePalette = m_adsPanelManager->getNodePalette();
+        if (!nodePalette) {
+            qWarning() << "MainWindow: 节点面板尚未创建，无法连接信号";
+            return;
+        }
+        
+        qDebug() << "MainWindow: 成功获取节点面板，开始连接信号";
+        
+        connect(nodePalette, &NodePalette::nodeCreationRequested, 
+                this, &MainWindow::onNodePaletteCreationRequested);
+        connect(nodePalette, &NodePalette::nodeSelectionChanged, 
+                this, &MainWindow::onNodePaletteSelectionChanged);
+        
+        qDebug() << "MainWindow: ADS节点面板信号连接成功";
+        
+    } catch (const std::exception& e) {
+        qCritical() << "MainWindow: 连接节点面板信号时发生异常:" << e.what();
+    } catch (...) {
+        qCritical() << "MainWindow: 连接节点面板信号时发生未知异常";
     }
 }
 
@@ -1586,7 +1339,7 @@ void MainWindow::setupAdvancedPanels()
     // 创建ADS面板管理器
     m_adsPanelManager = new ADSPanelManager(this, this);
     
-    // 初始化ADS系统
+    // 初始化ADS系统（但不立即创建面板）
     m_adsPanelManager->initialize();
     
     // 连接面板事件
@@ -1603,17 +1356,71 @@ void MainWindow::setupAdvancedPanels()
     
     connect(m_adsPanelManager, &ADSPanelManager::panelFocused,
             this, [this](const QString& panelId) {
-                // 当属性面板获得焦点时，更新图形模型引用
+                // 当属性面板获得焦点时，确保图形模型引用是最新的
                 if (panelId == "property_panel") {
                     updatePropertyPanelReference();
                 }
             });
     
-    // 设置默认布局
+    // 关键修改：必须首先设置中央部件，然后才能添加其他面板
+    setupADSCentralWidget();
+    
+    // 现在可以安全地设置其他面板布局
     m_adsPanelManager->setupDefaultLayout();
     
-    // 同步MainWindow的属性面板引用到ADSPanelManager的实例
-    updatePropertyPanelReference();
+    // 直接同步调用，避免异步调用导致的时序问题
+    try {
+        qDebug() << "MainWindow: 开始同步更新面板引用";
+        updatePropertyPanelReference();
+        qDebug() << "MainWindow: 属性面板引用更新完成";
+        
+        connectADSNodePaletteSignals();
+        qDebug() << "MainWindow: 节点面板信号连接完成";
+    } catch (const std::exception& e) {
+        qCritical() << "MainWindow: 面板引用更新失败:" << e.what();
+    } catch (...) {
+        qCritical() << "MainWindow: 面板引用更新发生未知错误";
+    }
+    
+    // 确保所有ADS组件都正确显示
+    if (m_adsPanelManager && m_adsPanelManager->dockManager()) {
+        auto* dockManager = m_adsPanelManager->dockManager();
+        
+        qDebug() << "MainWindow: 检查ADS组件状态";
+        qDebug() << "MainWindow: DockManager可见性:" << dockManager->isVisible();
+        qDebug() << "MainWindow: DockManager大小:" << dockManager->size();
+        qDebug() << "MainWindow: 中央部件可见性:" << ui->centralwidget->isVisible();
+        qDebug() << "MainWindow: 主窗口大小:" << this->size();
+        
+        // 强制显示dock manager
+        dockManager->show();
+        dockManager->raise();
+        dockManager->activateWindow();
+        
+        // 强制更新和重绘
+        dockManager->update();
+        dockManager->repaint();
+        
+        // 强制显示并激活各个面板
+        QStringList panelIds = {"property_panel", "node_palette", "command_history", "output_console"};
+        for (const QString& panelId : panelIds) {
+            auto* panel = m_adsPanelManager->getPanel(panelId);
+            if (panel) {
+                panel->show();
+                panel->raise();
+                qDebug() << "MainWindow: 强制显示面板" << panelId << "可见性:" << panel->isVisible();
+            }
+        }
+        
+        // 确保主窗口正确显示
+        this->show();
+        this->raise();
+        this->activateWindow();
+        
+        qDebug() << "MainWindow: 强制显示所有ADS面板完成";
+    } else {
+        qCritical() << "MainWindow: ADS面板管理器或dock manager不存在！";
+    }
     
     qDebug() << "MainWindow: ADS高级面板系统设置完成";
 }
@@ -1735,16 +1542,103 @@ void MainWindow::clearADSPropertyPanel()
     }
 }
 
+void MainWindow::setupADSCentralWidget()
+{
+    // 正确的ADS中央部件设置方法：
+    // 1. 创建一个CDockWidget包装TinaFlowGraphicsView
+    // 2. 使用dockManager()->setCentralWidget()设置
+    
+    if (m_adsPanelManager && m_graphicsView) {
+        auto* dockManager = m_adsPanelManager->dockManager();
+        if (!dockManager) {
+            qCritical() << "MainWindow: DockManager不存在，无法设置中央部件";
+            return;
+        }
+        
+        // 创建中央停靠部件
+        auto* centralDockWidget = new ads::CDockWidget("节点编辑器");
+        centralDockWidget->setWidget(m_graphicsView);
+        centralDockWidget->setObjectName("central_editor");
+        
+        // 使用ADS的正确API设置中央部件
+        // 注意：这必须是第一个添加到DockManager的部件
+        auto* centralArea = dockManager->setCentralWidget(centralDockWidget);
+        
+        if (centralArea) {
+            qDebug() << "MainWindow: 成功设置ADS中央部件";
+            
+            // ADS接管中央部件，设置ADS dock manager为主窗口中央布局
+            if (ui->centralwidget) {
+                // 清空中央部件的现有布局
+                if (ui->centralwidget->layout()) {
+                    delete ui->centralwidget->layout();
+                }
+                
+                // 创建新的布局并将ADS dock manager添加进去
+                QVBoxLayout* centralLayout = new QVBoxLayout(ui->centralwidget);
+                centralLayout->setContentsMargins(0, 0, 0, 0);
+                centralLayout->addWidget(dockManager);
+                
+                // 确保各个组件都正确显示
+                ui->centralwidget->show();
+                dockManager->show();
+                centralDockWidget->show();
+                m_graphicsView->show();
+                
+                // 设置最小尺寸确保可见
+                dockManager->setMinimumSize(800, 600);
+                ui->centralwidget->setMinimumSize(800, 600);
+                
+                qDebug() << "MainWindow: ADS系统已接管中央部件布局";
+                qDebug() << "MainWindow: 中央部件大小:" << ui->centralwidget->size();
+                qDebug() << "MainWindow: DockManager大小:" << dockManager->size();
+                qDebug() << "MainWindow: 图形视图大小:" << m_graphicsView->size();
+            }
+        } else {
+            qCritical() << "MainWindow: 设置ADS中央部件失败";
+        }
+    }
+}
+
 void MainWindow::updatePropertyPanelReference()
 {
-    // 同步MainWindow的属性面板引用到ADSPanelManager的实例
-    if (m_adsPanelManager) {
+    qDebug() << "MainWindow: 开始更新属性面板引用";
+    
+    // 检查ADS面板管理器
+    if (!m_adsPanelManager) {
+        qWarning() << "MainWindow: ADS面板管理器不存在";
+        return;
+    }
+    
+    qDebug() << "MainWindow: ADS面板管理器存在，获取属性面板容器";
+    
+    // 获取属性面板容器引用
+    try {
         m_propertyPanelContainer = m_adsPanelManager->getPropertyPanelContainer();
         
-        // 如果图形模型已创建，设置到属性面板
-        if (m_propertyPanelContainer && m_graphModel) {
-            m_propertyPanelContainer->setGraphModel(m_graphModel.get());
-            qDebug() << "MainWindow: 属性面板引用已同步并设置图形模型";
+        // 添加空指针检查
+        if (!m_propertyPanelContainer) {
+            qWarning() << "MainWindow: 属性面板容器尚未创建";
+            return;
         }
+        
+        qDebug() << "MainWindow: 成功获取属性面板容器引用";
+        
+        // 检查图形模型
+        if (!m_graphModel) {
+            qWarning() << "MainWindow: 图形模型尚未创建，无法设置到属性面板";
+            return;
+        }
+        
+        qDebug() << "MainWindow: 图形模型存在，设置到属性面板";
+        
+        // 设置图形模型到属性面板
+        m_propertyPanelContainer->setGraphModel(m_graphModel.get());
+        qDebug() << "MainWindow: 属性面板引用已同步并设置图形模型";
+        
+    } catch (const std::exception& e) {
+        qCritical() << "MainWindow: 更新属性面板引用时发生异常:" << e.what();
+    } catch (...) {
+        qCritical() << "MainWindow: 更新属性面板引用时发生未知异常";
     }
 }

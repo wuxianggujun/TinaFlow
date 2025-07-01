@@ -28,6 +28,7 @@
 #include <QJsonObject>
 #include <QIcon>
 #include <QDebug>
+#include <QTimer>
 
 ADSPanelManager::ADSPanelManager(QMainWindow* mainWindow, QObject* parent)
     : QObject(parent)
@@ -326,25 +327,76 @@ ads::CDockWidget* ADSPanelManager::createProjectExplorerPanel()
 // 布局管理实现
 void ADSPanelManager::setupDefaultLayout()
 {
+    // 注意：这个方法现在假设中央部件已经被设置
+    // 中央部件必须是第一个添加到dock manager的部件
     if (!m_dockManager) return;
     
-    // 创建默认面板
-    auto* propertyPanel = createPropertyPanel();
-    auto* nodePanel = createNodePalettePanel();
-    auto* historyPanel = createCommandHistoryPanel();
-    auto* outputPanel = createOutputConsolePanel();
+    qDebug() << "ADSPanelManager: 开始设置默认布局（假设中央部件已设置）";
     
-    // 设置布局
-    m_dockManager->addDockWidget(ads::LeftDockWidgetArea, nodePanel);
-    m_dockManager->addDockWidget(ads::RightDockWidgetArea, propertyPanel);
-    m_dockManager->addDockWidget(ads::RightDockWidgetArea, historyPanel);
-    m_dockManager->addDockWidget(ads::BottomDockWidgetArea, outputPanel);
+    // 检查面板是否已存在，避免重复创建和添加
+    auto* propertyPanel = getPanel("property_panel");
+    auto* nodePanel = getPanel("node_palette");
+    auto* historyPanel = getPanel("command_history");
+    auto* outputPanel = getPanel("output_console");
     
-    // 将属性面板和命令历史组合成标签页
-    m_dockManager->addDockWidgetTabToArea(historyPanel, propertyPanel->dockAreaWidget());
+    // 只有当面板不存在时才创建
+    if (!propertyPanel) {
+        propertyPanel = createPropertyPanel();
+    }
+    if (!nodePanel) {
+        nodePanel = createNodePalettePanel();
+    }
+    if (!historyPanel) {
+        historyPanel = createCommandHistoryPanel();
+    }
+    if (!outputPanel) {
+        outputPanel = createOutputConsolePanel();
+    }
     
-    // 设置Auto-Hide
-    outputPanel->setAutoHide(true);
+    // 添加空指针检查
+    if (!propertyPanel || !nodePanel || !historyPanel || !outputPanel) {
+        qCritical() << "ADSPanelManager: 面板创建失败，无法设置布局";
+        return;
+    }
+    
+    // 检查面板是否已经添加到dock manager，避免重复添加
+    // 使用CDockWidget的公开方法检查是否已添加
+    bool isNodePanelAdded = nodePanel->dockManager() != nullptr;
+    bool isPropertyPanelAdded = propertyPanel->dockManager() != nullptr;
+    bool isHistoryPanelAdded = historyPanel->dockManager() != nullptr;
+    bool isOutputPanelAdded = outputPanel->dockManager() != nullptr;
+    
+    qDebug() << "ADSPanelManager: 面板添加状态 - Node:" << isNodePanelAdded 
+             << "Property:" << isPropertyPanelAdded 
+             << "History:" << isHistoryPanelAdded 
+             << "Output:" << isOutputPanelAdded;
+    
+    // 只添加尚未添加的面板
+    if (!isNodePanelAdded) {
+        m_dockManager->addDockWidget(ads::LeftDockWidgetArea, nodePanel);
+        qDebug() << "ADSPanelManager: 添加节点面板到左侧区域";
+    }
+    
+    if (!isPropertyPanelAdded) {
+        m_dockManager->addDockWidget(ads::RightDockWidgetArea, propertyPanel);
+        qDebug() << "ADSPanelManager: 添加属性面板到右侧区域";
+    }
+    
+    if (!isHistoryPanelAdded) {
+        m_dockManager->addDockWidget(ads::RightDockWidgetArea, historyPanel);
+        qDebug() << "ADSPanelManager: 添加命令历史面板到右侧区域";
+    }
+    
+    if (!isOutputPanelAdded) {
+        m_dockManager->addDockWidget(ads::BottomDockWidgetArea, outputPanel);
+        qDebug() << "ADSPanelManager: 添加输出面板到底部区域";
+    }
+    
+    // 确保所有面板都可见
+    propertyPanel->show();
+    nodePanel->show();
+    historyPanel->show();
+    outputPanel->show();
     
     qDebug() << "ADSPanelManager: 默认布局设置完成";
 }
@@ -426,19 +478,19 @@ QWidget* ADSPanelManager::createPanelContent(PanelType type)
     switch (type) {
     case PropertyPanel:
         if (!m_propertyPanelContainer) {
-            m_propertyPanelContainer = new PropertyPanelContainer();
+            m_propertyPanelContainer = new PropertyPanelContainer(m_mainWindow);
         }
         return m_propertyPanelContainer;
         
-            case NodePalettePanel:
+    case NodePalettePanel:
         if (!m_nodePalette) {
-            m_nodePalette = new ::NodePalette(); // 使用全局命名空间
+            m_nodePalette = new ::NodePalette(m_mainWindow); // 设置正确的父对象
         }
         return m_nodePalette;
         
     case CommandHistory:
         if (!m_commandHistoryWidget) {
-            m_commandHistoryWidget = new CommandHistoryWidget();
+            m_commandHistoryWidget = new CommandHistoryWidget(m_mainWindow);
         }
         return m_commandHistoryWidget;
         
@@ -456,23 +508,24 @@ QWidget* ADSPanelManager::createPanelContent(PanelType type)
 
 QWidget* ADSPanelManager::createOutputConsoleWidget()
 {
-    auto* widget = new QWidget();
+    // 设置正确的父对象，确保生命周期管理
+    auto* widget = new QWidget(m_mainWindow);
     auto* layout = new QVBoxLayout(widget);
     
     // 创建控制栏
     auto* controlLayout = new QHBoxLayout();
-    auto* levelFilter = new QComboBox();
+    auto* levelFilter = new QComboBox(widget); // 设置父对象
     levelFilter->addItems({"全部", "调试", "信息", "警告", "错误"});
     
-    auto* clearButton = new QPushButton("清空");
+    auto* clearButton = new QPushButton("清空", widget); // 设置父对象
     
-    controlLayout->addWidget(new QLabel("日志级别:"));
+    controlLayout->addWidget(new QLabel("日志级别:", widget)); // 设置父对象
     controlLayout->addWidget(levelFilter);
     controlLayout->addStretch();
     controlLayout->addWidget(clearButton);
     
     // 创建输出文本区域
-    auto* outputText = new QTextEdit();
+    auto* outputText = new QTextEdit(widget); // 设置父对象
     outputText->setReadOnly(true);
     outputText->setFont(QFont("Consolas", 9));
     outputText->setStyleSheet(
@@ -499,12 +552,13 @@ QWidget* ADSPanelManager::createOutputConsoleWidget()
 
 QWidget* ADSPanelManager::createProjectExplorerWidget()
 {
-    auto* widget = new QWidget();
+    // 设置正确的父对象，确保生命周期管理
+    auto* widget = new QWidget(m_mainWindow);
     auto* layout = new QVBoxLayout(widget);
     
     // 创建文件树视图
-    auto* treeView = new QTreeView();
-    auto* fileModel = new QFileSystemModel();
+    auto* treeView = new QTreeView(widget); // 设置父对象
+    auto* fileModel = new QFileSystemModel(widget); // 设置父对象，这很重要！
     
     // 设置模型
     fileModel->setRootPath(QApplication::applicationDirPath());
@@ -516,7 +570,7 @@ QWidget* ADSPanelManager::createProjectExplorerWidget()
     treeView->hideColumn(2); // Type  
     treeView->hideColumn(3); // Date Modified
     
-    layout->addWidget(new QLabel("项目文件:"));
+    layout->addWidget(new QLabel("项目文件:", widget)); // 设置父对象
     layout->addWidget(treeView);
     
     return widget;
