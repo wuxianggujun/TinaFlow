@@ -46,10 +46,8 @@ public:
 private:
     QLabel* m_titleLabel;
     QScrollArea* m_scrollArea;
-    QWidget* m_contentWidget;
-    QVBoxLayout* m_contentLayout;
+    PropertyWidget* m_propertyWidget;  // 复用单一实例
 
-    PropertyWidget* m_currentPropertyWidget;
     QtNodes::NodeId m_nodeId;
     QtNodes::DataFlowGraphModel* m_graphModel;
 
@@ -57,5 +55,4 @@ private:
     void setupTitleBar(QVBoxLayout* layout);
     void setupContentArea(QVBoxLayout* layout);
     void showDefaultContent();
-    void clearContent();
 };

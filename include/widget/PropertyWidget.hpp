@@ -113,6 +113,16 @@ public:
      */
     void updatePropertyValue(const QString& propertyName, const QVariant& value);
 
+    /**
+     * @brief 清空所有属性（复用控件）
+     */
+    void clearAllProperties();
+
+    /**
+     * @brief 检查是否有属性
+     */
+    bool hasProperties() const { return !m_properties.isEmpty(); }
+
 signals:
     void propertyChanged(const QString& propertyName, const QVariant& value);
 

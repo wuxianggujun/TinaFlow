@@ -18,9 +18,7 @@ PropertyPanelContainer::PropertyPanelContainer(QWidget* parent)
     : PanelContainer(parent)
     , m_titleLabel(nullptr)
     , m_scrollArea(nullptr)
-    , m_contentWidget(nullptr)
-    , m_contentLayout(nullptr)
-    , m_currentPropertyWidget(nullptr)
+    , m_propertyWidget(nullptr)
     , m_nodeId(QtNodes::NodeId{})
     , m_graphModel(nullptr)
 {
@@ -82,45 +80,26 @@ void PropertyPanelContainer::setupContentArea(QVBoxLayout* layout)
     m_scrollArea->setWidgetResizable(true);
     m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    
-    // 内容控件
-    m_contentWidget = new QWidget();
-    m_contentLayout = new QVBoxLayout(m_contentWidget);
-    m_contentLayout->setContentsMargins(6, 6, 6, 6);
-    m_contentLayout->setSpacing(4);
-    
+
+    // 创建复用的PropertyWidget
+    m_propertyWidget = new PropertyWidget();
+
     // 默认内容
     showDefaultContent();
-    
-    m_scrollArea->setWidget(m_contentWidget);
+
+    m_scrollArea->setWidget(m_propertyWidget);
     layout->addWidget(m_scrollArea);
 }
 
 void PropertyPanelContainer::showDefaultContent()
 {
-    clearContent();
-    
-    auto* defaultLabel = new QLabel("点击节点查看和编辑属性");
-    defaultLabel->setAlignment(Qt::AlignCenter);
-    defaultLabel->setStyleSheet("color: #666666; padding: 20px;");
-    m_contentLayout->addWidget(defaultLabel);
-    
-    m_contentLayout->addStretch();
+    if (m_propertyWidget) {
+        m_propertyWidget->clearAllProperties();
+        m_propertyWidget->addDescription("点击节点查看和编辑属性");
+    }
 }
 
-void PropertyPanelContainer::clearContent()
-{
-    // 清除旧内容
-    QLayoutItem* item;
-    while ((item = m_contentLayout->takeAt(0)) != nullptr) {
-        if (item->widget()) {
-            item->widget()->deleteLater();
-        }
-        delete item;
-    }
-    
-    m_currentPropertyWidget = nullptr;
-}
+
 
 void PropertyPanelContainer::setGraphModel(QtNodes::DataFlowGraphModel* model)
 {
@@ -130,13 +109,13 @@ void PropertyPanelContainer::setGraphModel(QtNodes::DataFlowGraphModel* model)
 void PropertyPanelContainer::updateNodeProperties(QtNodes::NodeId nodeId)
 {
     m_nodeId = nodeId;
-    
+
     if (!m_graphModel) {
         qWarning() << "PropertyPanelContainer: No graph model set!";
         clearProperties();
         return;
     }
-    
+
     auto nodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(nodeId);
     if (!nodeDelegate) {
         qWarning() << "PropertyPanelContainer: Node delegate not found for" << nodeId;
@@ -149,45 +128,36 @@ void PropertyPanelContainer::updateNodeProperties(QtNodes::NodeId nodeId)
 
     // 更新标题
     m_titleLabel->setText(QString("%1 属性").arg(nodeCaption));
-    
-    // 清除旧内容
-    clearContent();
 
-    // 基本信息
-    QLabel* infoLabel = new QLabel(QString("节点类型: %1\nID: %2").arg(nodeName).arg(nodeId));
-    infoLabel->setStyleSheet("color: #666666; font-size: 11px; padding: 4px;");
-    m_contentLayout->addWidget(infoLabel);
+    // 清空属性控件内容（复用控件）
+    if (m_propertyWidget) {
+        m_propertyWidget->clearAllProperties();
 
-    // 尝试使用新的属性提供系统
-    bool hasProperties = false;
+        // 添加节点基本信息
+        m_propertyWidget->addInfoProperty("节点类型", nodeName);
+        m_propertyWidget->addInfoProperty("节点ID", QString::number(nodeId));
+        m_propertyWidget->addSeparator();
 
-    // 获取节点模型并检查是否实现了IPropertyProvider接口
-    auto* nodeModel = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(nodeId);
-    if (nodeModel) {
-        auto* propertyProvider = dynamic_cast<IPropertyProvider*>(nodeModel);
-        if (propertyProvider) {
-            // 使用新的PropertyWidget系统
-            auto* propertyWidget = PropertyPanelManager::createPropertyPanel(m_contentLayout);
-            m_currentPropertyWidget = propertyWidget;
-            hasProperties = propertyProvider->createPropertyPanel(propertyWidget);
-            qDebug() << "PropertyPanelContainer: Used PropertyWidget system for node" << nodeId;
+        // 尝试使用属性提供系统
+        bool hasProperties = false;
+        auto* nodeModel = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(nodeId);
+        if (nodeModel) {
+            auto* propertyProvider = dynamic_cast<IPropertyProvider*>(nodeModel);
+            if (propertyProvider) {
+                hasProperties = propertyProvider->createPropertyPanel(m_propertyWidget);
+                qDebug() << "PropertyPanelContainer: Used PropertyWidget system for node" << nodeId;
+            }
+        }
+
+        // 如果没有属性提供者，显示默认消息
+        if (!hasProperties) {
+            m_propertyWidget->addDescription("此节点暂无可编辑属性");
         }
     }
 
-    // 如果没有属性提供者，显示默认消息
-    if (!hasProperties) {
-        QLabel* genericLabel = new QLabel("此节点暂无可编辑属性");
-        genericLabel->setAlignment(Qt::AlignCenter);
-        genericLabel->setStyleSheet("color: #999999; padding: 20px;");
-        m_contentLayout->addWidget(genericLabel);
-    }
-
-    // 添加弹性空间
-    m_contentLayout->addStretch();
-    
     // 触发标题变化信号
     emit titleChanged(m_titleLabel->text());
-    
+
     qDebug() << "PropertyPanelContainer: Updated properties for node" << nodeId << "(" << nodeCaption << ")";
 }
 
@@ -207,9 +177,9 @@ void PropertyPanelContainer::setPanelContent(QWidget* content)
         qWarning() << "PropertyPanelContainer: Attempted to set null content";
         return;
     }
-    
-    clearContent();
-    m_contentLayout->addWidget(content);
+
+    // 直接设置到滚动区域
+    m_scrollArea->setWidget(content);
     qDebug() << "PropertyPanelContainer: Set custom panel content";
 }
 

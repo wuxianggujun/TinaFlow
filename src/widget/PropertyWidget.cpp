@@ -349,6 +349,23 @@ void PropertyWidget::updatePropertyVisibility()
     }
 }
 
+void PropertyWidget::clearAllProperties()
+{
+    // 清除所有属性控件
+    QLayoutItem* item;
+    while ((item = m_layout->takeAt(0)) != nullptr) {
+        if (item->widget()) {
+            item->widget()->deleteLater();
+        }
+        delete item;
+    }
+
+    m_properties.clear();
+    m_editMode = false;  // 重置为查看模式
+
+    qDebug() << "PropertyWidget: Cleared all properties";
+}
+
 PropertyWidget::PropertyItem* PropertyWidget::findProperty(const QString& name)
 {
     for (auto& item : m_properties) {
