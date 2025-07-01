@@ -76,31 +76,71 @@ MainWindow::MainWindow(QWidget* parent)
 {
     ui->setupUi(this);
     
+    // 1. 首先设置节点编辑器（创建图形视图）
     setupNodeEditor();
+    
+    // 2. 然后设置现代工具栏
     setupModernToolbar();
-    setupAdvancedPanels(); // 新的ADS面板系统
-    setupADSLayoutMenu(); // ADS布局菜单
+    
+    // 3. 接下来设置 ADS 面板系统（这会使用已创建的图形视图）
+    setupAdvancedPanels();
+    
+    // 4. 设置 ADS 布局菜单
+    setupADSLayoutMenu();
+    
+    // 5. 设置传统属性面板（作为后备）
     setupPropertyPanel();
+    
+    // 6. 设置节点面板（传统版本，作为后备）
     setupNodePalette();
+    
+    // 7. 最后设置菜单和快捷键
     setupLayoutMenu();
     setupKeyboardShortcuts();
+    
+    // 8. 确保 ADS 系统正确显示（安全的直接调用）
+    if (m_adsPanelManager && m_adsPanelManager->dockManager()) {
+        auto* dockManager = m_adsPanelManager->dockManager();
+        dockManager->show();
+        dockManager->update();
+        qDebug() << "MainWindow: ADS 系统显示设置完成";
+    }
 }
 
 MainWindow::~MainWindow()
 {
+    qDebug() << "MainWindow: 开始销毁主窗口";
+    
     // 自动保存窗口布局
     QSettings settings;
     settings.setValue("geometry", saveGeometry());
     settings.setValue("windowState", saveState());
     qDebug() << "MainWindow: Layout saved on exit";
     
-    // 清理ADS面板管理器
+    // 安全清理ADS面板管理器
     if (m_adsPanelManager) {
+        qDebug() << "MainWindow: 开始清理ADS面板管理器";
+        
+        // 先断开所有连接
+        m_adsPanelManager->disconnect();
+        
+        // 关闭面板管理器
         m_adsPanelManager->shutdown();
-        delete m_adsPanelManager;
+        
+        // 安全删除
+        m_adsPanelManager->deleteLater();
+        m_adsPanelManager = nullptr;
+        
+        qDebug() << "MainWindow: ADS面板管理器清理完成";
     }
     
+    // 清理其他指针
+    m_propertyPanelContainer = nullptr;
+    m_nodePalette = nullptr;
+    
     delete ui;
+    
+    qDebug() << "MainWindow: 主窗口销毁完成";
 }
 
 void MainWindow::setupNodeEditor()
@@ -1336,93 +1376,72 @@ void MainWindow::setupAdvancedPanels()
 {
     qDebug() << "MainWindow: 设置ADS高级面板系统";
     
-    // 创建ADS面板管理器
-    m_adsPanelManager = new ADSPanelManager(this, this);
-    
-    // 初始化ADS系统（但不立即创建面板）
-    m_adsPanelManager->initialize();
-    
-    // 连接面板事件
-    connect(m_adsPanelManager, &ADSPanelManager::panelCreated,
-            this, [this](const QString& panelId, ADSPanelManager::PanelType type) {
-                qDebug() << "MainWindow: ADS面板创建" << panelId << type;
-                ui->statusbar->showMessage(tr("面板已创建: %1").arg(panelId), 2000);
-            });
-    
-    connect(m_adsPanelManager, &ADSPanelManager::layoutChanged,
-            this, [this]() {
-                qDebug() << "MainWindow: ADS布局已更改";
-            });
-    
-    connect(m_adsPanelManager, &ADSPanelManager::panelFocused,
-            this, [this](const QString& panelId) {
-                // 当属性面板获得焦点时，确保图形模型引用是最新的
-                if (panelId == "property_panel") {
-                    updatePropertyPanelReference();
-                }
-            });
-    
-    // 关键修改：必须首先设置中央部件，然后才能添加其他面板
-    setupADSCentralWidget();
-    
-    // 现在可以安全地设置其他面板布局
-    m_adsPanelManager->setupDefaultLayout();
-    
-    // 直接同步调用，避免异步调用导致的时序问题
     try {
-        qDebug() << "MainWindow: 开始同步更新面板引用";
+        // 创建ADS面板管理器
+        m_adsPanelManager = new ADSPanelManager(this, this);
+        
+        // 初始化ADS系统
+        m_adsPanelManager->initialize();
+        
+        // 连接面板事件
+        connect(m_adsPanelManager, &ADSPanelManager::panelCreated,
+                this, [this](const QString& panelId, ADSPanelManager::PanelType type) {
+                    qDebug() << "MainWindow: ADS面板创建" << panelId << type;
+                    if (ui->statusbar) {
+                        ui->statusbar->showMessage(tr("面板已创建: %1").arg(panelId), 2000);
+                    }
+                });
+        
+        connect(m_adsPanelManager, &ADSPanelManager::layoutChanged,
+                this, [this]() {
+                    qDebug() << "MainWindow: ADS布局已更改";
+                });
+        
+        connect(m_adsPanelManager, &ADSPanelManager::panelFocused,
+                this, [this](const QString& panelId) {
+                    // 当属性面板获得焦点时，确保图形模型引用是最新的
+                    if (panelId == "property_panel") {
+                        updatePropertyPanelReference();
+                    }
+                });
+        
+        // 关键步骤：设置中央部件
+        setupADSCentralWidget();
+        
+        // 设置默认布局
+        m_adsPanelManager->setupDefaultLayout();
+        
+        // 更新面板引用
         updatePropertyPanelReference();
-        qDebug() << "MainWindow: 属性面板引用更新完成";
         
+        // 连接节点面板信号
         connectADSNodePaletteSignals();
-        qDebug() << "MainWindow: 节点面板信号连接完成";
+        
+        qDebug() << "MainWindow: ADS高级面板系统设置完成";
+        
     } catch (const std::exception& e) {
-        qCritical() << "MainWindow: 面板引用更新失败:" << e.what();
-    } catch (...) {
-        qCritical() << "MainWindow: 面板引用更新发生未知错误";
-    }
-    
-    // 确保所有ADS组件都正确显示
-    if (m_adsPanelManager && m_adsPanelManager->dockManager()) {
-        auto* dockManager = m_adsPanelManager->dockManager();
+        qCritical() << "MainWindow: ADS系统初始化失败:" << e.what();
         
-        qDebug() << "MainWindow: 检查ADS组件状态";
-        qDebug() << "MainWindow: DockManager可见性:" << dockManager->isVisible();
-        qDebug() << "MainWindow: DockManager大小:" << dockManager->size();
-        qDebug() << "MainWindow: 中央部件可见性:" << ui->centralwidget->isVisible();
-        qDebug() << "MainWindow: 主窗口大小:" << this->size();
-        
-        // 强制显示dock manager
-        dockManager->show();
-        dockManager->raise();
-        dockManager->activateWindow();
-        
-        // 强制更新和重绘
-        dockManager->update();
-        dockManager->repaint();
-        
-        // 强制显示并激活各个面板
-        QStringList panelIds = {"property_panel", "node_palette", "command_history", "output_console"};
-        for (const QString& panelId : panelIds) {
-            auto* panel = m_adsPanelManager->getPanel(panelId);
-            if (panel) {
-                panel->show();
-                panel->raise();
-                qDebug() << "MainWindow: 强制显示面板" << panelId << "可见性:" << panel->isVisible();
-            }
+        // 清理失败的初始化
+        if (m_adsPanelManager) {
+            delete m_adsPanelManager;
+            m_adsPanelManager = nullptr;
         }
         
-        // 确保主窗口正确显示
-        this->show();
-        this->raise();
-        this->activateWindow();
+        QMessageBox::critical(this, "错误", 
+            QString("ADS面板系统初始化失败：%1").arg(e.what()));
         
-        qDebug() << "MainWindow: 强制显示所有ADS面板完成";
-    } else {
-        qCritical() << "MainWindow: ADS面板管理器或dock manager不存在！";
+    } catch (...) {
+        qCritical() << "MainWindow: ADS系统初始化发生未知错误";
+        
+        // 清理失败的初始化
+        if (m_adsPanelManager) {
+            delete m_adsPanelManager;
+            m_adsPanelManager = nullptr;
+        }
+        
+        QMessageBox::critical(this, "错误", "ADS面板系统初始化发生未知错误");
     }
-    
-    qDebug() << "MainWindow: ADS高级面板系统设置完成";
 }
 
 void MainWindow::setupADSLayoutMenu()
@@ -1544,59 +1563,69 @@ void MainWindow::clearADSPropertyPanel()
 
 void MainWindow::setupADSCentralWidget()
 {
-    // 正确的ADS中央部件设置方法：
-    // 1. 创建一个CDockWidget包装TinaFlowGraphicsView
-    // 2. 使用dockManager()->setCentralWidget()设置
+    qDebug() << "MainWindow: 开始设置ADS中央部件";
     
-    if (m_adsPanelManager && m_graphicsView) {
-        auto* dockManager = m_adsPanelManager->dockManager();
-        if (!dockManager) {
-            qCritical() << "MainWindow: DockManager不存在，无法设置中央部件";
-            return;
-        }
+    if (!m_adsPanelManager) {
+        qCritical() << "MainWindow: ADS面板管理器不存在";
+        return;
+    }
+    
+    if (!m_graphicsView) {
+        qCritical() << "MainWindow: 图形视图不存在";
+        return;
+    }
+    
+    auto* dockManager = m_adsPanelManager->dockManager();
+    if (!dockManager) {
+        qCritical() << "MainWindow: DockManager不存在";
+        return;
+    }
+    
+    // 创建中央停靠部件 - 重要：设置正确的父对象
+    auto* centralDockWidget = new ads::CDockWidget("节点编辑器", dockManager);
+    centralDockWidget->setWidget(m_graphicsView);
+    centralDockWidget->setObjectName("central_editor");
+    
+    // 设置中央部件属性
+    centralDockWidget->setFeature(ads::CDockWidget::DockWidgetClosable, false);
+    centralDockWidget->setFeature(ads::CDockWidget::DockWidgetMovable, false);
+    centralDockWidget->setFeature(ads::CDockWidget::DockWidgetFloatable, false);
+    
+    qDebug() << "MainWindow: 中央停靠部件已创建";
+    
+    // 使用ADS的正确API设置中央部件
+    auto* centralArea = dockManager->setCentralWidget(centralDockWidget);
+    
+    if (centralArea) {
+        qDebug() << "MainWindow: 成功设置ADS中央部件";
         
-        // 创建中央停靠部件
-        auto* centralDockWidget = new ads::CDockWidget("节点编辑器");
-        centralDockWidget->setWidget(m_graphicsView);
-        centralDockWidget->setObjectName("central_editor");
-        
-        // 使用ADS的正确API设置中央部件
-        // 注意：这必须是第一个添加到DockManager的部件
-        auto* centralArea = dockManager->setCentralWidget(centralDockWidget);
-        
-        if (centralArea) {
-            qDebug() << "MainWindow: 成功设置ADS中央部件";
-            
-            // ADS接管中央部件，设置ADS dock manager为主窗口中央布局
-            if (ui->centralwidget) {
-                // 清空中央部件的现有布局
-                if (ui->centralwidget->layout()) {
-                    delete ui->centralwidget->layout();
+        // 将ADS dock manager添加到主窗口的中央部件
+        if (ui->centralwidget) {
+            // 清空现有布局
+            if (ui->centralwidget->layout()) {
+                QLayoutItem* item;
+                while ((item = ui->centralwidget->layout()->takeAt(0)) != nullptr) {
+                    delete item->widget();
+                    delete item;
                 }
-                
-                // 创建新的布局并将ADS dock manager添加进去
-                QVBoxLayout* centralLayout = new QVBoxLayout(ui->centralwidget);
-                centralLayout->setContentsMargins(0, 0, 0, 0);
-                centralLayout->addWidget(dockManager);
-                
-                // 确保各个组件都正确显示
-                ui->centralwidget->show();
-                dockManager->show();
-                centralDockWidget->show();
-                m_graphicsView->show();
-                
-                // 设置最小尺寸确保可见
-                dockManager->setMinimumSize(800, 600);
-                ui->centralwidget->setMinimumSize(800, 600);
-                
-                qDebug() << "MainWindow: ADS系统已接管中央部件布局";
-                qDebug() << "MainWindow: 中央部件大小:" << ui->centralwidget->size();
-                qDebug() << "MainWindow: DockManager大小:" << dockManager->size();
-                qDebug() << "MainWindow: 图形视图大小:" << m_graphicsView->size();
+                delete ui->centralwidget->layout();
             }
-        } else {
-            qCritical() << "MainWindow: 设置ADS中央部件失败";
+            
+            // 创建新布局
+            QVBoxLayout* centralLayout = new QVBoxLayout(ui->centralwidget);
+            centralLayout->setContentsMargins(0, 0, 0, 0);
+            centralLayout->setSpacing(0);
+            centralLayout->addWidget(dockManager);
+            
+            // 确保组件正确显示
+            dockManager->show();
+            centralDockWidget->show();
+            m_graphicsView->show();
+            
+            qDebug() << "MainWindow: ADS系统已接管中央部件布局";
         }
+    } else {
+        qCritical() << "MainWindow: 设置ADS中央部件失败";
     }
 }
 

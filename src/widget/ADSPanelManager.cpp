@@ -43,8 +43,35 @@ ADSPanelManager::ADSPanelManager(QMainWindow* mainWindow, QObject* parent)
 
 ADSPanelManager::~ADSPanelManager()
 {
-    shutdown();
-    qDebug() << "ADSPanelManager: 销毁面板管理器";
+    qDebug() << "ADSPanelManager: 开始销毁面板管理器";
+    
+    // 安全关闭所有面板
+    if (m_dockManager) {
+        // 先断开所有信号连接，避免在销毁过程中触发信号
+        m_dockManager->disconnect();
+        
+        // 移除所有面板
+        QList<ads::CDockWidget*> panels = m_panels.values();
+        for (auto* panel : panels) {
+            if (panel) {
+                panel->disconnect(); // 断开面板的信号连接
+                if (panel->dockManager() == m_dockManager) {
+                    m_dockManager->removeDockWidget(panel);
+                }
+            }
+        }
+        
+        // 清理注册表
+        m_panels.clear();
+        m_panelTypes.clear();
+        
+        // 重置指针
+        m_propertyPanelContainer = nullptr;
+        m_nodePalette = nullptr;
+        m_commandHistoryWidget = nullptr;
+    }
+    
+    qDebug() << "ADSPanelManager: 面板管理器销毁完成";
 }
 
 void ADSPanelManager::initialize()
@@ -243,8 +270,8 @@ ads::CDockWidget* ADSPanelManager::createPanel(PanelType type, const QString& pa
         return nullptr;
     }
     
-    // 创建ADS停靠面板
-    ads::CDockWidget* dockWidget = new ads::CDockWidget(title);
+    // 创建ADS停靠面板 - 重要：设置正确的父对象
+    ads::CDockWidget* dockWidget = new ads::CDockWidget(title, m_dockManager);
     dockWidget->setObjectName(panelId);
     dockWidget->setWidget(content);
     dockWidget->setIcon(getPanelIcon(type));
@@ -327,78 +354,77 @@ ads::CDockWidget* ADSPanelManager::createProjectExplorerPanel()
 // 布局管理实现
 void ADSPanelManager::setupDefaultLayout()
 {
-    // 注意：这个方法现在假设中央部件已经被设置
-    // 中央部件必须是第一个添加到dock manager的部件
-    if (!m_dockManager) return;
-    
-    qDebug() << "ADSPanelManager: 开始设置默认布局（假设中央部件已设置）";
-    
-    // 检查面板是否已存在，避免重复创建和添加
-    auto* propertyPanel = getPanel("property_panel");
-    auto* nodePanel = getPanel("node_palette");
-    auto* historyPanel = getPanel("command_history");
-    auto* outputPanel = getPanel("output_console");
-    
-    // 只有当面板不存在时才创建
-    if (!propertyPanel) {
-        propertyPanel = createPropertyPanel();
-    }
-    if (!nodePanel) {
-        nodePanel = createNodePalettePanel();
-    }
-    if (!historyPanel) {
-        historyPanel = createCommandHistoryPanel();
-    }
-    if (!outputPanel) {
-        outputPanel = createOutputConsolePanel();
+    if (!m_dockManager) {
+        qCritical() << "ADSPanelManager: DockManager 不存在，无法设置布局";
+        return;
     }
     
-    // 添加空指针检查
+    qDebug() << "ADSPanelManager: 开始设置默认布局";
+    
+    // 清理现有面板（安全删除）
+    QStringList panelIds = m_panels.keys();
+    for (const QString& panelId : panelIds) {
+        auto* panel = m_panels.value(panelId);
+        if (panel) {
+            if (panel->dockManager()) {
+                m_dockManager->removeDockWidget(panel);
+            }
+            // 从注册表中移除，但不删除对象，让ADS系统管理
+            m_panels.remove(panelId);
+            m_panelTypes.remove(panelId);
+        }
+    }
+    
+    // 重新创建所有面板
+    auto* propertyPanel = createPropertyPanel();
+    auto* nodePanel = createNodePalettePanel();
+    auto* historyPanel = createCommandHistoryPanel();
+    auto* outputPanel = createOutputConsolePanel();
+    
+    // 检查面板创建是否成功
     if (!propertyPanel || !nodePanel || !historyPanel || !outputPanel) {
         qCritical() << "ADSPanelManager: 面板创建失败，无法设置布局";
         return;
     }
     
-    // 检查面板是否已经添加到dock manager，避免重复添加
-    // 使用CDockWidget的公开方法检查是否已添加
-    bool isNodePanelAdded = nodePanel->dockManager() != nullptr;
-    bool isPropertyPanelAdded = propertyPanel->dockManager() != nullptr;
-    bool isHistoryPanelAdded = historyPanel->dockManager() != nullptr;
-    bool isOutputPanelAdded = outputPanel->dockManager() != nullptr;
+    qDebug() << "ADSPanelManager: 所有面板创建成功，开始添加到布局";
     
-    qDebug() << "ADSPanelManager: 面板添加状态 - Node:" << isNodePanelAdded 
-             << "Property:" << isPropertyPanelAdded 
-             << "History:" << isHistoryPanelAdded 
-             << "Output:" << isOutputPanelAdded;
-    
-    // 只添加尚未添加的面板
-    if (!isNodePanelAdded) {
+    // 按布局添加面板
+    try {
+        // 左侧：节点面板
         m_dockManager->addDockWidget(ads::LeftDockWidgetArea, nodePanel);
-        qDebug() << "ADSPanelManager: 添加节点面板到左侧区域";
-    }
-    
-    if (!isPropertyPanelAdded) {
+        qDebug() << "ADSPanelManager: 节点面板添加完成";
+        
+        // 右侧：属性面板
         m_dockManager->addDockWidget(ads::RightDockWidgetArea, propertyPanel);
-        qDebug() << "ADSPanelManager: 添加属性面板到右侧区域";
-    }
-    
-    if (!isHistoryPanelAdded) {
-        m_dockManager->addDockWidget(ads::RightDockWidgetArea, historyPanel);
-        qDebug() << "ADSPanelManager: 添加命令历史面板到右侧区域";
-    }
-    
-    if (!isOutputPanelAdded) {
+        qDebug() << "ADSPanelManager: 属性面板添加完成";
+        
+        // 右侧：命令历史面板（添加到属性面板的同一区域作为标签页）
+        m_dockManager->addDockWidgetTabToArea(historyPanel, propertyPanel->dockAreaWidget());
+        qDebug() << "ADSPanelManager: 命令历史面板添加完成";
+        
+        // 底部：输出面板
         m_dockManager->addDockWidget(ads::BottomDockWidgetArea, outputPanel);
-        qDebug() << "ADSPanelManager: 添加输出面板到底部区域";
+        qDebug() << "ADSPanelManager: 输出面板添加完成";
+        
+        // 设置默认激活的标签页
+        if (propertyPanel->dockAreaWidget()) {
+            propertyPanel->dockAreaWidget()->setCurrentDockWidget(propertyPanel);
+        }
+        
+        // 确保所有面板可见
+        propertyPanel->show();
+        nodePanel->show();
+        historyPanel->show();
+        outputPanel->show();
+        
+        qDebug() << "ADSPanelManager: 默认布局设置完成";
+        
+    } catch (const std::exception& e) {
+        qCritical() << "ADSPanelManager: 设置布局时发生异常:" << e.what();
+    } catch (...) {
+        qCritical() << "ADSPanelManager: 设置布局时发生未知异常";
     }
-    
-    // 确保所有面板都可见
-    propertyPanel->show();
-    nodePanel->show();
-    historyPanel->show();
-    outputPanel->show();
-    
-    qDebug() << "ADSPanelManager: 默认布局设置完成";
 }
 
 void ADSPanelManager::setupMinimalLayout()
