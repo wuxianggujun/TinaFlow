@@ -26,6 +26,7 @@
 #include "CommandManager.hpp"
 #include "NodeCommands.hpp"
 #include "widget/ModernToolBar.hpp"
+#include "widget/ADSPanelManager.hpp"
 #include "NodeCatalog.hpp"
 
 // QtNodes
@@ -64,11 +65,14 @@ bool MainWindow::s_globalExecutionEnabled = false;
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
       , ui(new Ui::MainWindow)
+      , m_adsPanelManager(nullptr)
 {
     ui->setupUi(this);
     
     setupNodeEditor();
     setupModernToolbar();
+    setupAdvancedPanels(); // 新的ADS面板系统
+    setupADSLayoutMenu(); // ADS布局菜单
     setupPropertyPanel();
     setupNodePalette();
     setupLayoutMenu();
@@ -82,6 +86,12 @@ MainWindow::~MainWindow()
     settings.setValue("geometry", saveGeometry());
     settings.setValue("windowState", saveState());
     qDebug() << "MainWindow: Layout saved on exit";
+    
+    // 清理ADS面板管理器
+    if (m_adsPanelManager) {
+        m_adsPanelManager->shutdown();
+        delete m_adsPanelManager;
+    }
     
     delete ui;
 }
@@ -236,9 +246,7 @@ void MainWindow::reinitializeNodeEditor()
     }
     
     // 更新属性面板容器的图形模型
-    if (m_propertyPanelContainer) {
-        m_propertyPanelContainer->setGraphModel(m_graphModel.get());
-    }
+    updatePropertyPanelReference();
     
     qDebug() << "MainWindow: Node editor reinitialized with fresh model";
 }
@@ -349,81 +357,18 @@ void MainWindow::setupModernToolbar()
 
 void MainWindow::setupPropertyPanel()
 {
-    // 属性面板已经在UI文件中设计好了，这里只需要初始化
+    // 注意：当使用ADS面板系统时，属性面板由ADSPanelManager管理
+    // 这里只初始化传统的UI面板作为备用
     m_currentPropertyWidget = nullptr;
     
-    // 创建新的属性面板容器
-    m_propertyPanelContainer = new PropertyPanelContainer(this);
-    m_propertyPanelContainer->setGraphModel(m_graphModel.get());
+    // 属性面板容器将由ADS系统创建和管理
+    // 这里不再创建独立的QDockWidget实例，避免与ADS系统冲突
+    m_propertyPanelContainer = nullptr;
+    m_propertyPanelDock = nullptr;
+    m_commandHistoryWidget = nullptr; 
+    m_commandHistoryDock = nullptr;
     
-    // 创建新属性面板的停靠窗口
-    m_propertyPanelDock = new QDockWidget("🔧 新属性面板 (测试)", this);
-    m_propertyPanelDock->setWidget(m_propertyPanelContainer);
-    m_propertyPanelDock->setAllowedAreas(Qt::AllDockWidgetAreas);
-    m_propertyPanelDock->setFeatures(
-        QDockWidget::DockWidgetMovable | 
-        QDockWidget::DockWidgetFloatable | 
-        QDockWidget::DockWidgetClosable
-    );
-    
-    // 设置新属性面板停靠窗口样式
-    m_propertyPanelDock->setStyleSheet(
-        "QDockWidget {"
-        "background-color: #f1f8ff;"
-        "border: 2px solid #007acc;"
-        "border-radius: 6px;"
-        "}"
-        "QDockWidget::title {"
-        "background-color: #007acc;"
-        "padding: 8px;"
-        "border-top-left-radius: 6px;"
-        "border-top-right-radius: 6px;"
-        "font-weight: bold;"
-        "color: white;"
-        "}"
-    );
-    
-    // 将新属性面板添加到右侧
-    addDockWidget(Qt::RightDockWidgetArea, m_propertyPanelDock);
-    
-    // 创建命令历史停靠窗口，而不是标签页
-    m_commandHistoryWidget = new CommandHistoryWidget(this);
-    m_commandHistoryDock = new QDockWidget("📜 命令历史", this);
-    m_commandHistoryDock->setWidget(m_commandHistoryWidget);
-    m_commandHistoryDock->setAllowedAreas(Qt::AllDockWidgetAreas);
-    m_commandHistoryDock->setFeatures(
-        QDockWidget::DockWidgetMovable | 
-        QDockWidget::DockWidgetFloatable | 
-        QDockWidget::DockWidgetClosable
-    );
-    
-    // 设置命令历史停靠窗口样式
-    m_commandHistoryDock->setStyleSheet(
-        "QDockWidget {"
-        "background-color: #f8f9fa;"
-        "border: 1px solid #dee2e6;"
-        "border-radius: 6px;"
-        "}"
-        "QDockWidget::title {"
-        "background-color: #e9ecef;"
-        "padding: 8px;"
-        "border-top-left-radius: 6px;"
-        "border-top-right-radius: 6px;"
-        "font-weight: bold;"
-        "color: #495057;"
-        "}"
-    );
-    
-    // 将命令历史面板添加到右侧
-    addDockWidget(Qt::RightDockWidgetArea, m_commandHistoryDock);
-    
-    // 将新属性面板和命令历史面板组合成标签页（可选）
-    tabifyDockWidget(m_propertyPanelDock, m_commandHistoryDock);
-    
-    // 默认显示新属性面板
-    m_propertyPanelDock->raise();
-    
-    qDebug() << "MainWindow: Property panel setup completed with new PropertyPanelContainer";
+    qDebug() << "MainWindow: Property panel setup completed - will be managed by ADS system";
 }
 
 
@@ -636,6 +581,7 @@ void MainWindow::onNodeSelected(QtNodes::NodeId nodeId)
     qDebug() << "MainWindow: Node selected:" << nodeId;
     m_selectedNodeId = nodeId; // 保存选中的节点ID
     updatePropertyPanel(nodeId);
+    updateADSPropertyPanel(nodeId); // 同时更新ADS属性面板
 }
 
 void MainWindow::onNodeDeselected()
@@ -643,6 +589,7 @@ void MainWindow::onNodeDeselected()
     qDebug() << "MainWindow: Node deselected";
     m_selectedNodeId = QtNodes::NodeId{}; // 清除选中的节点ID
     clearPropertyPanel();
+    clearADSPropertyPanel(); // 同时清空ADS属性面板
 }
 
 void MainWindow::refreshCurrentPropertyPanel()
@@ -720,10 +667,8 @@ void MainWindow::updatePropertyPanel(QtNodes::NodeId nodeId)
     // 切换到属性tab
     ui->rightTab->setCurrentWidget(ui->tab_properties);
 
-    // 同时更新新的属性面板容器
-    if (m_propertyPanelContainer) {
-        m_propertyPanelContainer->updateNodeProperties(nodeId);
-    }
+    // 同时更新ADS属性面板容器
+    updateADSPropertyPanel(nodeId);
 
     qDebug() << "MainWindow: Updated property panel for node" << nodeId << "(" << nodeCaption << ")";
 }
@@ -754,10 +699,8 @@ void MainWindow::clearPropertyPanel()
     // 添加弹性空间
     contentLayout->addStretch();
 
-    // 同时清除新的属性面板容器
-    if (m_propertyPanelContainer) {
-        m_propertyPanelContainer->clearProperties();
-    }
+    // 同时清除ADS属性面板容器
+    clearADSPropertyPanel();
 
     qDebug() << "MainWindow: Cleared property panel";
 }
@@ -1411,19 +1354,33 @@ void MainWindow::setupLayoutMenu()
     connect(toggleNodePaletteAction, &QAction::toggled, m_nodePaletteDock, &QDockWidget::setVisible);
     connect(m_nodePaletteDock, &QDockWidget::visibilityChanged, toggleNodePaletteAction, &QAction::setChecked);
     
-    // 新属性面板控制
-    QAction* toggleNewPropertyPanelAction = panelsMenu->addAction("🔧 新属性面板");
-    toggleNewPropertyPanelAction->setCheckable(true);
-    toggleNewPropertyPanelAction->setChecked(true);
-    connect(toggleNewPropertyPanelAction, &QAction::toggled, m_propertyPanelDock, &QDockWidget::setVisible);
-    connect(m_propertyPanelDock, &QDockWidget::visibilityChanged, toggleNewPropertyPanelAction, &QAction::setChecked);
+    // ADS属性面板控制
+    QAction* toggleADSPropertyPanelAction = panelsMenu->addAction("🔧 ADS属性面板");
+    toggleADSPropertyPanelAction->setCheckable(true);
+    toggleADSPropertyPanelAction->setChecked(true);
+    connect(toggleADSPropertyPanelAction, &QAction::toggled, [this](bool visible) {
+        if (m_adsPanelManager) {
+            if (visible) {
+                m_adsPanelManager->showPanel("property_panel");
+            } else {
+                m_adsPanelManager->hidePanel("property_panel");
+            }
+        }
+    });
 
-    // 命令历史面板控制
-    QAction* toggleCommandHistoryAction = panelsMenu->addAction("📜 命令历史");
-    toggleCommandHistoryAction->setCheckable(true);
-    toggleCommandHistoryAction->setChecked(true);
-    connect(toggleCommandHistoryAction, &QAction::toggled, m_commandHistoryDock, &QDockWidget::setVisible);
-    connect(m_commandHistoryDock, &QDockWidget::visibilityChanged, toggleCommandHistoryAction, &QAction::setChecked);
+    // ADS命令历史面板控制
+    QAction* toggleADSCommandHistoryAction = panelsMenu->addAction("📜 ADS命令历史");
+    toggleADSCommandHistoryAction->setCheckable(true);
+    toggleADSCommandHistoryAction->setChecked(true);
+    connect(toggleADSCommandHistoryAction, &QAction::toggled, [this](bool visible) {
+        if (m_adsPanelManager) {
+            if (visible) {
+                m_adsPanelManager->showPanel("command_history");
+            } else {
+                m_adsPanelManager->hidePanel("command_history");
+            }
+        }
+    });
     
     panelsMenu->addSeparator();
     
@@ -1431,16 +1388,9 @@ void MainWindow::setupLayoutMenu()
     QAction* tabifyPanelsAction = panelsMenu->addAction("📑 面板组合模式");
     tabifyPanelsAction->setCheckable(true);
     connect(tabifyPanelsAction, &QAction::toggled, this, [this](bool enabled) {
-        if (enabled) {
-            // 将命令历史面板与节点面板组合成标签页
-            tabifyDockWidget(m_nodePaletteDock, m_commandHistoryDock);
-            ui->statusbar->showMessage(tr("面板已组合成标签页"), 2000);
-        } else {
-            // 分离面板到独立位置
-            removeDockWidget(m_commandHistoryDock);
-            addDockWidget(Qt::RightDockWidgetArea, m_commandHistoryDock);
-            ui->statusbar->showMessage(tr("面板已分离"), 2000);
-        }
+        // ADS系统自动管理面板组合，这里暂时禁用
+        Q_UNUSED(enabled);
+        ui->statusbar->showMessage(tr("ADS系统自动管理面板布局"), 2000);
     });
     
     panelsMenu->addSeparator();
@@ -1448,24 +1398,17 @@ void MainWindow::setupLayoutMenu()
     // 布局控制
     QAction* resetLayoutAction = panelsMenu->addAction("🔄 重置布局");
     connect(resetLayoutAction, &QAction::triggered, this, [this]() {
-        // 重置所有停靠窗口到默认位置
-        removeDockWidget(m_nodePaletteDock);
-        removeDockWidget(m_propertyPanelDock);
-        removeDockWidget(m_commandHistoryDock);
+        // 使用ADS系统重置布局
+        if (m_adsPanelManager) {
+            m_adsPanelManager->resetToDefaultLayout();
+        }
         
-        // 重新添加到默认位置
-        addDockWidget(Qt::LeftDockWidgetArea, m_nodePaletteDock);
-        addDockWidget(Qt::RightDockWidgetArea, m_propertyPanelDock);
-        addDockWidget(Qt::RightDockWidgetArea, m_commandHistoryDock);
-        
-        // 确保都显示
-        m_nodePaletteDock->show();
-        m_propertyPanelDock->show();
-        m_commandHistoryDock->show();
-        
-        // 将新属性面板和命令历史组合成标签页
-        tabifyDockWidget(m_propertyPanelDock, m_commandHistoryDock);
-        m_propertyPanelDock->raise();
+        // 重置节点面板（传统系统）
+        if (m_nodePaletteDock) {
+            removeDockWidget(m_nodePaletteDock);
+            addDockWidget(Qt::LeftDockWidgetArea, m_nodePaletteDock);
+            m_nodePaletteDock->show();
+        }
         
         ui->statusbar->showMessage(tr("布局已重置"), 2000);
         qDebug() << "MainWindow: Layout reset to default";
@@ -1634,4 +1577,174 @@ void MainWindow::showImprovedSceneContextMenu(const QPointF& pos)
     // 转换坐标并显示菜单
     QPoint globalPos = m_graphicsView->mapToGlobal(m_graphicsView->mapFromScene(pos));
     contextMenu.exec(globalPos);
+}
+
+void MainWindow::setupAdvancedPanels()
+{
+    qDebug() << "MainWindow: 设置ADS高级面板系统";
+    
+    // 创建ADS面板管理器
+    m_adsPanelManager = new ADSPanelManager(this, this);
+    
+    // 初始化ADS系统
+    m_adsPanelManager->initialize();
+    
+    // 连接面板事件
+    connect(m_adsPanelManager, &ADSPanelManager::panelCreated,
+            this, [this](const QString& panelId, ADSPanelManager::PanelType type) {
+                qDebug() << "MainWindow: ADS面板创建" << panelId << type;
+                ui->statusbar->showMessage(tr("面板已创建: %1").arg(panelId), 2000);
+            });
+    
+    connect(m_adsPanelManager, &ADSPanelManager::layoutChanged,
+            this, [this]() {
+                qDebug() << "MainWindow: ADS布局已更改";
+            });
+    
+    connect(m_adsPanelManager, &ADSPanelManager::panelFocused,
+            this, [this](const QString& panelId) {
+                // 当属性面板获得焦点时，更新图形模型引用
+                if (panelId == "property_panel") {
+                    updatePropertyPanelReference();
+                }
+            });
+    
+    // 设置默认布局
+    m_adsPanelManager->setupDefaultLayout();
+    
+    // 同步MainWindow的属性面板引用到ADSPanelManager的实例
+    updatePropertyPanelReference();
+    
+    qDebug() << "MainWindow: ADS高级面板系统设置完成";
+}
+
+void MainWindow::setupADSLayoutMenu()
+{
+    if (!m_adsPanelManager) return;
+    
+    // 创建视图菜单（如果不存在）
+    QMenuBar* menuBar = this->menuBar();
+    QMenu* viewMenu = nullptr;
+    
+    // 查找现有的视图菜单
+    for (QAction* action : menuBar->actions()) {
+        if (action->menu() && action->menu()->title() == "视图") {
+            viewMenu = action->menu();
+            break;
+        }
+    }
+    
+    // 如果没有视图菜单，创建一个
+    if (!viewMenu) {
+        viewMenu = menuBar->addMenu("视图");
+    }
+    
+    // 添加ADS布局控制菜单
+    QMenu* adsLayoutMenu = viewMenu->addMenu("🎛️ ADS布局");
+    
+    // 布局预设
+    QAction* defaultLayoutAction = adsLayoutMenu->addAction("🏠 默认布局");
+    connect(defaultLayoutAction, &QAction::triggered, 
+            m_adsPanelManager, &ADSPanelManager::setupDefaultLayout);
+    
+    QAction* minimalLayoutAction = adsLayoutMenu->addAction("📦 最小化布局");
+    connect(minimalLayoutAction, &QAction::triggered, 
+            m_adsPanelManager, &ADSPanelManager::setupMinimalLayout);
+    
+    QAction* developerLayoutAction = adsLayoutMenu->addAction("🛠️ 开发者布局");
+    connect(developerLayoutAction, &QAction::triggered, 
+            m_adsPanelManager, &ADSPanelManager::setupDeveloperLayout);
+    
+    QAction* designerLayoutAction = adsLayoutMenu->addAction("🎨 设计师布局");
+    connect(designerLayoutAction, &QAction::triggered, 
+            m_adsPanelManager, &ADSPanelManager::setupDesignerLayout);
+    
+    adsLayoutMenu->addSeparator();
+    
+    // 面板控制
+    QAction* showPropertyAction = adsLayoutMenu->addAction("🔧 显示属性面板");
+    connect(showPropertyAction, &QAction::triggered, 
+            [this]() { m_adsPanelManager->showPanel("property_panel"); });
+    
+    QAction* showNodePaletteAction = adsLayoutMenu->addAction("🗂️ 显示节点面板");
+    connect(showNodePaletteAction, &QAction::triggered, 
+            [this]() { m_adsPanelManager->showPanel("node_palette"); });
+    
+    QAction* showOutputAction = adsLayoutMenu->addAction("💻 显示输出控制台");
+    connect(showOutputAction, &QAction::triggered, 
+            [this]() { m_adsPanelManager->showPanel("output_console"); });
+    
+    adsLayoutMenu->addSeparator();
+    
+    // 布局管理
+    QAction* saveLayoutAction = adsLayoutMenu->addAction("💾 保存当前布局");
+    connect(saveLayoutAction, &QAction::triggered, 
+            [this]() { 
+                QString layoutName = QString("user_layout_%1").arg(
+                    QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss"));
+                m_adsPanelManager->saveLayoutPreset(layoutName);
+                ui->statusbar->showMessage(tr("布局已保存: %1").arg(layoutName), 3000);
+            });
+    
+    QAction* resetLayoutAction = adsLayoutMenu->addAction("🔄 重置到默认布局");
+    connect(resetLayoutAction, &QAction::triggered, 
+            m_adsPanelManager, &ADSPanelManager::resetToDefaultLayout);
+    
+    qDebug() << "MainWindow: ADS布局菜单设置完成";
+}
+
+void MainWindow::updateADSPropertyPanel(QtNodes::NodeId nodeId)
+{
+    if (!m_adsPanelManager) return;
+    
+    // 确保属性面板引用是最新的
+    updatePropertyPanelReference();
+    
+    // 确保属性面板可见
+    m_adsPanelManager->showPanel("property_panel");
+    
+    // 更新属性面板内容
+    if (m_propertyPanelContainer) {
+        m_propertyPanelContainer->updateNodeProperties(nodeId);
+        
+        // 获取ADS面板并更新标题
+        if (auto* propertyPanel = m_adsPanelManager->getPanel("property_panel")) {
+            auto nodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(nodeId);
+            if (nodeDelegate) {
+                QString newTitle = QString("🔧 属性面板 - %1").arg(nodeDelegate->caption());
+                propertyPanel->setWindowTitle(newTitle);
+            }
+        }
+    }
+}
+
+void MainWindow::clearADSPropertyPanel()
+{
+    // 确保属性面板引用是最新的
+    updatePropertyPanelReference();
+    
+    if (m_propertyPanelContainer) {
+        m_propertyPanelContainer->clearProperties();
+        
+        // 重置ADS面板标题
+        if (m_adsPanelManager) {
+            if (auto* propertyPanel = m_adsPanelManager->getPanel("property_panel")) {
+                propertyPanel->setWindowTitle("🔧 属性面板");
+            }
+        }
+    }
+}
+
+void MainWindow::updatePropertyPanelReference()
+{
+    // 同步MainWindow的属性面板引用到ADSPanelManager的实例
+    if (m_adsPanelManager) {
+        m_propertyPanelContainer = m_adsPanelManager->getPropertyPanelContainer();
+        
+        // 如果图形模型已创建，设置到属性面板
+        if (m_propertyPanelContainer && m_graphModel) {
+            m_propertyPanelContainer->setGraphModel(m_graphModel.get());
+            qDebug() << "MainWindow: 属性面板引用已同步并设置图形模型";
+        }
+    }
 }

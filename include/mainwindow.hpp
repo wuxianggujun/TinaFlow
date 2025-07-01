@@ -14,6 +14,7 @@
 #include "widget/CommandHistoryWidget.hpp"
 #include "widget/ModernToolBar.hpp"
 #include "widget/PropertyPanelContainer.hpp"
+#include "widget/ADSPanelManager.hpp"
 #include "NodePalette.hpp"
 
 namespace Ui {
@@ -64,9 +65,16 @@ private:
     void reinitializeNodeEditor();
     void setupModernToolbar();
     void setupPropertyPanel();
+    void setupAdvancedPanels(); // 新的ADS面板系统
+    void setupADSLayoutMenu(); // ADS布局菜单
     void setupNodePalette();
     void setupKeyboardShortcuts();
     void setupLayoutMenu();
+    
+    // ADS面板更新方法
+    void updateADSPropertyPanel(QtNodes::NodeId nodeId);
+    void clearADSPropertyPanel();
+    void updatePropertyPanelReference(); // 同步属性面板引用
     void setupCustomStyles();
     void saveToFile(const QString& fileName);
     void loadFromFile(const QString& fileName);
@@ -107,6 +115,9 @@ private:
     
     // 现代化工具栏
     ModernToolBar* m_modernToolBar;
+    
+    // ADS面板管理器
+    ADSPanelManager* m_adsPanelManager;
     
     // 节点面板
     NodePalette* m_nodePalette;
