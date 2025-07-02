@@ -23,6 +23,10 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QSplitter>
+#include <QLineEdit>
+#include <QTextEdit>
+#include <QPlainTextEdit>
+#include <QComboBox>
 
 // QtNodes
 #include <QtNodes/DataFlowGraphicsScene>
@@ -901,6 +905,27 @@ void MainWindow::deleteSelectedNode()
     }
 }
 
+void MainWindow::onDeleteKeyPressed()
+{
+    // 检查当前焦点是否在输入控件上
+    QWidget* focusWidget = QApplication::focusWidget();
+    if (focusWidget) {
+        // 检查是否为文本输入控件
+        if (qobject_cast<QLineEdit*>(focusWidget) ||
+            qobject_cast<QTextEdit*>(focusWidget) ||
+            qobject_cast<QPlainTextEdit*>(focusWidget) ||
+            qobject_cast<QComboBox*>(focusWidget)) {
+            // 如果焦点在输入控件上，不处理删除节点操作
+            // 让输入控件自己处理 Delete 键
+            qDebug() << "MainWindow: Delete key ignored - focus is on input widget:" << focusWidget->metaObject()->className();
+            return;
+        }
+    }
+
+    // 如果焦点不在输入控件上，执行删除节点操作
+    deleteSelectedNode();
+}
+
 void MainWindow::deleteSelectedConnection()
 {
     // 检查是否有有效的连接被选中（简化检查）
@@ -1750,13 +1775,13 @@ void MainWindow::setupKeyboardShortcuts()
         }
     });
 
-    // 删除快捷键
+    // 删除快捷键 - 使用智能处理，避免在输入时误删节点
     QShortcut* deleteShortcut = new QShortcut(QKeySequence::Delete, this);
-    connect(deleteShortcut, &QShortcut::activated, this, &MainWindow::deleteSelectedNode);
+    connect(deleteShortcut, &QShortcut::activated, this, &MainWindow::onDeleteKeyPressed);
 
-    // 备用删除快捷键
+    // 备用删除快捷键 - 同样使用智能处理
     QShortcut* deleteShortcut2 = new QShortcut(QKeySequence("Backspace"), this);
-    connect(deleteShortcut2, &QShortcut::activated, this, &MainWindow::deleteSelectedNode);
+    connect(deleteShortcut2, &QShortcut::activated, this, &MainWindow::onDeleteKeyPressed);
 
     // 撤销重做快捷键
     QShortcut* undoShortcut = new QShortcut(QKeySequence::Undo, this);

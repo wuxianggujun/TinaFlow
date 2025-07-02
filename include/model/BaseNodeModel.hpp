@@ -36,7 +36,10 @@ class BaseNodeModel : public QtNodes::NodeDelegateModel, public PropertyProvider
 
 public:
     BaseNodeModel() = default;
-    ~BaseNodeModel() override = default;
+    ~BaseNodeModel() override {
+        // 清理注册的属性控件，避免悬空指针
+        m_properties.clear();
+    }
 
     // 标准化的save/load实现
     QJsonObject save() const override

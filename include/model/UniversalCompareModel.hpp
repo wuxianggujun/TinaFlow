@@ -8,6 +8,7 @@
 #include "data/BooleanData.hpp"
 #include "data/CellData.hpp"
 #include "data/IntegerData.hpp"
+#include "data/ValueData.hpp"
 #include "widget/PropertyWidget.hpp"
 #include <QComboBox>
 #include <QCheckBox>
@@ -102,32 +103,28 @@ public:
         
         if (performComparison(leftData, rightData, result, errorMsg)) {
             clearError();
-            qDebug() << "UniversalCompareModel: Comparison successful, result:" << result;
             return std::make_shared<BooleanData>(result);
         } else {
             setError(errorMsg);
-            qDebug() << "UniversalCompareModel: Comparison failed:" << errorMsg;
             return std::make_shared<BooleanData>(false);
         }
     }
 
     void setInData(std::shared_ptr<QtNodes::NodeData> nodeData, QtNodes::PortIndex portIndex) override {
-        qDebug() << "UniversalCompareModel: setInData called, portIndex:" << portIndex;
-        
         if (portIndex < m_inputData.size()) {
             m_inputData[portIndex] = nodeData;
-            
-            if (nodeData) {
-                QString dataType = nodeData->type().name;
-                qDebug() << "UniversalCompareModel: Received" << dataType << "at port" << portIndex;
-            } else {
-                qDebug() << "UniversalCompareModel: Received null data at port" << portIndex;
-            }
         }
-        
-        // 重新计算并更新显示
+
+        // 只有当两个输入都有数据时才更新错误显示和触发计算
+        // 这样可以避免不必要的重复计算
         updateErrorDisplay();
-        emit dataUpdated(0);
+
+        // 只有当有有效的比较结果时才触发更新
+        auto leftData = getInputData(0);
+        auto rightData = getInputData(1);
+        if (leftData && rightData) {
+            emit dataUpdated(0);
+        }
     }
 
     QWidget* embeddedWidget() override {
@@ -260,7 +257,6 @@ private:
             m_errorLabel->show();
         }
         // 可以在这里设置节点为红色
-        qDebug() << "UniversalCompareModel: Error:" << message;
     }
 
     void clearError() {
@@ -295,8 +291,33 @@ private:
         if (auto cellData = std::dynamic_pointer_cast<CellData>(data)) {
             QVariant value = cellData->value();
             if (value.type() == QVariant::Bool) return "布尔值";
-            if (value.canConvert<double>()) return "数值";
+
+            // 更严格的数值检查：只有当字符串确实是有效数字时才认为是数值
+            if (value.type() == QVariant::Int || value.type() == QVariant::Double ||
+                value.type() == QVariant::LongLong || value.type() == QVariant::UInt ||
+                value.type() == QVariant::ULongLong) {
+                return "数值";
+            }
+
+            // 对于字符串类型，检查是否为纯数字
+            if (value.type() == QVariant::String) {
+                QString str = value.toString().trimmed();
+                if (!str.isEmpty()) {
+                    bool ok;
+                    str.toDouble(&ok);
+                    if (ok) return "数值";
+                }
+            }
+
             return "字符串";
+        } else if (auto valueData = std::dynamic_pointer_cast<ValueData>(data)) {
+            // 新的 ValueData 类型支持
+            switch (valueData->valueType()) {
+                case ValueData::String: return "字符串";
+                case ValueData::Number: return "数值";
+                case ValueData::Boolean: return "布尔值";
+                default: return "未知";
+            }
         } else if (std::dynamic_pointer_cast<BooleanData>(data)) {
             return "布尔值";
         } else if (std::dynamic_pointer_cast<IntegerData>(data)) {
@@ -441,6 +462,8 @@ private:
     QString extractStringValue(std::shared_ptr<QtNodes::NodeData> data) {
         if (auto cellData = std::dynamic_pointer_cast<CellData>(data)) {
             return cellData->value().toString();
+        } else if (auto valueData = std::dynamic_pointer_cast<ValueData>(data)) {
+            return valueData->toString();
         } else if (auto boolData = std::dynamic_pointer_cast<BooleanData>(data)) {
             return boolData->value() ? "true" : "false";
         } else if (auto intData = std::dynamic_pointer_cast<IntegerData>(data)) {
@@ -452,6 +475,8 @@ private:
     double extractNumericValue(std::shared_ptr<QtNodes::NodeData> data) {
         if (auto cellData = std::dynamic_pointer_cast<CellData>(data)) {
             return cellData->value().toDouble();
+        } else if (auto valueData = std::dynamic_pointer_cast<ValueData>(data)) {
+            return valueData->toDouble();
         } else if (auto boolData = std::dynamic_pointer_cast<BooleanData>(data)) {
             return boolData->value() ? 1.0 : 0.0;
         } else if (auto intData = std::dynamic_pointer_cast<IntegerData>(data)) {
@@ -463,6 +488,8 @@ private:
     bool extractBooleanValue(std::shared_ptr<QtNodes::NodeData> data) {
         if (auto cellData = std::dynamic_pointer_cast<CellData>(data)) {
             return cellData->value().toBool();
+        } else if (auto valueData = std::dynamic_pointer_cast<ValueData>(data)) {
+            return valueData->toBool();
         } else if (auto boolData = std::dynamic_pointer_cast<BooleanData>(data)) {
             return boolData->value();
         } else if (auto intData = std::dynamic_pointer_cast<IntegerData>(data)) {

@@ -67,6 +67,9 @@ private slots:
     void deleteSelectedConnection();
     void showAllConnectionsForDeletion();
     void duplicateSelectedNode();
+
+    // 智能键盘处理
+    void onDeleteKeyPressed();
     
     // 节点面板相关
     void onNodePaletteCreationRequested(const QString& nodeId);

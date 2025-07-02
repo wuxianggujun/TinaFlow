@@ -8,12 +8,16 @@
 #include "data/CellData.hpp"
 #include "data/IntegerData.hpp"
 #include "data/BooleanData.hpp"
+#include "data/ValueData.hpp"
 #include "widget/PropertyWidget.hpp"
 #include <QComboBox>
 #include <QLineEdit>
 #include <QCheckBox>
 #include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QLabel>
+#include <QPushButton>
+#include <QEvent>
 
 /**
  * @brief 常量值节点
@@ -62,10 +66,10 @@ public:
     QtNodes::NodeDataType dataType(QtNodes::PortType portType, QtNodes::PortIndex portIndex) const override {
         if (portType == QtNodes::PortType::Out) {
             switch (m_valueType) {
-                case String: return CellData().type();
-                case Number: return IntegerData().type();
-                case Boolean: return BooleanData().type();
-                default: return CellData().type();
+                case String: return {"value_string", "Value(字符串)"};
+                case Number: return {"value_number", "Value(数值)"};
+                case Boolean: return {"value_boolean", "Value(布尔值)"};
+                default: return {"value", "Value"};
             }
         }
         return {"", ""};
@@ -76,13 +80,13 @@ public:
 
         switch (m_valueType) {
             case String: {
-                return std::make_shared<CellData>("CONST", QVariant(m_stringValue));
+                return std::make_shared<ValueData>(m_stringValue);
             }
             case Number: {
-                return std::make_shared<IntegerData>(static_cast<int>(m_numberValue));
+                return std::make_shared<ValueData>(m_numberValue);
             }
             case Boolean: {
-                return std::make_shared<BooleanData>(m_booleanValue);
+                return std::make_shared<ValueData>(m_booleanValue);
             }
             default:
                 return nullptr;
@@ -93,44 +97,48 @@ public:
         // 常量节点没有输入
     }
 
+    bool eventFilter(QObject* obj, QEvent* event) override {
+        if (obj == m_valueEdit && event->type() == QEvent::MouseButtonDblClick) {
+            switchToNextType();
+            return true;
+        }
+        return BaseNodeModel::eventFilter(obj, event);
+    }
+
     QWidget* embeddedWidget() override {
         if (!m_widget) {
-            m_widget = new QWidget();
-            auto layout = new QVBoxLayout(m_widget);
-            layout->setContentsMargins(4, 4, 4, 4);
-            layout->setSpacing(2);
+            // 直接使用自定义的输入框，避免任何容器嵌套问题
+            m_valueEdit = new QLineEdit();
+            m_valueEdit->setStyleSheet(
+                "QLineEdit {"
+                "  font-size: 10px;"
+                "  border: 1px solid #ccc;"
+                "  border-radius: 3px;"
+                "  padding: 2px 4px;"
+                "  background: white;"
+                "}"
+                "QLineEdit:focus {"
+                "  border: 2px solid #0066cc;"
+                "  background: #f8f8ff;"
+                "}"
+            );
 
-            // 类型选择
-            auto typeLabel = new QLabel("类型:");
-            typeLabel->setStyleSheet("font-weight: bold; font-size: 10px;");
-            layout->addWidget(typeLabel);
+            // 根据当前类型设置占位符和初始值
+            updateInputDisplay();
 
-            m_typeCombo = new QComboBox();
-            m_typeCombo->addItems({"字符串", "数值", "布尔值"});
-            m_typeCombo->setCurrentIndex(static_cast<int>(m_valueType));
-            m_typeCombo->setStyleSheet("font-size: 10px;");
+            // 连接文本变化事件
+            connect(m_valueEdit, &QLineEdit::textChanged, [this](const QString& text) {
+                parseAndSetValue(text);
+                emit dataUpdated(0);
+            });
 
-            connect(m_typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
-                    [this](int index) {
-                        m_valueType = static_cast<ValueType>(index);
-                        updateValueWidget();
-                        emit dataUpdated(0);
-                    });
-
-            layout->addWidget(m_typeCombo);
-
-            // 值输入区域
-            m_valueWidget = new QWidget();
-            m_valueLayout = new QVBoxLayout(m_valueWidget);
-            m_valueLayout->setContentsMargins(0, 0, 0, 0);
-            m_valueLayout->setSpacing(2);
-            layout->addWidget(m_valueWidget);
-
-            updateValueWidget();
+            // 使用事件过滤器来处理双击切换类型
+            m_valueEdit->installEventFilter(this);
 
             // 注册属性控件
-            registerProperty("valueType", m_typeCombo);
-            // 注意：stringValue, numberValue, booleanValue的控件在updateValueWidget()中动态创建
+            registerProperty("valueEdit", m_valueEdit);
+
+            m_widget = m_valueEdit;
         }
         return m_widget;
     }
@@ -159,9 +167,8 @@ public:
             m_booleanValue = json["booleanValue"].toBool();
         }
 
-        if (m_typeCombo) {
-            m_typeCombo->setCurrentIndex(static_cast<int>(m_valueType));
-            updateValueWidget();
+        if (m_valueEdit) {
+            updateInputDisplay();
         }
     }
 
@@ -182,10 +189,9 @@ public:
             [this](int index) {
                 if (index >= 0 && index < 3) {
                     m_valueType = static_cast<ValueType>(index);
-                    if (m_typeCombo) {
-                        m_typeCombo->setCurrentIndex(index);
+                    if (m_valueEdit) {
+                        updateInputDisplay();
                     }
-                    updateValueWidget();
                     emit dataUpdated(0);
                 }
             });
@@ -197,8 +203,8 @@ public:
                     "stringValue", "输入字符串常量",
                     [this](const QString& newValue) {
                         m_stringValue = newValue;
-                        if (m_stringEdit) {
-                            m_stringEdit->setText(newValue);
+                        if (m_valueEdit) {
+                            updateInputDisplay();
                         }
                         emit dataUpdated(0);
                     });
@@ -211,8 +217,8 @@ public:
                         double value = newValue.toDouble(&ok);
                         if (ok) {
                             m_numberValue = value;
-                            if (m_numberEdit) {
-                                m_numberEdit->setText(newValue);
+                            if (m_valueEdit) {
+                                updateInputDisplay();
                             }
                             emit dataUpdated(0);
                         }
@@ -223,9 +229,8 @@ public:
                     "booleanValue",
                     [this](bool checked) {
                         m_booleanValue = checked;
-                        if (m_booleanCheck) {
-                            m_booleanCheck->setChecked(checked);
-                            m_booleanCheck->setText(checked ? "True" : "False");
+                        if (m_valueEdit) {
+                            updateInputDisplay();
                         }
                         emit dataUpdated(0);
                     });
@@ -251,70 +256,75 @@ private:
     bool m_booleanValue;
 
     QWidget* m_widget = nullptr;
-    QComboBox* m_typeCombo = nullptr;
-    QWidget* m_valueWidget = nullptr;
-    QVBoxLayout* m_valueLayout = nullptr;
+    QLineEdit* m_valueEdit = nullptr;
 
-    // 当前值输入控件
-    QLineEdit* m_stringEdit = nullptr;
-    QLineEdit* m_numberEdit = nullptr;
-    QCheckBox* m_booleanCheck = nullptr;
-
-    void updateValueWidget() {
-        if (!m_valueLayout) return;
-
-        // 清除现有控件
-        QLayoutItem* item;
-        while ((item = m_valueLayout->takeAt(0)) != nullptr) {
-            delete item->widget();
-            delete item;
+    QString getTypeDisplayName() const {
+        switch (m_valueType) {
+            case String: return "字符串";
+            case Number: return "数值";
+            case Boolean: return "布尔值";
+            default: return "未知";
         }
+    }
 
-        m_stringEdit = nullptr;
-        m_numberEdit = nullptr;
-        m_booleanCheck = nullptr;
+    void switchToNextType() {
+        int newType = (static_cast<int>(m_valueType) + 1) % 3;
+        m_valueType = static_cast<ValueType>(newType);
+        updateInputDisplay();
 
-        auto valueLabel = new QLabel("值:");
-        valueLabel->setStyleSheet("font-weight: bold; font-size: 10px;");
-        m_valueLayout->addWidget(valueLabel);
+        // 通知端口类型变化 - 这会让连接的节点知道端口类型改变了
+        emit portsAboutToBeDeleted(QtNodes::PortType::Out, 0, 0);
+        emit portsDeleted();
+
+        emit dataUpdated(0);
+    }
+
+    void updateInputDisplay() {
+        if (!m_valueEdit) return;
+
+        QString placeholder;
+        QString currentValue;
 
         switch (m_valueType) {
-            case String: {
-                m_stringEdit = new QLineEdit(m_stringValue);
-                m_stringEdit->setPlaceholderText("输入字符串值");
-                m_stringEdit->setStyleSheet("font-size: 10px;");
-                connect(m_stringEdit, &QLineEdit::textChanged, [this](const QString& text) {
-                    m_stringValue = text;
-                    emit dataUpdated(0);
-                });
-                m_valueLayout->addWidget(m_stringEdit);
+            case String:
+                placeholder = QString("[字符串] 输入文本 (双击切换类型)");
+                currentValue = m_stringValue;
                 break;
-            }
+            case Number:
+                placeholder = QString("[数值] 输入数字 (双击切换类型)");
+                currentValue = QString::number(m_numberValue);
+                break;
+            case Boolean:
+                placeholder = QString("[布尔值] 输入 true/false (双击切换类型)");
+                currentValue = m_booleanValue ? "true" : "false";
+                break;
+        }
+
+        m_valueEdit->setPlaceholderText(placeholder);
+        m_valueEdit->setText(currentValue);
+        m_valueEdit->setToolTip(QString("当前类型: %1\n双击可切换类型").arg(getTypeDisplayName()));
+    }
+
+    void parseAndSetValue(const QString& text) {
+        switch (m_valueType) {
+            case String:
+                m_stringValue = text;
+                break;
             case Number: {
-                m_numberEdit = new QLineEdit(QString::number(m_numberValue));
-                m_numberEdit->setPlaceholderText("输入数值");
-                m_numberEdit->setStyleSheet("font-size: 10px;");
-                connect(m_numberEdit, &QLineEdit::textChanged, [this](const QString& text) {
-                    bool ok;
-                    double value = text.toDouble(&ok);
-                    if (ok) {
-                        m_numberValue = value;
-                        emit dataUpdated(0);
-                    }
-                });
-                m_valueLayout->addWidget(m_numberEdit);
+                bool ok;
+                double value = text.toDouble(&ok);
+                if (ok) {
+                    m_numberValue = value;
+                }
                 break;
             }
             case Boolean: {
-                m_booleanCheck = new QCheckBox("True");
-                m_booleanCheck->setChecked(m_booleanValue);
-                m_booleanCheck->setStyleSheet("font-size: 10px;");
-                connect(m_booleanCheck, &QCheckBox::toggled, [this](bool checked) {
-                    m_booleanValue = checked;
-                    m_booleanCheck->setText(checked ? "True" : "False");
-                    emit dataUpdated(0);
-                });
-                m_valueLayout->addWidget(m_booleanCheck);
+                QString lowerText = text.toLower().trimmed();
+                if (lowerText == "true" || lowerText == "1" || lowerText == "yes") {
+                    m_booleanValue = true;
+                } else if (lowerText == "false" || lowerText == "0" || lowerText == "no") {
+                    m_booleanValue = false;
+                }
                 break;
             }
         }
