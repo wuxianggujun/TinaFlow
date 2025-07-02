@@ -268,10 +268,8 @@ private:
         m_valueType = static_cast<ValueType>(newType);
         updateInputDisplay();
 
-        // 通知端口类型变化 - 这会让连接的节点知道端口类型改变了
-        emit portsAboutToBeDeleted(QtNodes::PortType::Out, 0, 0);
-        emit portsDeleted();
-
+        // 只需要通知数据更新，不需要重建端口
+        // 因为我们使用统一的 "value" 类型，端口类型不会改变
         emit dataUpdated(0);
     }
 
