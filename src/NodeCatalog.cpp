@@ -106,14 +106,7 @@ void NodeCatalog::initializeNodeCatalog()
         false
     );
     
-    s_nodeMap["StringCompare"] = NodeInfo(
-        "StringCompare", 
-        "字符串比较", 
-        categoryToDisplayName(Processing),
-        "比较两个字符串是否相等或满足条件",
-        categoryToIcon(Processing),
-        true  // 常用节点
-    );
+    // s_nodeMap["StringCompare"] - 已被StringCompareDouble替代
     
     s_nodeMap["RangeInfo"] = NodeInfo(
         "RangeInfo", 
@@ -162,14 +155,87 @@ void NodeCatalog::initializeNodeCatalog()
     );
     
     s_nodeMap["DisplayCellList"] = NodeInfo(
-        "DisplayCellList", 
-        "显示单元格列表", 
+        "DisplayCellList",
+        "显示单元格列表",
         categoryToDisplayName(Display),
         "以列表形式显示多个单元格",
         categoryToIcon(Display),
         false
     );
-    
+
+    // 条件逻辑节点
+    s_nodeMap["NumberCompare"] = NodeInfo(
+        "NumberCompare",
+        "数值比较",
+        categoryToDisplayName(Processing),
+        "比较两个数值的大小关系，输出布尔结果",
+        categoryToIcon(Processing),
+        true  // 常用节点
+    );
+
+    s_nodeMap["StringCompare"] = NodeInfo(
+        "StringCompare",
+        "字符串比较",
+        categoryToDisplayName(Processing),
+        "比较两个字符串输入的关系，输出布尔结果",
+        categoryToIcon(Processing),
+        false  // 不常用，被通用比较替代
+    );
+
+    s_nodeMap["UniversalCompare"] = NodeInfo(
+        "UniversalCompare",
+        "通用比较",
+        categoryToDisplayName(Processing),
+        "智能比较任意类型数据，支持类型检查和自动转换",
+        categoryToIcon(Processing),
+        true  // 常用节点
+    );
+
+    s_nodeMap["IfElse"] = NodeInfo(
+        "IfElse",
+        "条件分支",
+        categoryToDisplayName(Processing),
+        "根据布尔条件选择输出不同的数据",
+        categoryToIcon(Processing),
+        true  // 常用节点
+    );
+
+    s_nodeMap["LogicalAnd"] = NodeInfo(
+        "LogicalAnd",
+        "逻辑与",
+        categoryToDisplayName(Processing),
+        "对两个布尔值执行逻辑与运算",
+        categoryToIcon(Processing),
+        false
+    );
+
+    s_nodeMap["LogicalOr"] = NodeInfo(
+        "LogicalOr",
+        "逻辑或",
+        categoryToDisplayName(Processing),
+        "对两个布尔值执行逻辑或运算",
+        categoryToIcon(Processing),
+        false
+    );
+
+    s_nodeMap["LogicalNot"] = NodeInfo(
+        "LogicalNot",
+        "逻辑非",
+        categoryToDisplayName(Processing),
+        "对布尔值执行逻辑非运算",
+        categoryToIcon(Processing),
+        false
+    );
+
+    s_nodeMap["ConstantValue"] = NodeInfo(
+        "ConstantValue",
+        "常量值",
+        categoryToDisplayName(DataSource),
+        "提供常量值输出，支持字符串、数值、布尔值",
+        categoryToIcon(DataSource),
+        true  // 常用节点
+    );
+
     s_initialized = true;
     qDebug() << "NodeCatalog: Initialized with" << s_nodeMap.size() << "nodes";
 }

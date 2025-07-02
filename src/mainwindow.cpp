@@ -38,13 +38,23 @@
 #include "model/DisplayCellModel.hpp"
 #include "model/ReadRangeModel.hpp"
 #include "model/DisplayRangeModel.hpp"
-#include "model/StringCompareModel.hpp"
+// #include "model/StringCompareModel.hpp" // 已删除，被StringCompareDoubleModel替代
 #include "model/DisplayBooleanModel.hpp"
 #include "model/SmartLoopProcessorModel.hpp"
 #include "model/DisplayCellListModel.hpp"
 #include "model/DisplayRowModel.hpp"
 #include "model/RangeInfoModel.hpp"
 #include "model/SaveExcelModel.hpp"
+
+// 条件逻辑节点
+#include "model/NumberCompareModel.hpp"
+#include "model/StringCompareDoubleModel.hpp"
+#include "model/UniversalCompareModel.hpp"
+#include "model/IfElseModel.hpp"
+#include "model/LogicalAndModel.hpp"
+#include "model/LogicalOrModel.hpp"
+#include "model/LogicalNotModel.hpp"
+#include "model/ConstantValueModel.hpp"
 
 // 核心节点模型
 #include "model/OpenExcelModel.hpp"
@@ -53,7 +63,6 @@
 #include "model/ReadRangeModel.hpp"
 #include "model/SaveExcelModel.hpp"
 #include "model/SmartLoopProcessorModel.hpp"
-#include "model/StringCompareModel.hpp"
 
 // 显示节点模型
 #include "model/DisplayCellModel.hpp"
@@ -325,7 +334,7 @@ std::shared_ptr<QtNodes::NodeDelegateModelRegistry> MainWindow::registerDataMode
     ret->registerModel<DisplayCellModel>("DisplayCell");
     ret->registerModel<ReadRangeModel>("ReadRange");
     ret->registerModel<DisplayRangeModel>("DisplayRange");
-    ret->registerModel<StringCompareModel>("StringCompare");
+
     ret->registerModel<DisplayBooleanModel>("DisplayBoolean");
 
     ret->registerModel<SmartLoopProcessorModel>("SmartLoopProcessor");
@@ -333,6 +342,17 @@ std::shared_ptr<QtNodes::NodeDelegateModelRegistry> MainWindow::registerDataMode
     ret->registerModel<DisplayRowModel>("DisplayRow");
     ret->registerModel<RangeInfoModel>("RangeInfo");
     ret->registerModel<SaveExcelModel>("SaveExcel");
+
+    // 条件逻辑节点
+    ret->registerModel<NumberCompareModel>("NumberCompare");
+    ret->registerModel<StringCompareDoubleModel>("StringCompare");
+    ret->registerModel<UniversalCompareModel>("UniversalCompare");
+    ret->registerModel<IfElseModel>("IfElse");
+    ret->registerModel<LogicalAndModel>("LogicalAnd");
+    ret->registerModel<LogicalOrModel>("LogicalOr");
+    ret->registerModel<LogicalNotModel>("LogicalNot");
+    ret->registerModel<ConstantValueModel>("ConstantValue");
+
     return ret;
 }
 

@@ -7,8 +7,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /utf-8")
 
 # 分别定义 Qt 和 vcpkg 的路径
-set(Qt_PREFIX_PATH "D:/Programs/Qt/6.8.0/msvc2022_64")
-set(VCPKG_PREFIX_PATH "D:/Programs/vcpkg/installed/x64-windows/share")
+set(Qt_PREFIX_PATH "D:/Programs/Qt/6.9.1/msvc2022_64")
+
+# 将Qt路径添加到CMAKE_PREFIX_PATH中
+list(APPEND CMAKE_PREFIX_PATH ${Qt_PREFIX_PATH})
 
 option(OPENXLSX_CREATE_DOCS "Build library documentation (requires Doxygen and Graphviz/Dot to be installed)" OFF)
 option(OPENXLSX_BUILD_SAMPLES "Build sample programs" OFF)
@@ -103,6 +105,20 @@ qt_finalize_executable(TinaFlow)
 
 # 添加自定义命令，确保所有依赖的dll都在正确的目录
 if(WIN32)
+    # 获取Qt安装路径并部署Qt库
+    get_target_property(QT_QMAKE_EXECUTABLE Qt6::qmake IMPORTED_LOCATION)
+    get_filename_component(QT_WINDEPLOYQT_EXECUTABLE ${QT_QMAKE_EXECUTABLE} PATH)
+    set(QT_WINDEPLOYQT_EXECUTABLE "${QT_WINDEPLOYQT_EXECUTABLE}/windeployqt.exe")
+
+    # 使用生成器表达式来根据配置选择不同的windeployqt参数
+    add_custom_command(TARGET TinaFlow POST_BUILD
+        COMMAND ${QT_WINDEPLOYQT_EXECUTABLE}
+            $<$<CONFIG:Debug>:--debug>
+            $<$<CONFIG:Release>:--release>
+            --compiler-runtime --force --verbose 2
+            $<TARGET_FILE:TinaFlow>
+        COMMENT "Deploying Qt libraries with windeployqt")
+
     # 复制ADS库的dll到输出目录
     add_custom_command(TARGET TinaFlow POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -110,13 +126,12 @@ if(WIN32)
         $<TARGET_FILE_DIR:TinaFlow>
         COMMENT "Copying ADS dll to output directory"
     )
-    
-    # 如果有其他第三方库的dll，也可以在这里添加
-    # 复制Qt dll（如果需要的话）
-    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-        add_custom_command(TARGET TinaFlow POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E echo "Debug build - dll dependencies should be resolved by Qt deployment tools"
-        )
-    endif()
+
+    # 添加DLL检查命令，列出输出目录中的所有DLL
+    add_custom_command(TARGET TinaFlow POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E echo "=== DLL Dependencies Check ==="
+        COMMAND powershell -Command "Get-ChildItem '$<TARGET_FILE_DIR:TinaFlow>' -Filter '*.dll' | Select-Object Name, Length | Format-Table -AutoSize"
+        COMMENT "Listing all DLL files in output directory"
+    )
 endif()
 

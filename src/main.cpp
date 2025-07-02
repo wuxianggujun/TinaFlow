@@ -20,13 +20,14 @@ void handleUnknownException() {
 
 int main(int argc, char* argv[])
 {
-#if defined(Q_OS_WINDOWS)
+/*#if defined(Q_OS_WINDOWS)
     // 修复Qt6在Windows 11上QComboBox在QGraphicsProxyWidget中无法显示下拉菜单的问题
     // 参考: https://forum.qt.io/topic/158614/qcombobox-fails-to-display-dropdown-when-placed-in-qgraphicsview-via-qgraphicsproxywidget
     // 这是目前最可靠的解决方案
     QApplication::setStyle(QStyleFactory::create("windowsvista"));
-#endif
-
+#endif*/
+    // QCoreApplication::setAttribute(Qt::AA_DontUseNativeMenuWindows);
+    
     QApplication app(argc, argv);
 
     // 设置应用程序信息
