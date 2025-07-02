@@ -65,12 +65,9 @@ public:
 
     QtNodes::NodeDataType dataType(QtNodes::PortType portType, QtNodes::PortIndex portIndex) const override {
         if (portType == QtNodes::PortType::Out) {
-            switch (m_valueType) {
-                case String: return {"value_string", "Value(字符串)"};
-                case Number: return {"value_number", "Value(数值)"};
-                case Boolean: return {"value_boolean", "Value(布尔值)"};
-                default: return {"value", "Value"};
-            }
+            // 统一使用 "value" 类型，这样可以与 UniversalCompare 的输入端口匹配
+            // 具体的类型信息保存在 ValueData 对象内部
+            return {"value", "值"};
         }
         return {"", ""};
     }
@@ -128,8 +125,7 @@ public:
 
             // 连接文本变化事件
             connect(m_valueEdit, &QLineEdit::textChanged, [this](const QString& text) {
-                parseAndSetValue(text);
-                emit dataUpdated(0);
+                parseAndSetValue(text); // parseAndSetValue 内部会处理信号发射
             });
 
             // 使用事件过滤器来处理双击切换类型
@@ -306,27 +302,43 @@ private:
     }
 
     void parseAndSetValue(const QString& text) {
+        bool valueChanged = false;
+
         switch (m_valueType) {
             case String:
-                m_stringValue = text;
+                if (m_stringValue != text) {
+                    m_stringValue = text;
+                    valueChanged = true;
+                }
                 break;
             case Number: {
                 bool ok;
                 double value = text.toDouble(&ok);
-                if (ok) {
+                if (ok && qAbs(m_numberValue - value) > 1e-9) {
                     m_numberValue = value;
+                    valueChanged = true;
                 }
                 break;
             }
             case Boolean: {
                 QString lowerText = text.toLower().trimmed();
+                bool newValue = m_booleanValue;
                 if (lowerText == "true" || lowerText == "1" || lowerText == "yes") {
-                    m_booleanValue = true;
+                    newValue = true;
                 } else if (lowerText == "false" || lowerText == "0" || lowerText == "no") {
-                    m_booleanValue = false;
+                    newValue = false;
+                }
+                if (m_booleanValue != newValue) {
+                    m_booleanValue = newValue;
+                    valueChanged = true;
                 }
                 break;
             }
+        }
+
+        // 只有当值真正改变时才发射信号
+        if (valueChanged) {
+            emit dataUpdated(0);
         }
     }
 };

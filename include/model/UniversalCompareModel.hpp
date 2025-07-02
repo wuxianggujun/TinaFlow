@@ -80,7 +80,9 @@ public:
 
     QtNodes::NodeDataType dataType(QtNodes::PortType portType, QtNodes::PortIndex portIndex) const override {
         if (portType == QtNodes::PortType::In) {
-            return CellData().type(); // 接受任意类型（用CellData作为通用类型）
+            // 输入端口接受 ValueData 的所有变体类型
+            // 使用基础的 value 类型，这样可以匹配所有 value_* 类型
+            return {"value", "值"};
         } else {
             return BooleanData().type();
         }

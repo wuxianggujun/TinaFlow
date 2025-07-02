@@ -57,12 +57,9 @@ public:
 
     QtNodes::NodeDataType type() const override
     {
-        switch (m_type) {
-            case String: return {"value_string", "Value(字符串)"};
-            case Number: return {"value_number", "Value(数值)"};
-            case Boolean: return {"value_boolean", "Value(布尔值)"};
-            default: return {"value", "Value"};
-        }
+        // 统一返回 "value" 类型，具体类型信息通过 valueType() 方法获取
+        // 这样可以让所有 ValueData 都能连接到接受 "value" 类型的端口
+        return {"value", "值"};
     }
 
     // 获取值
@@ -73,15 +70,37 @@ public:
     
     // 类型转换方法
     QString toString() const {
-        return m_value.toString();
+        switch (m_type) {
+            case String: return m_value.toString();
+            case Number: return QString::number(m_value.toDouble());
+            case Boolean: return m_value.toBool() ? "true" : "false";
+            default: return m_value.toString();
+        }
     }
-    
+
     double toDouble() const {
-        return m_value.toDouble();
+        switch (m_type) {
+            case Number: return m_value.toDouble();
+            case Boolean: return m_value.toBool() ? 1.0 : 0.0;
+            case String: {
+                bool ok;
+                double result = m_value.toString().toDouble(&ok);
+                return ok ? result : 0.0;
+            }
+            default: return 0.0;
+        }
     }
-    
+
     bool toBool() const {
-        return m_value.toBool();
+        switch (m_type) {
+            case Boolean: return m_value.toBool();
+            case Number: return qAbs(m_value.toDouble()) > 1e-9;
+            case String: {
+                QString str = m_value.toString().toLower().trimmed();
+                return str == "true" || str == "1" || str == "yes";
+            }
+            default: return false;
+        }
     }
     
     // 检查是否有效

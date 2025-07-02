@@ -108,6 +108,13 @@ protected:
         if (!hasValidData()) {
             // 显示空状态
             m_resultLabel->setText("--");
+            m_resultLabel->setStyleSheet(
+                "font-size: 14px; "
+                "color: #666666; "
+                "background-color: transparent; "
+                "border: none; "
+                "padding: 4px;"
+            );
             m_descriptionLabel->setText("等待输入");
             m_frame->setStyleSheet(
                 "QFrame {"

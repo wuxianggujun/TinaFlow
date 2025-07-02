@@ -37,7 +37,15 @@ class BaseNodeModel : public QtNodes::NodeDelegateModel, public PropertyProvider
 public:
     BaseNodeModel() = default;
     ~BaseNodeModel() override {
-        // 清理注册的属性控件，避免悬空指针
+        // 断开所有信号连接，避免悬空指针
+        disconnect();
+
+        // 清理注册的属性控件
+        for (auto& prop : m_properties) {
+            if (prop.widget) {
+                prop.widget->disconnect();
+            }
+        }
         m_properties.clear();
     }
 
@@ -56,8 +64,13 @@ public:
         
         // 调用子类的自定义保存逻辑
         onSave(modelJson);
-        
-        qDebug() << getNodeTypeName() << ": Saved properties:" << modelJson.keys();
+
+        // 只在调试模式下输出日志
+        #ifdef QT_DEBUG
+        if (modelJson.size() > 1) { // 只有当有实际属性时才输出
+            qDebug() << getNodeTypeName() << ": Saved properties:" << modelJson.keys();
+        }
+        #endif
         return modelJson;
     }
 

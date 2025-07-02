@@ -57,11 +57,11 @@ public:
         if (portType == QtNodes::PortType::In) {
             return BooleanData().type(); // 只接收布尔输入
         } else {
-            // 为输出端口设置自定义标签
+            // 为输出端口设置自定义标签，使用正确的 BooleanData 类型 ID
             if (portIndex == 0) {
-                return {"BooleanData", "True"};  // True端口
+                return {"boolean", "True"};  // True端口
             } else {
-                return {"BooleanData", "False"}; // False端口
+                return {"boolean", "False"}; // False端口
             }
         }
     }
@@ -116,8 +116,9 @@ public:
             m_inputData[portIndex] = nodeData;
         }
 
-        // 立即重新计算并通知输出更新
-        emit dataUpdated(0);
+        // 立即重新计算并通知所有输出端口更新
+        emit dataUpdated(0); // 通知 True 端口
+        emit dataUpdated(1); // 通知 False 端口
     }
 
     QWidget* embeddedWidget() override {
