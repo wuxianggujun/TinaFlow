@@ -58,15 +58,11 @@ public:
 
     UniversalCompareModel() : m_compareType(Auto), m_operator(Equal), m_caseSensitive(false), m_hasError(false) {
         m_inputData.resize(2);
-        
-        // 注册需要保存的属性
-        registerProperty("compareType", nullptr);
-        registerProperty("operator", nullptr);
-        registerProperty("caseSensitive", nullptr);
+        // 属性将在embeddedWidget()创建后注册
     }
 
     QString caption() const override {
-        return tr("通用比较");
+        return tr("智能比较");
     }
 
     bool captionVisible() const override {
@@ -136,27 +132,12 @@ public:
 
     QWidget* embeddedWidget() override {
         if (!m_widget) {
-            m_widget = new QWidget();
-            auto layout = new QVBoxLayout(m_widget);
-            layout->setContentsMargins(4, 4, 4, 4);
-            layout->setSpacing(2);
-
-            // 错误提示标签
-            m_errorLabel = new QLabel();
-            m_errorLabel->setStyleSheet("color: red; font-size: 9px; font-weight: bold;");
-            m_errorLabel->setWordWrap(true);
-            m_errorLabel->hide();
-            layout->addWidget(m_errorLabel);
-
-            // 比较类型选择
-            auto typeLabel = new QLabel("比较类型:");
-            typeLabel->setStyleSheet("font-weight: bold; font-size: 10px;");
-            layout->addWidget(typeLabel);
-
+            // 直接使用QComboBox作为主控件，避免容器嵌套导致的下拉框问题
             m_typeCombo = new QComboBox();
             m_typeCombo->addItems({"自动检测", "字符串", "数值", "布尔值"});
             m_typeCombo->setCurrentIndex(static_cast<int>(m_compareType));
             m_typeCombo->setStyleSheet("font-size: 10px;");
+            m_typeCombo->setToolTip("选择比较数据类型\n操作符和其他设置请在属性面板中调整");
 
             connect(m_typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
                     [this](int index) {
@@ -166,38 +147,10 @@ public:
                         emit dataUpdated(0);
                     });
 
-            layout->addWidget(m_typeCombo);
+            // 注册属性控件
+            registerProperty("compareType", m_typeCombo);
 
-            // 比较操作符选择
-            auto opLabel = new QLabel("操作符:");
-            opLabel->setStyleSheet("font-weight: bold; font-size: 10px;");
-            layout->addWidget(opLabel);
-
-            m_operatorCombo = new QComboBox();
-            updateOperatorOptions();
-            m_operatorCombo->setStyleSheet("font-size: 10px;");
-
-            connect(m_operatorCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
-                    [this](int index) {
-                        m_operator = static_cast<CompareOperator>(index);
-                        emit dataUpdated(0);
-                    });
-
-            layout->addWidget(m_operatorCombo);
-
-            // 大小写敏感选项（仅字符串比较时显示）
-            m_caseSensitiveCheck = new QCheckBox("区分大小写");
-            m_caseSensitiveCheck->setChecked(m_caseSensitive);
-            m_caseSensitiveCheck->setStyleSheet("font-size: 10px;");
-
-            connect(m_caseSensitiveCheck, &QCheckBox::toggled,
-                    [this](bool checked) {
-                        m_caseSensitive = checked;
-                        emit dataUpdated(0);
-                    });
-
-            layout->addWidget(m_caseSensitiveCheck);
-            updateCaseSensitiveVisibility();
+            m_widget = m_typeCombo;
         }
         return m_widget;
     }
@@ -366,30 +319,23 @@ private:
     }
 
     void updateOperatorOptions() {
-        if (!m_operatorCombo) return;
-
-        m_operatorCombo->clear();
-
-        if (m_compareType == String || (m_compareType == Auto)) {
-            m_operatorCombo->addItems({"==", "!=", "包含", "开始于", "结束于"});
+        // 现在操作符选择在属性面板中处理，这里只需要重置操作符值
+        if (m_compareType == String || m_compareType == Auto) {
+            // 字符串操作符：==, !=, 包含, 开始于, 结束于
+            if (m_operator > EndsWith) {
+                m_operator = Equal;
+            }
         } else {
-            m_operatorCombo->addItems({"==", "!=", ">", "<", ">=", "<="});
+            // 数值操作符：==, !=, >, <, >=, <=
+            if (m_operator > LessEqual) {
+                m_operator = Equal;
+            }
         }
-
-        // 重置操作符选择
-        if (m_operator >= m_operatorCombo->count()) {
-            m_operator = Equal;
-        }
-        m_operatorCombo->setCurrentIndex(static_cast<int>(m_operator));
     }
 
     void updateCaseSensitiveVisibility() {
-        if (!m_caseSensitiveCheck) return;
-
-        // 只有字符串比较时才显示大小写敏感选项
-        bool showCaseSensitive = (m_compareType == String) ||
-                                (m_compareType == Auto && hasStringInputs());
-        m_caseSensitiveCheck->setVisible(showCaseSensitive);
+        // 大小写敏感选项现在在属性面板中处理
+        // 这里不需要做任何操作
     }
 
     bool hasStringInputs() {

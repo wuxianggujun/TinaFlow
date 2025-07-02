@@ -106,7 +106,7 @@ void NodeCatalog::initializeNodeCatalog()
         false
     );
     
-    // s_nodeMap["StringCompare"] - 已被StringCompareDouble替代
+    // 注释：NumberCompare和StringCompare已被UniversalCompare替代
     
     s_nodeMap["RangeInfo"] = NodeInfo(
         "RangeInfo", 
@@ -164,31 +164,14 @@ void NodeCatalog::initializeNodeCatalog()
     );
 
     // 条件逻辑节点
-    s_nodeMap["NumberCompare"] = NodeInfo(
-        "NumberCompare",
-        "数值比较",
-        categoryToDisplayName(Processing),
-        "比较两个数值的大小关系，输出布尔结果",
-        categoryToIcon(Processing),
-        true  // 常用节点
-    );
-
-    s_nodeMap["StringCompare"] = NodeInfo(
-        "StringCompare",
-        "字符串比较",
-        categoryToDisplayName(Processing),
-        "比较两个字符串输入的关系，输出布尔结果",
-        categoryToIcon(Processing),
-        false  // 不常用，被通用比较替代
-    );
 
     s_nodeMap["UniversalCompare"] = NodeInfo(
         "UniversalCompare",
-        "通用比较",
+        "智能比较",
         categoryToDisplayName(Processing),
-        "智能比较任意类型数据，支持类型检查和自动转换",
+        "万能比较节点：自动识别数据类型（字符串/数值/布尔），支持多种比较操作符，替代原有的数值比较和字符串比较节点",
         categoryToIcon(Processing),
-        true  // 常用节点
+        true  // 常用节点，替代NumberCompare和StringCompare
     );
 
     s_nodeMap["IfElse"] = NodeInfo(

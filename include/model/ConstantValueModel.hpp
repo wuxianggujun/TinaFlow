@@ -40,10 +40,7 @@ public:
     };
 
     ConstantValueModel() : m_valueType(String), m_stringValue(""), m_numberValue(0), m_booleanValue(false) {
-        registerProperty("valueType", nullptr);
-        registerProperty("stringValue", nullptr);
-        registerProperty("numberValue", nullptr);
-        registerProperty("booleanValue", nullptr);
+        // 属性将在embeddedWidget()创建后注册
     }
 
     QString caption() const override {
@@ -130,6 +127,10 @@ public:
             layout->addWidget(m_valueWidget);
 
             updateValueWidget();
+
+            // 注册属性控件
+            registerProperty("valueType", m_typeCombo);
+            // 注意：stringValue, numberValue, booleanValue的控件在updateValueWidget()中动态创建
         }
         return m_widget;
     }

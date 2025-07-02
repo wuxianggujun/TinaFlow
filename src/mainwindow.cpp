@@ -47,8 +47,6 @@
 #include "model/SaveExcelModel.hpp"
 
 // 条件逻辑节点
-#include "model/NumberCompareModel.hpp"
-#include "model/StringCompareDoubleModel.hpp"
 #include "model/UniversalCompareModel.hpp"
 #include "model/IfElseModel.hpp"
 #include "model/LogicalAndModel.hpp"
@@ -344,8 +342,6 @@ std::shared_ptr<QtNodes::NodeDelegateModelRegistry> MainWindow::registerDataMode
     ret->registerModel<SaveExcelModel>("SaveExcel");
 
     // 条件逻辑节点
-    ret->registerModel<NumberCompareModel>("NumberCompare");
-    ret->registerModel<StringCompareDoubleModel>("StringCompare");
     ret->registerModel<UniversalCompareModel>("UniversalCompare");
     ret->registerModel<IfElseModel>("IfElse");
     ret->registerModel<LogicalAndModel>("LogicalAnd");

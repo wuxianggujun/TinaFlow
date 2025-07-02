@@ -126,12 +126,5 @@ if(WIN32)
         $<TARGET_FILE_DIR:TinaFlow>
         COMMENT "Copying ADS dll to output directory"
     )
-
-    # 添加DLL检查命令，列出输出目录中的所有DLL
-    add_custom_command(TARGET TinaFlow POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E echo "=== DLL Dependencies Check ==="
-        COMMAND powershell -Command "Get-ChildItem '$<TARGET_FILE_DIR:TinaFlow>' -Filter '*.dll' | Select-Object Name, Length | Format-Table -AutoSize"
-        COMMENT "Listing all DLL files in output directory"
-    )
 endif()
 
