@@ -118,6 +118,7 @@ private:
     void createADSCentralWidget(ads::CDockManager* dockManager);
     void configureCentralWidgetFeatures(ads::CDockWidget* centralDockWidget);
     void setupCustomStyles();
+    void setupMainWindowStyles();
 
     // 文件操作封装
     bool saveToFile(const QString& fileName);

@@ -150,6 +150,9 @@ void MainWindow::setupNodeEditor()
     // 应用自定义样式
     setupCustomStyles();
 
+    // 设置主窗口样式，确保一致的浅色主题
+    setupMainWindowStyles();
+
     // 重新启用节点选择事件，使用队列连接避免循环调用
     connect(m_graphicsScene, &QtNodes::DataFlowGraphicsScene::nodeSelected,
             this, &MainWindow::onNodeSelected, Qt::QueuedConnection);
@@ -1170,12 +1173,62 @@ void MainWindow::setupCustomStyles()
             "UseDataDefinedColors": true
         }
     })";
-
-    // 应用样式
+    
     QtNodes::ConnectionStyle::setConnectionStyle(connectionStyleJson);
     QtNodes::NodeStyle::setNodeStyle(nodeStyleJson);
+    
+}
 
-    // 样式已应用
+void MainWindow::setupMainWindowStyles()
+{
+    // 为主窗口设置精细的样式表，只影响必要的组件
+    QString mainWindowStyleSheet = R"(
+        /* 主窗口背景 */
+        QMainWindow {
+            background-color: #f0f0f0;
+        }
+
+        /* 中央区域背景 */
+        QWidget#centralwidget {
+            background-color: #f8f8f8;
+        }
+
+        /* 菜单栏样式 */
+        QMenuBar {
+            background-color: #f0f0f0;
+            border-bottom: 1px solid #d0d0d0;
+        }
+
+        QMenuBar::item {
+            background-color: transparent;
+            padding: 4px 8px;
+        }
+
+        QMenuBar::item:selected {
+            background-color: #e0e0e0;
+        }
+
+        /* 状态栏样式 */
+        QStatusBar {
+            background-color: #f0f0f0;
+            border-top: 1px solid #d0d0d0;
+        }
+
+        /* 确保对话框也使用浅色主题 */
+        QDialog {
+            background-color: #f0f0f0;
+        }
+
+        /* 工具提示样式 */
+        QToolTip {
+            background-color: #ffffcc;
+            color: #000000;
+            border: 1px solid #999999;
+        }
+    )";
+
+    // 只对主窗口应用样式表
+    this->setStyleSheet(mainWindowStyleSheet);
 }
 
 QString MainWindow::getPortTypeDescription(QtNodes::NodeDelegateModel* nodeModel, QtNodes::PortType portType,

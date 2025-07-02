@@ -143,89 +143,89 @@ void ADSPanelManager::setupDockManager()
 
 void ADSPanelManager::setupADSStyle()
 {
-    // 设置ADS样式表
+    // 设置ADS样式表 - 使用浅色主题保持一致性
     QString adsStyleSheet = R"(
         ads--CDockWidget {
-            background: #2b2b2b;
-            color: #cccccc;
-            border: 1px solid #464646;
+            background: #f0f0f0;
+            color: #333333;
+            border: 1px solid #c0c0c0;
         }
-        
+
         ads--CDockWidget[focused="true"] {
             border: 2px solid #007acc;
         }
-        
+
         ads--CTitleBarButton {
             background: transparent;
             border: none;
             padding: 2px;
         }
-        
+
         ads--CTitleBarButton:hover {
-            background: #464646;
+            background: #e0e0e0;
             border-radius: 2px;
         }
-        
+
         ads--CTitleBarButton:pressed {
             background: #007acc;
         }
-        
+
         ads--CDockAreaWidget {
-            background: #2b2b2b;
-            border: 1px solid #464646;
+            background: #f0f0f0;
+            border: 1px solid #c0c0c0;
         }
-        
+
         ads--CDockAreaTitleBar {
-            background: #383838;
-            border-bottom: 1px solid #464646;
+            background: #e8e8e8;
+            border-bottom: 1px solid #c0c0c0;
         }
-        
+
         ads--CTitleBarButton#tabsMenuButton::menu-indicator {
             image: none;
         }
-        
+
         ads--CTabBar {
-            background: #383838;
+            background: #e8e8e8;
         }
         
         ads--CTabBar::tab {
-            background: #383838;
-            color: #cccccc;
+            background: #e0e0e0;
+            color: #333333;
             border: none;
             padding: 6px 12px;
         }
-        
+
         ads--CTabBar::tab:selected {
             background: #007acc;
             color: white;
         }
-        
+
         ads--CTabBar::tab:hover {
-            background: #464646;
+            background: #d0d0d0;
         }
-        
+
         ads--CSplitter::handle {
-            background: #464646;
+            background: #c0c0c0;
         }
-        
+
         ads--CSplitter::handle:horizontal {
             width: 2px;
         }
-        
+
         ads--CSplitter::handle:vertical {
             height: 2px;
         }
-        
+
         ads--CAutoHideTab {
-            background: #383838;
-            color: #cccccc;
-            border: 1px solid #464646;
+            background: #e0e0e0;
+            color: #333333;
+            border: 1px solid #c0c0c0;
         }
-        
+
         ads--CAutoHideTab:hover {
-            background: #464646;
+            background: #d0d0d0;
         }
-        
+
         ads--CAutoHideTab[activeTab="true"] {
             background: #007acc;
             color: white;

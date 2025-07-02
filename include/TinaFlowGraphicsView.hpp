@@ -18,7 +18,11 @@
 #include <QMenu>
 #include <QObject>
 #include <QLineF>
+#include <QPainter>
+#include <QPen>
+#include <QColor>
 #include <limits>
+#include <cmath>
 
 /**
  * @brief TinaFlow节点编辑器的图形视图
@@ -70,6 +74,47 @@ protected:
 
         // 默认情况：空白区域菜单
         emit sceneContextMenuRequested(scenePos);
+    }
+
+    void drawBackground(QPainter* painter, const QRectF& r) override
+    {
+        // 完全自定义背景绘制，不调用父类方法避免调色板干扰
+
+        // 1. 先绘制背景色 - 使用自然的浅色背景
+        painter->fillRect(r, QColor(248, 248, 248));
+
+        // 2. 自定义网格线绘制
+        auto drawGrid = [&](double gridStep, const QColor& color) {
+            QRect windowRect = rect();
+            QPointF tl = mapToScene(windowRect.topLeft());
+            QPointF br = mapToScene(windowRect.bottomRight());
+
+            double left = std::floor(tl.x() / gridStep - 0.5);
+            double right = std::floor(br.x() / gridStep + 1.0);
+            double bottom = std::floor(tl.y() / gridStep - 0.5);
+            double top = std::floor(br.y() / gridStep + 1.0);
+
+            QPen pen(color, 1.0);
+            painter->setPen(pen);
+
+            // 垂直线
+            for (int xi = int(left); xi <= int(right); ++xi) {
+                QLineF line(xi * gridStep, bottom * gridStep, xi * gridStep, top * gridStep);
+                painter->drawLine(line);
+            }
+
+            // 水平线
+            for (int yi = int(bottom); yi <= int(top); ++yi) {
+                QLineF line(left * gridStep, yi * gridStep, right * gridStep, yi * gridStep);
+                painter->drawLine(line);
+            }
+        };
+
+        // 绘制细网格线 - 浅灰色
+        drawGrid(15, QColor(200, 200, 200));
+
+        // 绘制粗网格线 - 深灰色
+        drawGrid(150, QColor(160, 160, 160));
     }
     
     void dragEnterEvent(QDragEnterEvent* event) override
