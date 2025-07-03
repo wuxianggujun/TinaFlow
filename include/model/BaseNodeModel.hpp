@@ -16,6 +16,9 @@
 #include <QTextEdit>
 #include <QLabel>
 
+// 前向声明
+class StyledLineEdit;
+
 /**
  * @brief 节点模型的基类
  * 
@@ -140,6 +143,11 @@ protected:
     void registerLineEdit(const QString& name, QLineEdit* lineEdit, const QString& description = "")
     {
         registerProperty(name, lineEdit, description.isEmpty() ? QString("LineEdit: %1").arg(name) : description);
+    }
+
+    void registerStyledLineEdit(const QString& name, StyledLineEdit* lineEdit, const QString& description = "")
+    {
+        registerProperty(name, lineEdit, description.isEmpty() ? QString("StyledLineEdit: %1").arg(name) : description);
     }
 
     void registerComboBox(const QString& name, QComboBox* comboBox, const QString& description = "")

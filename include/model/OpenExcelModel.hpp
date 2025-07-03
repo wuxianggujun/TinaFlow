@@ -13,6 +13,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QMessageBox>
+#include "widget/StyledLineEdit.hpp"
 
 #include "XLDocument.hpp"
 #include "data/WorkbookData.hpp"
@@ -21,16 +22,16 @@
 #include "DataValidator.hpp"
 #include "PerformanceProfiler.hpp"
 
-class ClickableLineEdit : public QLineEdit
+class ClickableLineEdit : public StyledLineEdit
 {
     Q_OBJECT
 
 public:
-    explicit ClickableLineEdit(QWidget* parent = nullptr): QLineEdit(parent)
+    explicit ClickableLineEdit(QWidget* parent = nullptr): StyledLineEdit(parent)
     {
         setReadOnly(true);
         setPlaceholderText("未选择Excel文件");
-        setFrame(true);
+        setDoubleClickEnabled(false); // 不需要双击功能
         setProperty("class", "node-path");
     }
 

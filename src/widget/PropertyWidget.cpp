@@ -1,4 +1,5 @@
 #include "widget/PropertyWidget.hpp"
+#include "widget/StyledLineEdit.hpp"
 #include <QFileDialog>
 #include <QDebug>
 
@@ -127,16 +128,16 @@ void PropertyWidget::addTextProperty(const QString& label, const QString& value,
     item.valueLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     m_layout->addWidget(item.valueLabel);
     
-    // 编辑模式：输入框
-    auto* lineEdit = new QLineEdit(value);
+    // 编辑模式：使用自定义样式输入框
+    auto* lineEdit = new StyledLineEdit(value);
     lineEdit->setPlaceholderText(placeholder);
-    lineEdit->setStyleSheet("padding: 4px; border: 1px solid #ccc; border-radius: 3px; margin-bottom: 4px;");
+    lineEdit->setDoubleClickEnabled(false); // 属性面板不需要双击功能
     item.editWidget = lineEdit;
     m_layout->addWidget(item.editWidget);
     
-    // 连接信号
+    // 连接信号 - 使用防抖动的文本变化信号
     if (callback) {
-        connect(lineEdit, &QLineEdit::textChanged, [this, propertyName, callback](const QString& text) {
+        connect(lineEdit, &StyledLineEdit::textChangedDebounced, [this, propertyName, callback](const QString& text) {
             callback(text);
             emit propertyChanged(propertyName, text);
         });
@@ -144,9 +145,9 @@ void PropertyWidget::addTextProperty(const QString& label, const QString& value,
     
     // 更新回调
     item.updateCallback = [item, value]() {
-        if (auto* edit = qobject_cast<QLineEdit*>(item.editWidget)) {
+        if (auto* edit = qobject_cast<StyledLineEdit*>(item.editWidget)) {
             item.valueLabel->setText(edit->text().isEmpty() ? "未设置" : edit->text());
-            item.valueLabel->setStyleSheet(edit->text().isEmpty() ? 
+            item.valueLabel->setStyleSheet(edit->text().isEmpty() ?
                 "color: #999; font-style: italic;" : "color: #333;");
         }
     };
@@ -229,9 +230,9 @@ void PropertyWidget::addFilePathProperty(const QString& label, const QString& pa
     auto* layout = new QHBoxLayout(container);
     layout->setContentsMargins(0, 0, 0, 0);
 
-    auto* lineEdit = new QLineEdit(path);
+    auto* lineEdit = new StyledLineEdit(path);
     lineEdit->setPlaceholderText("选择文件路径");
-    lineEdit->setStyleSheet("padding: 4px; border: 1px solid #ccc; border-radius: 3px;");
+    lineEdit->setDoubleClickEnabled(false); // 文件路径不需要双击功能
     layout->addWidget(lineEdit);
 
     auto* browseButton = new QPushButton("浏览...");
@@ -263,9 +264,9 @@ void PropertyWidget::addFilePathProperty(const QString& label, const QString& pa
         }
     });
 
-    // 连接输入框
+    // 连接输入框 - 使用防抖动信号
     if (callback) {
-        connect(lineEdit, &QLineEdit::textChanged, [this, propertyName, callback](const QString& text) {
+        connect(lineEdit, &StyledLineEdit::textChangedDebounced, [this, propertyName, callback](const QString& text) {
             callback(text);
             emit propertyChanged(propertyName, text);
         });
@@ -274,7 +275,7 @@ void PropertyWidget::addFilePathProperty(const QString& label, const QString& pa
     // 更新回调
     item.updateCallback = [item]() {
         if (auto* container = item.editWidget) {
-            auto* lineEdit = container->findChild<QLineEdit*>();
+            auto* lineEdit = container->findChild<StyledLineEdit*>();
             if (lineEdit) {
                 QString text = lineEdit->text();
                 item.valueLabel->setText(text.isEmpty() ? "未设置" : text);

@@ -10,14 +10,12 @@
 #include "data/BooleanData.hpp"
 #include "data/ValueData.hpp"
 #include "widget/PropertyWidget.hpp"
+#include "widget/StyledLineEdit.hpp"
 #include <QComboBox>
-#include <QLineEdit>
 #include <QCheckBox>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QPushButton>
-#include <QEvent>
 
 /**
  * @brief 常量值节点
@@ -94,42 +92,25 @@ public:
         // 常量节点没有输入
     }
 
-    bool eventFilter(QObject* obj, QEvent* event) override {
-        if (obj == m_valueEdit && event->type() == QEvent::MouseButtonDblClick) {
-            switchToNextType();
-            return true;
-        }
-        return BaseNodeModel::eventFilter(obj, event);
-    }
+
 
     QWidget* embeddedWidget() override {
         if (!m_widget) {
-            // 直接使用自定义的输入框，避免任何容器嵌套问题
-            m_valueEdit = new QLineEdit();
-            m_valueEdit->setStyleSheet(
-                "QLineEdit {"
-                "  font-size: 10px;"
-                "  border: 1px solid #ccc;"
-                "  border-radius: 3px;"
-                "  padding: 2px 4px;"
-                "  background: white;"
-                "}"
-                "QLineEdit:focus {"
-                "  border: 2px solid #0066cc;"
-                "  background: #f8f8ff;"
-                "}"
-            );
+            // 使用自定义的样式化输入框
+            m_valueEdit = new ConstantValueLineEdit();
 
             // 根据当前类型设置占位符和初始值
             updateInputDisplay();
 
-            // 连接文本变化事件
-            connect(m_valueEdit, &QLineEdit::textChanged, [this](const QString& text) {
+            // 连接防抖动的文本变化事件
+            connect(m_valueEdit, &StyledLineEdit::textChangedDebounced, [this](const QString& text) {
                 parseAndSetValue(text); // parseAndSetValue 内部会处理信号发射
             });
 
-            // 使用事件过滤器来处理双击切换类型
-            m_valueEdit->installEventFilter(this);
+            // 连接类型切换事件
+            connect(m_valueEdit, &ConstantValueLineEdit::typeChangeRequested, [this]() {
+                switchToNextType();
+            });
 
             // 注册属性控件
             registerProperty("valueEdit", m_valueEdit);
@@ -252,7 +233,7 @@ private:
     bool m_booleanValue;
 
     QWidget* m_widget = nullptr;
-    QLineEdit* m_valueEdit = nullptr;
+    ConstantValueLineEdit* m_valueEdit = nullptr;
 
     QString getTypeDisplayName() const {
         switch (m_valueType) {
@@ -276,27 +257,28 @@ private:
     void updateInputDisplay() {
         if (!m_valueEdit) return;
 
+        QString typeName = getTypeDisplayName();
         QString placeholder;
         QString currentValue;
 
         switch (m_valueType) {
             case String:
-                placeholder = QString("[字符串] 输入文本 (双击切换类型)");
+                placeholder = "输入文本";
                 currentValue = m_stringValue;
                 break;
             case Number:
-                placeholder = QString("[数值] 输入数字 (双击切换类型)");
+                placeholder = "输入数字";
                 currentValue = QString::number(m_numberValue);
                 break;
             case Boolean:
-                placeholder = QString("[布尔值] 输入 true/false (双击切换类型)");
+                placeholder = "输入 true/false";
                 currentValue = m_booleanValue ? "true" : "false";
                 break;
         }
 
-        m_valueEdit->setPlaceholderText(placeholder);
+        // 使用新的 API 设置类型和占位符
+        m_valueEdit->setValueType(typeName, placeholder);
         m_valueEdit->setText(currentValue);
-        m_valueEdit->setToolTip(QString("当前类型: %1\n双击可切换类型").arg(getTypeDisplayName()));
     }
 
     void parseAndSetValue(const QString& text) {

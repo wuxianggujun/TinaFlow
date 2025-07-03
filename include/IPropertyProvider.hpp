@@ -13,6 +13,7 @@
 #include <QComboBox>
 #include <QCheckBox>
 #include <QString>
+#include "widget/StyledLineEdit.hpp"
 #include <QObject>
 
 // 前向声明
@@ -129,16 +130,17 @@ protected:
     /**
      * @brief 添加可编辑的文本输入框
      */
-    QLineEdit* addEditableLineEdit(QVBoxLayout* layout, const QString& label,
-                                   const QString& currentValue, const QString& propertyName,
-                                   IPropertyProvider* provider)
+    StyledLineEdit* addEditableLineEdit(QVBoxLayout* layout, const QString& label,
+                                       const QString& currentValue, const QString& propertyName,
+                                       IPropertyProvider* provider)
     {
         addLabeledWidget(layout, label, nullptr);
-        auto* lineEdit = new QLineEdit(currentValue);
+        auto* lineEdit = new StyledLineEdit(currentValue);
+        lineEdit->setDoubleClickEnabled(false); // 属性提供者不需要双击功能
         layout->addWidget(lineEdit);
 
-        // 连接信号
-        QObject::connect(lineEdit, &QLineEdit::textChanged, [provider, propertyName](const QString& text) {
+        // 连接信号 - 使用防抖动信号
+        QObject::connect(lineEdit, &StyledLineEdit::textChangedDebounced, [provider, propertyName](const QString& text) {
             provider->onPropertyChanged(propertyName, text);
         });
 
