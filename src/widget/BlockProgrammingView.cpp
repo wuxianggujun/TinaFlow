@@ -10,6 +10,7 @@
 #include <QMouseEvent>
 #include <QAction>
 #include <QIcon>
+#include "SkiaRenderer.hpp"
 
 BlockProgrammingView::BlockProgrammingView(QWidget* parent)
     : QWidget(parent), m_scriptName("未命名脚本")
@@ -154,18 +155,20 @@ void BlockProgrammingView::setupWorkspace()
 {
     m_workspace = new QScrollArea();
     m_workspace->setWidgetResizable(true);
-    
+
+    // 创建Skia渲染器作为工作区域
+    m_skiaRenderer = new SkiaRenderer();
+    m_skiaRenderer->setMinimumSize(800, 600);
+
+    // 设置工作区域容器
     m_workspaceContent = new QWidget();
-    m_workspaceContent->setMinimumSize(600, 400);
-    m_workspaceContent->setStyleSheet(
-        "QWidget {"
-        "  background-color: #ffffff;"
-        "  background-image: radial-gradient(circle, #e0e0e0 1px, transparent 1px);"
-        "  background-size: 20px 20px;"
-        "}"
-    );
-    
+    auto* layout = new QVBoxLayout(m_workspaceContent);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->addWidget(m_skiaRenderer);
+
     m_workspace->setWidget(m_workspaceContent);
+
+    qDebug() << "BlockProgrammingView: Skia renderer integrated into workspace";
 }
 
 void BlockProgrammingView::setupStatusBar()

@@ -16,6 +16,9 @@
 #include <QJsonObject>
 #include <QJsonArray>
 
+// Skia渲染器
+#include "SkiaRenderer.hpp"
+
 /**
  * @brief 积木编程视图
  * 
@@ -70,6 +73,7 @@ private:
     // 工作区域
     QScrollArea* m_workspace = nullptr;
     QWidget* m_workspaceContent = nullptr;
+    SkiaRenderer* m_skiaRenderer = nullptr;
     
     // 状态栏
     QWidget* m_statusBar = nullptr;
