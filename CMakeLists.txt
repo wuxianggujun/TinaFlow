@@ -147,11 +147,10 @@ if(WIN32)
         COMMENT "Copying ADS dll to output directory"
     )
 
-    # 复制Skia的ICU数据文件到输出目录
+    # 复制Skia的ICU数据文件到输出目录（统一使用Release版本）
     add_custom_command(TARGET TinaFlow POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        $<$<CONFIG:Debug>:${CMAKE_SOURCE_DIR}/third_party/skia/debug/out/Debug-windows-x64/icudtl.dat>
-        $<$<CONFIG:Release>:${CMAKE_SOURCE_DIR}/third_party/skia/release/out/Release-windows-x64/icudtl.dat>
+        ${CMAKE_SOURCE_DIR}/third_party/skia/release/out/Release-windows-x64/icudtl.dat
         $<TARGET_FILE_DIR:TinaFlow>
         COMMENT "Copying Skia ICU data file to output directory"
     )

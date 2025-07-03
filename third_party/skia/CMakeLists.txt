@@ -3,21 +3,19 @@ cmake_minimum_required(VERSION 3.20)
 
 project(Skia)
 
-# 设置Skia库的路径
-set(SKIA_DEBUG_DIR "${CMAKE_CURRENT_SOURCE_DIR}/debug")
+# 设置Skia库的路径（只使用Release版本）
 set(SKIA_RELEASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/release")
 
 # 创建Skia接口库
 add_library(Skia INTERFACE)
 
-# 设置头文件包含目录 - 使用Debug版本的头文件（Debug和Release的头文件应该是相同的）
+# 设置头文件包含目录
 # Skia头文件使用相对路径如"include/core/SkArc.h"，所以我们需要将Skia根目录添加到包含路径
 target_include_directories(Skia INTERFACE
-    ${SKIA_DEBUG_DIR}
+    ${SKIA_RELEASE_DIR}
 )
 
-# 由于Skia的Debug版本使用MT（静态Release）而我们需要MTd（静态Debug），
-# 在Debug模式下使用Release版本的Skia库来避免运行时库不匹配
+# 使用Release版本的Skia库
 set(SKIA_LIB_DIR "${SKIA_RELEASE_DIR}/out/Release-windows-x64")
 
 # 定义所有Skia相关的库文件
@@ -46,18 +44,12 @@ set(SKIA_LIBRARIES
     spirv_cross
 )
 
-# Debug版本额外的库文件
-set(SKIA_DEBUG_EXTRA_LIBRARIES
-    spvtools
-    spvtools_val
-)
-
-# 统一使用Release版本的库文件以避免运行时库不匹配
+# 处理所有Skia库文件
 foreach(lib ${SKIA_LIBRARIES})
     # 创建导入库目标
     add_library(${lib}_imported STATIC IMPORTED)
 
-    # 统一使用Release版本的库文件
+    # 使用Release版本的库文件
     set_target_properties(${lib}_imported PROPERTIES
         IMPORTED_LOCATION_DEBUG "${SKIA_RELEASE_DIR}/out/Release-windows-x64/${lib}.lib"
         IMPORTED_LOCATION_RELEASE "${SKIA_RELEASE_DIR}/out/Release-windows-x64/${lib}.lib"
@@ -67,8 +59,6 @@ foreach(lib ${SKIA_LIBRARIES})
     # 将导入的库链接到Skia接口库
     target_link_libraries(Skia INTERFACE ${lib}_imported)
 endforeach()
-
-# 跳过Debug版本额外的库文件，因为我们使用Release版本
 
 # 添加系统库依赖（Windows平台）
 if(WIN32)
@@ -122,6 +112,7 @@ target_compile_features(Skia INTERFACE cxx_std_17)
 
 # 输出配置信息
 message(STATUS "Skia configuration:")
-message(STATUS "  Debug libraries: ${SKIA_DEBUG_DIR}/out/Debug-windows-x64")
 message(STATUS "  Release libraries: ${SKIA_RELEASE_DIR}/out/Release-windows-x64")
-message(STATUS "  Include directories: ${SKIA_DEBUG_DIR}/include")
+message(STATUS "  Include directories: ${SKIA_RELEASE_DIR}/include")
+message(STATUS "  Currently using: ${SKIA_LIB_DIR}")
+message(STATUS "  Note: Using only Release libraries for compatibility")
