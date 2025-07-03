@@ -158,14 +158,7 @@ bool ADSPropertyPanel::isEditableNodeType(const QString& nodeTypeName) const
         "SaveExcel",        // 保存Excel文件
         "ReadCell",         // 读取单元格（有地址设置）
         "ReadRange",        // 读取范围（有范围设置）
-        "StringCompare",    // 字符串比较（有比较值和操作设置）
-        "SmartLoopProcessor", // 智能循环处理器
-        "WriteCell",        // 写入单元格
-        "WriteRange",       // 写入范围
-        "CellFilter",       // 单元格过滤器
-        "ValueFilter",      // 值过滤器
-        "IntegerFilter",    // 整数过滤器
-        "BooleanFilter"     // 布尔值过滤器
+        "ConstantValue"     // 常量值
     };
 
     // 显示类节点不需要编辑模式

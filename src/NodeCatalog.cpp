@@ -84,16 +84,7 @@ void NodeCatalog::initializeNodeCatalog()
         categoryToDisplayName(DataSource),
         "从工作表中读取指定范围的数据",
         categoryToIcon(DataSource),
-        false  // 不再是常用节点
-    );
-
-    s_nodeMap["SmartReadRange"] = NodeInfo(
-        "SmartReadRange",
-        "智能范围读取",
-        categoryToDisplayName(DataSource),
-        "支持多种方式读取Excel数据：整张表、自动检测、指定范围等",
-        categoryToIcon(DataSource),
-        true  // 新的常用节点
+        true  // 常用节点
     );
     
     s_nodeMap["SaveExcel"] = NodeInfo(
@@ -105,26 +96,7 @@ void NodeCatalog::initializeNodeCatalog()
         false
     );
     
-    // 数据处理节点
-    s_nodeMap["SmartLoopProcessor"] = NodeInfo(
-        "SmartLoopProcessor", 
-        "智能循环处理器", 
-        categoryToDisplayName(Processing),
-        "智能地循环处理数据列表",
-        categoryToIcon(Processing),
-        false
-    );
-    
-    // 注释：NumberCompare和StringCompare已被UniversalCompare替代
-    
-    s_nodeMap["RangeInfo"] = NodeInfo(
-        "RangeInfo", 
-        "范围信息", 
-        categoryToDisplayName(Processing),
-        "分析数据范围的统计信息",
-        categoryToIcon(Processing),
-        false
-    );
+
     
     // 显示节点
     s_nodeMap["DisplayCell"] = NodeInfo(
@@ -145,79 +117,9 @@ void NodeCatalog::initializeNodeCatalog()
         false
     );
     
-    s_nodeMap["DisplayBoolean"] = NodeInfo(
-        "DisplayBoolean", 
-        "显示布尔值", 
-        categoryToDisplayName(Display),
-        "显示布尔值（真/假）",
-        categoryToIcon(Display),
-        false
-    );
-    
-    s_nodeMap["DisplayRow"] = NodeInfo(
-        "DisplayRow", 
-        "显示行", 
-        categoryToDisplayName(Display),
-        "显示单行数据",
-        categoryToIcon(Display),
-        false
-    );
-    
-    s_nodeMap["DisplayCellList"] = NodeInfo(
-        "DisplayCellList",
-        "显示单元格列表",
-        categoryToDisplayName(Display),
-        "以列表形式显示多个单元格",
-        categoryToIcon(Display),
-        false
-    );
 
-    // 条件逻辑节点
 
-    s_nodeMap["UniversalCompare"] = NodeInfo(
-        "UniversalCompare",
-        "智能比较",
-        categoryToDisplayName(Processing),
-        "万能比较节点：自动识别数据类型（字符串/数值/布尔），支持多种比较操作符，替代原有的数值比较和字符串比较节点",
-        categoryToIcon(Processing),
-        true  // 常用节点，替代NumberCompare和StringCompare
-    );
 
-    s_nodeMap["IfElse"] = NodeInfo(
-        "IfElse",
-        "条件分支",
-        categoryToDisplayName(Processing),
-        "根据布尔条件选择输出不同的数据",
-        categoryToIcon(Processing),
-        true  // 常用节点
-    );
-
-    s_nodeMap["LogicalAnd"] = NodeInfo(
-        "LogicalAnd",
-        "逻辑与",
-        categoryToDisplayName(Processing),
-        "对两个布尔值执行逻辑与运算",
-        categoryToIcon(Processing),
-        false
-    );
-
-    s_nodeMap["LogicalOr"] = NodeInfo(
-        "LogicalOr",
-        "逻辑或",
-        categoryToDisplayName(Processing),
-        "对两个布尔值执行逻辑或运算",
-        categoryToIcon(Processing),
-        false
-    );
-
-    s_nodeMap["LogicalNot"] = NodeInfo(
-        "LogicalNot",
-        "逻辑非",
-        categoryToDisplayName(Processing),
-        "对布尔值执行逻辑非运算",
-        categoryToIcon(Processing),
-        false
-    );
 
     s_nodeMap["ConstantValue"] = NodeInfo(
         "ConstantValue",
@@ -228,42 +130,7 @@ void NodeCatalog::initializeNodeCatalog()
         true  // 常用节点
     );
 
-    // 过滤器节点
-    s_nodeMap["CellFilter"] = NodeInfo(
-        "CellFilter",
-        "单元格过滤器",
-        categoryToDisplayName(Processing),
-        "根据地址、值或类型过滤单元格数据",
-        categoryToIcon(Processing),
-        false
-    );
 
-    s_nodeMap["ValueFilter"] = NodeInfo(
-        "ValueFilter",
-        "值过滤器",
-        categoryToDisplayName(Processing),
-        "根据条件过滤值数据（字符串、数值、布尔值）",
-        categoryToIcon(Processing),
-        false
-    );
-
-    s_nodeMap["IntegerFilter"] = NodeInfo(
-        "IntegerFilter",
-        "整数过滤器",
-        categoryToDisplayName(Processing),
-        "根据条件过滤整数数据",
-        categoryToIcon(Processing),
-        false
-    );
-
-    s_nodeMap["BooleanFilter"] = NodeInfo(
-        "BooleanFilter",
-        "布尔值过滤器",
-        categoryToDisplayName(Processing),
-        "根据条件过滤布尔值数据",
-        categoryToIcon(Processing),
-        false
-    );
 
     s_initialized = true;
     qDebug() << "NodeCatalog: Initialized with" << s_nodeMap.size() << "nodes";

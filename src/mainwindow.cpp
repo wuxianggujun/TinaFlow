@@ -42,20 +42,9 @@
 #include "model/DisplayCellModel.hpp"
 #include "model/ReadRangeModel.hpp"
 #include "model/DisplayRangeModel.hpp"
-// #include "model/StringCompareModel.hpp" // 已删除，被StringCompareDoubleModel替代
-#include "model/DisplayBooleanModel.hpp"
-#include "model/SmartLoopProcessorModel.hpp"
-#include "model/DisplayCellListModel.hpp"
-#include "model/DisplayRowModel.hpp"
-#include "model/RangeInfoModel.hpp"
 #include "model/SaveExcelModel.hpp"
 
 // 条件逻辑节点
-#include "model/UniversalCompareModel.hpp"
-#include "model/IfElseModel.hpp"
-#include "model/LogicalAndModel.hpp"
-#include "model/LogicalOrModel.hpp"
-#include "model/LogicalNotModel.hpp"
 #include "model/ConstantValueModel.hpp"
 
 // 核心节点模型
@@ -64,22 +53,11 @@
 #include "model/ReadCellModel.hpp"
 #include "model/ReadRangeModel.hpp"
 #include "model/SaveExcelModel.hpp"
-#include "model/SmartLoopProcessorModel.hpp"
+#include "model/ConstantValueModel.hpp"
 
 // 显示节点模型
 #include "model/DisplayCellModel.hpp"
 #include "model/DisplayRangeModel.hpp"
-#include "model/DisplayBooleanModel.hpp"
-#include "model/DisplayRowModel.hpp"
-#include "model/DisplayCellListModel.hpp"
-#include "model/RangeInfoModel.hpp"
-
-// 过滤器节点模型
-#include "model/CellFilterModel.hpp"
-#include "model/ValueFilterModel.hpp"
-
-// 智能读取节点模型
-#include "model/SmartReadRangeModel.hpp"
 
 // TinaFlow Components
 #include "CommandManager.hpp"
@@ -336,36 +314,17 @@ void MainWindow::cleanupGraphicsComponents()
 std::shared_ptr<QtNodes::NodeDelegateModelRegistry> MainWindow::registerDataModels()
 {
     auto ret = std::make_shared<QtNodes::NodeDelegateModelRegistry>();
-    // 使用英文名称注册（与节点的name()方法返回值一致）
+    // 核心节点注册
     ret->registerModel<OpenExcelModel>("OpenExcel");
     ret->registerModel<SelectSheetModel>("SelectSheet");
     ret->registerModel<ReadCellModel>("ReadCell");
-    ret->registerModel<DisplayCellModel>("DisplayCell");
     ret->registerModel<ReadRangeModel>("ReadRange");
-    ret->registerModel<SmartReadRangeModel>("SmartReadRange");
-    ret->registerModel<DisplayRangeModel>("DisplayRange");
-
-    ret->registerModel<DisplayBooleanModel>("DisplayBoolean");
-
-    ret->registerModel<SmartLoopProcessorModel>("SmartLoopProcessor");
-    ret->registerModel<DisplayCellListModel>("DisplayCellList");
-    ret->registerModel<DisplayRowModel>("DisplayRow");
-    ret->registerModel<RangeInfoModel>("RangeInfo");
     ret->registerModel<SaveExcelModel>("SaveExcel");
-
-    // 条件逻辑节点
-    ret->registerModel<UniversalCompareModel>("UniversalCompare");
-    ret->registerModel<IfElseModel>("IfElse");
-    ret->registerModel<LogicalAndModel>("LogicalAnd");
-    ret->registerModel<LogicalOrModel>("LogicalOr");
-    ret->registerModel<LogicalNotModel>("LogicalNot");
     ret->registerModel<ConstantValueModel>("ConstantValue");
 
-    // 过滤器节点
-    ret->registerModel<CellFilterModel>("CellFilter");
-    ret->registerModel<ValueDataFilterModel>("ValueFilter");
-    ret->registerModel<IntegerFilterModel>("IntegerFilter");
-    ret->registerModel<BooleanFilterModel>("BooleanFilter");
+    // 显示节点
+    ret->registerModel<DisplayCellModel>("DisplayCell");
+    ret->registerModel<DisplayRangeModel>("DisplayRange");
 
     return ret;
 }
