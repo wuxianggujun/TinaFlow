@@ -1,0 +1,27 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/icons">
+        <!-- Action Icons -->
+        <file alias="actions/play">icons/actions/play.svg</file>
+        <file alias="actions/pause">icons/actions/pause.svg</file>
+        <file alias="actions/copy">icons/actions/copy.svg</file>
+        <file alias="actions/trash">icons/actions/trash.svg</file>
+        <file alias="actions/plus">icons/actions/plus.svg</file>
+        <file alias="actions/pencil">icons/actions/pencil.svg</file>
+        <file alias="actions/pen-off">icons/actions/pen-off.svg</file>
+
+        <!-- File Operation Icons -->
+        <file alias="files/save">icons/files/save.svg</file>
+        <file alias="files/save-all">icons/files/save-all.svg</file>
+        <file alias="files/save-off">icons/files/save-off.svg</file>
+        <file alias="files/folder">icons/files/folder.svg</file>
+        <file alias="files/file">icons/files/file.svg</file>
+        <file alias="files/import">icons/files/import.svg</file>
+        <file alias="files/upload">icons/files/upload.svg</file>
+
+        <!-- UI Icons -->
+        <file alias="ui/settings">icons/ui/settings.svg</file>
+        <file alias="ui/search">icons/ui/search.svg</file>
+        <file alias="ui/bug">icons/ui/bug.svg</file>
+    </qresource>
+</RCC>
