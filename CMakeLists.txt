@@ -2,6 +2,22 @@ cmake_minimum_required(VERSION 3.20)
 
 project(TinaFlow VERSION 0.1 LANGUAGES CXX)
 
+# 在项目开始时就设置运行时库，确保所有子项目都使用相同的运行时库
+if (MSVC)
+    # 为了与Skia兼容，在Debug模式下也使用静态Release运行时库
+    # 这是因为Skia的所有版本都是用Release运行时库编译的
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
+
+    # 设置全局编译选项，强制所有目标都使用静态Release运行时库
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MT")
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
+    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /MT")
+    set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /MT")
+
+    # 在Debug模式下禁用迭代器调试以匹配Skia
+    add_compile_definitions($<$<CONFIG:Debug>:_ITERATOR_DEBUG_LEVEL=0>)
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /utf-8")
@@ -40,6 +56,9 @@ add_subdirectory(third_party/OpenXLSX)
 add_subdirectory(third_party/nodeeditor)
 
 add_subdirectory(third_party/Qt-Advanced-Docking-System)
+
+# 添加Skia库
+add_subdirectory(third_party/skia)
 
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
@@ -86,6 +105,7 @@ target_link_libraries(TinaFlow PRIVATE
         OpenXLSX
         QtNodes
         qtadvanceddocking-qt6
+        Skia
 )
 
 set_target_properties(TinaFlow PROPERTIES
@@ -125,6 +145,15 @@ if(WIN32)
         $<TARGET_FILE:qtadvanceddocking-qt6>
         $<TARGET_FILE_DIR:TinaFlow>
         COMMENT "Copying ADS dll to output directory"
+    )
+
+    # 复制Skia的ICU数据文件到输出目录
+    add_custom_command(TARGET TinaFlow POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<$<CONFIG:Debug>:${CMAKE_SOURCE_DIR}/third_party/skia/debug/out/Debug-windows-x64/icudtl.dat>
+        $<$<CONFIG:Release>:${CMAKE_SOURCE_DIR}/third_party/skia/release/out/Release-windows-x64/icudtl.dat>
+        $<TARGET_FILE_DIR:TinaFlow>
+        COMMENT "Copying Skia ICU data file to output directory"
     )
 endif()
 

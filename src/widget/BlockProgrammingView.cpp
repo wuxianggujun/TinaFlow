@@ -334,4 +334,4 @@ void BlockItem::mousePressEvent(QMouseEvent* event)
     QWidget::mousePressEvent(event);
 }
 
-#include "widget/BlockProgrammingView.moc"
+

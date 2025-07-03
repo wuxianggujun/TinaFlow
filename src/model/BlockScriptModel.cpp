@@ -262,4 +262,4 @@ void BlockScriptModel::onScriptSaved(const QString& scriptName, const QJsonObjec
     qDebug() << "BlockScriptModel: Script saved:" << scriptName;
 }
 
-#include "model/BlockScriptModel.moc"
+
