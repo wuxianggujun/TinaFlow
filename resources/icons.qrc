@@ -9,6 +9,8 @@
         <file alias="actions/plus">icons/actions/plus.svg</file>
         <file alias="actions/pencil">icons/actions/pencil.svg</file>
         <file alias="actions/pen-off">icons/actions/pen-off.svg</file>
+        <file alias="actions/undo">icons/actions/undo.svg</file>
+        <file alias="actions/redo">icons/actions/redo.svg</file>
 
         <!-- File Operation Icons -->
         <file alias="files/save">icons/files/save.svg</file>
@@ -16,12 +18,16 @@
         <file alias="files/save-off">icons/files/save-off.svg</file>
         <file alias="files/folder">icons/files/folder.svg</file>
         <file alias="files/file">icons/files/file.svg</file>
+        <file alias="files/file-plus">icons/files/file-plus.svg</file>
         <file alias="files/import">icons/files/import.svg</file>
         <file alias="files/upload">icons/files/upload.svg</file>
 
         <!-- UI Icons -->
         <file alias="ui/settings">icons/ui/settings.svg</file>
         <file alias="ui/search">icons/ui/search.svg</file>
+        <file alias="ui/maximize">icons/ui/maximize.svg</file>
+        <file alias="ui/zoom-in">icons/ui/zoom-in.svg</file>
+        <file alias="ui/zoom-out">icons/ui/zoom-out.svg</file>
         <file alias="ui/bug">icons/ui/bug.svg</file>
     </qresource>
 </RCC>

@@ -28,6 +28,8 @@ void IconManager::initializeIconMap()
     m_iconMap[IconType::Plus] = ":/icons/actions/plus";
     m_iconMap[IconType::Pencil] = ":/icons/actions/pencil";
     m_iconMap[IconType::PenOff] = ":/icons/actions/pen-off";
+    m_iconMap[IconType::Undo] = ":/icons/actions/undo";
+    m_iconMap[IconType::Redo] = ":/icons/actions/redo";
     
     // 文件操作图标
     m_iconMap[IconType::Save] = ":/icons/files/save";
@@ -35,15 +37,19 @@ void IconManager::initializeIconMap()
     m_iconMap[IconType::SaveOff] = ":/icons/files/save-off";
     m_iconMap[IconType::Folder] = ":/icons/files/folder";
     m_iconMap[IconType::File] = ":/icons/files/file";
+    m_iconMap[IconType::FilePlus] = ":/icons/files/file-plus";
     m_iconMap[IconType::Import] = ":/icons/files/import";
     m_iconMap[IconType::Upload] = ":/icons/files/upload";
     
     // 界面图标
     m_iconMap[IconType::Settings] = ":/icons/ui/settings";
     m_iconMap[IconType::Search] = ":/icons/ui/search";
+    m_iconMap[IconType::Maximize] = ":/icons/ui/maximize";
+    m_iconMap[IconType::ZoomIn] = ":/icons/ui/zoom-in";
+    m_iconMap[IconType::ZoomOut] = ":/icons/ui/zoom-out";
     
     // 状态图标
-    m_iconMap[IconType::Bug] = ":/icons/states/bug";
+    m_iconMap[IconType::Bug] = ":/icons/ui/bug";
 }
 
 QIcon IconManager::getIcon(IconType type, IconSize size) const

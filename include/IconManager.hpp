@@ -23,13 +23,14 @@ public:
     enum class IconType {
         // 操作类图标
         Play,           // 播放/运行
-        Pause,          // 暂停
-        Stop,           // 停止
+        Pause,          // 暂停/停止
         Copy,           // 复制
         Trash,          // 删除
         Plus,           // 添加
         Pencil,         // 编辑
         PenOff,         // 禁用编辑
+        Undo,           // 撤销
+        Redo,           // 重做
         
         // 文件操作图标
         Save,           // 保存
@@ -37,12 +38,16 @@ public:
         SaveOff,        // 保存禁用
         Folder,         // 文件夹
         File,           // 文件
+        FilePlus,       // 新建文件
         Import,         // 导入
         Upload,         // 上传
         
         // 界面图标
         Settings,       // 设置
         Search,         // 搜索
+        Maximize,       // 适应视图
+        ZoomIn,         // 放大
+        ZoomOut,        // 缩小
         
         // 状态图标
         Bug,            // 错误/调试

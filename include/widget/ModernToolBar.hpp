@@ -32,7 +32,7 @@ public:
     explicit ModernToolBar(MainWindow* parent = nullptr, bool showFileActions = true);
     
     // 状态更新方法
-    void updateExecutionState(bool running);
+    void updateExecutionState(bool running, bool debugging = false);
     void updateUndoRedoState(bool canUndo, bool canRedo);
     
     // 获取动作指针
@@ -51,6 +51,7 @@ signals:
     
     // 执行控制信号
     void runRequested();
+    void debugRequested();
     void pauseRequested();
     void stopRequested();
     
@@ -82,4 +83,5 @@ private:
     
     // 执行状态
     bool m_isRunning;
+    bool m_isDebugging;
 }; 

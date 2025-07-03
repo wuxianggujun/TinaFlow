@@ -387,7 +387,8 @@ void MainWindow::setupModernToolbar()
 
     // 连接执行控制信号
     connect(m_modernToolBar, &ModernToolBar::runRequested, this, &MainWindow::onRunClicked);
-    connect(m_modernToolBar, &ModernToolBar::pauseRequested, this, &MainWindow::onPauseClicked);
+    connect(m_modernToolBar, &ModernToolBar::debugRequested, this, &MainWindow::onDebugClicked);
+    connect(m_modernToolBar, &ModernToolBar::pauseRequested, this, &MainWindow::onStopClicked); // 暂停实际上是停止
     connect(m_modernToolBar, &ModernToolBar::stopRequested, this, &MainWindow::onStopClicked);
 
 
@@ -461,7 +462,7 @@ void MainWindow::setupModernToolbar()
     });
 
     // 初始化状态
-    m_modernToolBar->updateExecutionState(false);
+    m_modernToolBar->updateExecutionState(false, false);
     m_modernToolBar->updateUndoRedoState(false, false);
 }
 
@@ -659,10 +660,10 @@ void MainWindow::onRunClicked()
     // 运行按钮被点击
     setGlobalExecutionState(true);
 
-    // 更新现代化工具栏状态
+    // 更新现代化工具栏状态 - 运行模式
     if (m_modernToolBar)
     {
-        m_modernToolBar->updateExecutionState(true);
+        m_modernToolBar->updateExecutionState(true, false);
     }
 
     // 重新触发数据流处理
@@ -671,18 +672,21 @@ void MainWindow::onRunClicked()
     ui->statusbar->showMessage(tr("流程正在运行..."), 0);
 }
 
-void MainWindow::onPauseClicked()
+void MainWindow::onDebugClicked()
 {
-    // 暂停按钮被点击
-    setGlobalExecutionState(false);
+    // 调试按钮被点击
+    setGlobalExecutionState(true);
 
-    // 更新现代化工具栏状态
+    // 更新现代化工具栏状态 - 调试模式
     if (m_modernToolBar)
     {
-        m_modernToolBar->updateExecutionState(false);
+        m_modernToolBar->updateExecutionState(true, true);
     }
 
-    ui->statusbar->showMessage(tr("流程已暂停"), 3000);
+    // 重新触发数据流处理（调试模式）
+    triggerDataFlow();
+
+    ui->statusbar->showMessage(tr("流程开始调试"), 3000);
 }
 
 void MainWindow::onStopClicked()
@@ -690,10 +694,10 @@ void MainWindow::onStopClicked()
     // 停止按钮被点击
     setGlobalExecutionState(false);
 
-    // 更新现代化工具栏状态
+    // 更新现代化工具栏状态 - 回到空闲状态
     if (m_modernToolBar)
     {
-        m_modernToolBar->updateExecutionState(false);
+        m_modernToolBar->updateExecutionState(false, false);
     }
 
     ui->statusbar->showMessage(tr("流程已停止"), 3000);

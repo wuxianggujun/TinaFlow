@@ -54,7 +54,7 @@ private slots:
     
     // 执行控制
     void onRunClicked();
-    void onPauseClicked();
+    void onDebugClicked();
     void onStopClicked();
     void onUndoClicked();
     void onRedoClicked();

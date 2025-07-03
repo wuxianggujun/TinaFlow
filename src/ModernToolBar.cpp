@@ -1,5 +1,6 @@
 #include "widget/ModernToolBar.hpp"
 #include "mainwindow.hpp"
+#include "IconManager.hpp"
 #include <QGroupBox>
 #include <QSplitter>
 #include <QFrame>
@@ -10,11 +11,16 @@ ModernToolBar::ModernToolBar(MainWindow* parent, bool showFileActions)
     : QToolBar(parent)
     , m_mainWindow(parent)
     , m_isRunning(false)
+    , m_isDebugging(false)
 {
     setObjectName("ModernToolBar");
     setWindowTitle(tr("工具栏"));
     setMovable(false);
     setFloatable(false);
+
+    // 设置工具栏样式
+    setToolButtonStyle(Qt::ToolButtonIconOnly); // 全局设置只显示图标
+    setIconSize(QSize(20, 20)); // 设置图标大小
 
     setupLayout();
     if (showFileActions) {
@@ -30,17 +36,22 @@ ModernToolBar::ModernToolBar(MainWindow* parent, bool showFileActions)
 void ModernToolBar::setupLayout()
 {
     // QToolBar不需要手动设置布局，它有自己的布局管理
-    setFixedHeight(48);
+    setFixedHeight(32); // 更紧凑的高度
     setMinimumWidth(800);
     setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
 }
 
 void ModernToolBar::createFileGroup()
 {
-    // 创建文件操作动作
-    auto* newAction = createAction("new", "新建", "📄", "创建新的流程文件 (Ctrl+N)", QKeySequence::New);
-    auto* openAction = createAction("open", "打开", "📁", "打开现有流程文件 (Ctrl+O)", QKeySequence::Open);
-    auto* saveAction = createAction("save", "保存", "💾", "保存当前流程文件 (Ctrl+S)", QKeySequence::Save);
+    // 创建文件操作动作 - 使用图标管理器
+    auto* newAction = createAction("new", "", "", "创建新的流程文件 (Ctrl+N)", QKeySequence::New);
+    newAction->setIcon(Icons::get(IconType::FilePlus, IconSize::Small));
+
+    auto* openAction = createAction("open", "", "", "打开现有流程文件 (Ctrl+O)", QKeySequence::Open);
+    openAction->setIcon(Icons::get(IconType::Folder, IconSize::Small));
+
+    auto* saveAction = createAction("save", "", "", "保存当前流程文件 (Ctrl+S)", QKeySequence::Save);
+    saveAction->setIcon(Icons::get(IconType::Save, IconSize::Small));
     
     // 添加动作到工具栏
     addAction(newAction);
@@ -57,9 +68,12 @@ void ModernToolBar::createFileGroup()
 
 void ModernToolBar::createEditGroup()
 {
-    // 创建编辑操作动作
-    auto* undoAction = createAction("undo", "撤销", "↶", "撤销上一个操作 (Ctrl+Z)", QKeySequence::Undo);
-    auto* redoAction = createAction("redo", "重做", "↷", "重做下一个操作 (Ctrl+Y)", QKeySequence::Redo);
+    // 创建编辑操作动作 - 使用正确的图标
+    auto* undoAction = createAction("undo", "", "", "撤销上一个操作 (Ctrl+Z)", QKeySequence::Undo);
+    undoAction->setIcon(Icons::get(IconType::Undo, IconSize::Small));
+
+    auto* redoAction = createAction("redo", "", "", "重做下一个操作 (Ctrl+Y)", QKeySequence::Redo);
+    redoAction->setIcon(Icons::get(IconType::Redo, IconSize::Small));
     
     // 默认禁用
     undoAction->setEnabled(false);
@@ -78,34 +92,57 @@ void ModernToolBar::createEditGroup()
 
 void ModernToolBar::createExecutionGroup()
 {
-    // 创建执行控制动作
-    auto* runAction = createAction("run", "运行", "▶️", "开始执行流程 (F5)", QKeySequence("F5"));
-    auto* pauseAction = createAction("pause", "暂停", "⏸️", "暂停执行 (F6)", QKeySequence("F6"));
-    auto* stopAction = createAction("stop", "停止", "⏹️", "停止执行 (F7)", QKeySequence("F7"));
-    
-    // 设置初始状态
+    // 执行控制组 - 样式已在构造函数中设置
+
+    // 创建执行控制动作 - 使用图标管理器，不显示文本
+    auto* runAction = createAction("run", "", "", "开始执行流程 (F5)", QKeySequence("F5"));
+    runAction->setIcon(Icons::get(IconType::Play, IconSize::Small));
+
+    auto* debugAction = createAction("debug", "", "", "调试执行流程 (F6)", QKeySequence("F6"));
+    debugAction->setIcon(Icons::get(IconType::Bug, IconSize::Small));
+
+    auto* pauseAction = createAction("pause", "", "", "暂停执行 (F7)", QKeySequence("F7"));
+    pauseAction->setIcon(Icons::get(IconType::Pause, IconSize::Small));
+
+    auto* stopAction = createAction("stop", "", "", "停止执行 (F8)", QKeySequence("F8"));
+    stopAction->setIcon(Icons::get(IconType::Pause, IconSize::Small));
+
+    // 设置初始状态 - 空闲时显示运行和调试按钮
+    runAction->setEnabled(true);
+    runAction->setVisible(true);
+    debugAction->setEnabled(true);
+    debugAction->setVisible(true);
     pauseAction->setEnabled(false);
+    pauseAction->setVisible(false);
     stopAction->setEnabled(false);
-    
+    stopAction->setVisible(false);
+
     // 添加动作到工具栏
     addAction(runAction);
+    addAction(debugAction);
     addAction(pauseAction);
     addAction(stopAction);
-    
+
     // 连接信号
     connect(runAction, &QAction::triggered, this, &ModernToolBar::runRequested);
-    connect(pauseAction, &QAction::triggered, this, &ModernToolBar::pauseRequested);
+    connect(debugAction, &QAction::triggered, this, &ModernToolBar::debugRequested);
+    connect(pauseAction, &QAction::triggered, this, &ModernToolBar::stopRequested); // 暂停实际上是停止
     connect(stopAction, &QAction::triggered, this, &ModernToolBar::stopRequested);
-    
+
     addSeparator();
 }
 
 void ModernToolBar::createViewGroup()
 {
-    // 创建视图控制动作
-    auto* zoomFitAction = createAction("zoomFit", "适应", "🔍", "缩放以适应所有节点 (Ctrl+0)", QKeySequence("Ctrl+0"));
-    auto* zoomInAction = createAction("zoomIn", "放大", "+", "放大视图 (Ctrl++)", QKeySequence::ZoomIn);
-    auto* zoomOutAction = createAction("zoomOut", "缩小", "-", "缩小视图 (Ctrl+-)", QKeySequence::ZoomOut);
+    // 创建视图控制动作 - 使用正确的图标
+    auto* zoomFitAction = createAction("zoomFit", "", "", "缩放以适应所有节点 (Ctrl+0)", QKeySequence("Ctrl+0"));
+    zoomFitAction->setIcon(Icons::get(IconType::Maximize, IconSize::Small));
+
+    auto* zoomInAction = createAction("zoomIn", "", "", "放大视图 (Ctrl++)", QKeySequence::ZoomIn);
+    zoomInAction->setIcon(Icons::get(IconType::ZoomIn, IconSize::Small));
+
+    auto* zoomOutAction = createAction("zoomOut", "", "", "缩小视图 (Ctrl+-)", QKeySequence::ZoomOut);
+    zoomOutAction->setIcon(Icons::get(IconType::ZoomOut, IconSize::Small));
     
     // 添加动作到工具栏
     addAction(zoomFitAction);
@@ -127,14 +164,18 @@ void ModernToolBar::setupStyles()
         "    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, "
         "                               stop:0 #f8f8f8, stop:1 #e8e8e8);"
         "    border-bottom: 1px solid #c0c0c0;"
+        "    spacing: 2px;"
         "}"
         "QToolButton {"
         "    background-color: transparent;"
         "    border: 1px solid transparent;"
-        "    border-radius: 4px;"
-        "    padding: 4px 8px;"
+        "    border-radius: 3px;"
+        "    padding: 3px;"  // 减少内边距
         "    margin: 1px;"
-        "    font-size: 11px;"
+        "    min-width: 24px;"  // 设置最小宽度
+        "    min-height: 24px;" // 设置最小高度
+        "    max-width: 24px;"  // 设置最大宽度
+        "    max-height: 24px;" // 设置最大高度
         "}"
         "QToolButton:hover {"
         "    background-color: rgba(0,0,0,0.1);"
@@ -147,6 +188,9 @@ void ModernToolBar::setupStyles()
         "    background-color: #2196F3;"
         "    color: white;"
         "    border: 1px solid #1976D2;"
+        "}"
+        "QToolButton:disabled {"
+        "    opacity: 0.5;"
         "}"
     );
 }
@@ -169,14 +213,41 @@ QAction* ModernToolBar::createAction(const QString& name, const QString& text,
 
 // createToolButton方法已移除，直接使用QAction
 
-void ModernToolBar::updateExecutionState(bool running)
+void ModernToolBar::updateExecutionState(bool running, bool debugging)
 {
     m_isRunning = running;
-    
-    // 更新按钮状态
-    m_actions["run"]->setEnabled(!running);
-    m_actions["pause"]->setEnabled(running);
-    m_actions["stop"]->setEnabled(running);
+    m_isDebugging = debugging;
+
+    // 根据状态更新按钮
+    if (running || debugging) {
+        // 运行中或调试中：禁用运行和调试，显示暂停按钮
+        m_actions["run"]->setEnabled(false);
+        m_actions["debug"]->setEnabled(false);
+
+        // 显示暂停按钮
+        m_actions["pause"]->setVisible(true);
+        m_actions["pause"]->setEnabled(true);
+
+        // 更新暂停按钮的工具提示
+        if (debugging) {
+            m_actions["pause"]->setToolTip("暂停调试执行 (F7)");
+        } else {
+            m_actions["pause"]->setToolTip("暂停运行执行 (F7)");
+        }
+
+        // 隐藏停止按钮
+        m_actions["stop"]->setVisible(false);
+    } else {
+        // 空闲状态：恢复原始状态
+        m_actions["run"]->setEnabled(true);
+        m_actions["debug"]->setEnabled(true);
+
+        // 隐藏暂停和停止按钮
+        m_actions["pause"]->setVisible(false);
+        m_actions["pause"]->setEnabled(false);
+        m_actions["stop"]->setVisible(false);
+        m_actions["stop"]->setEnabled(false);
+    }
 }
 
 
@@ -201,5 +272,7 @@ void ModernToolBar::onRecentFileTriggered()
         emit recentFileRequested(action->data().toString());
     }
 }
+
+
 
  
