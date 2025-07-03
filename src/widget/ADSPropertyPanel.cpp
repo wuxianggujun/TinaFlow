@@ -158,7 +158,8 @@ bool ADSPropertyPanel::isEditableNodeType(const QString& nodeTypeName) const
         "SaveExcel",        // 保存Excel文件
         "ReadCell",         // 读取单元格（有地址设置）
         "ReadRange",        // 读取范围（有范围设置）
-        "ConstantValue"     // 常量值
+        "ConstantValue",    // 常量值
+        "BlockScript"       // 积木脚本
     };
 
     // 显示类节点不需要编辑模式

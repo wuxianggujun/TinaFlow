@@ -59,6 +59,9 @@
 #include "model/DisplayCellModel.hpp"
 #include "model/DisplayRangeModel.hpp"
 
+// 积木脚本节点模型
+#include "model/BlockScriptModel.hpp"
+
 // TinaFlow Components
 #include "CommandManager.hpp"
 #include "NodeCatalog.hpp"
@@ -325,6 +328,9 @@ std::shared_ptr<QtNodes::NodeDelegateModelRegistry> MainWindow::registerDataMode
     // 显示节点
     ret->registerModel<DisplayCellModel>("DisplayCell");
     ret->registerModel<DisplayRangeModel>("DisplayRange");
+
+    // 积木脚本节点
+    ret->registerModel<BlockScriptModel>("BlockScript");
 
     return ret;
 }

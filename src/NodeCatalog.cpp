@@ -130,6 +130,15 @@ void NodeCatalog::initializeNodeCatalog()
         true  // 常用节点
     );
 
+    s_nodeMap["BlockScript"] = NodeInfo(
+        "BlockScript",
+        "积木脚本",
+        categoryToDisplayName(Processing),
+        "使用积木编程处理Excel数据，支持可视化逻辑编程",
+        categoryToIcon(Processing),
+        true  // 常用节点
+    );
+
 
 
     s_initialized = true;
