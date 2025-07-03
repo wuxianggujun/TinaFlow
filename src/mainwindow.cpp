@@ -74,6 +74,13 @@
 #include "model/DisplayCellListModel.hpp"
 #include "model/RangeInfoModel.hpp"
 
+// 过滤器节点模型
+#include "model/CellFilterModel.hpp"
+#include "model/ValueFilterModel.hpp"
+
+// 智能读取节点模型
+#include "model/SmartReadRangeModel.hpp"
+
 // TinaFlow Components
 #include "CommandManager.hpp"
 #include "NodeCatalog.hpp"
@@ -335,6 +342,7 @@ std::shared_ptr<QtNodes::NodeDelegateModelRegistry> MainWindow::registerDataMode
     ret->registerModel<ReadCellModel>("ReadCell");
     ret->registerModel<DisplayCellModel>("DisplayCell");
     ret->registerModel<ReadRangeModel>("ReadRange");
+    ret->registerModel<SmartReadRangeModel>("SmartReadRange");
     ret->registerModel<DisplayRangeModel>("DisplayRange");
 
     ret->registerModel<DisplayBooleanModel>("DisplayBoolean");
@@ -352,6 +360,12 @@ std::shared_ptr<QtNodes::NodeDelegateModelRegistry> MainWindow::registerDataMode
     ret->registerModel<LogicalOrModel>("LogicalOr");
     ret->registerModel<LogicalNotModel>("LogicalNot");
     ret->registerModel<ConstantValueModel>("ConstantValue");
+
+    // 过滤器节点
+    ret->registerModel<CellFilterModel>("CellFilter");
+    ret->registerModel<ValueDataFilterModel>("ValueFilter");
+    ret->registerModel<IntegerFilterModel>("IntegerFilter");
+    ret->registerModel<BooleanFilterModel>("BooleanFilter");
 
     return ret;
 }

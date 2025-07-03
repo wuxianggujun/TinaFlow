@@ -67,6 +67,7 @@ void ADSPropertyPanel::showDefaultContent()
     if (m_propertyWidget) {
         m_propertyWidget->clearAllProperties();
         m_propertyWidget->addDescription("点击节点查看和编辑属性");
+        m_propertyWidget->finishLayout(); // 防止控件拉伸
     }
 }
 
@@ -136,7 +137,8 @@ void ADSPropertyPanel::updateNodeProperties(QtNodes::NodeId nodeId)
             }
         }
 
-
+        // 完成布局设置，防止控件拉伸
+        m_propertyWidget->finishLayout();
     }
 }
 
@@ -159,7 +161,11 @@ bool ADSPropertyPanel::isEditableNodeType(const QString& nodeTypeName) const
         "StringCompare",    // 字符串比较（有比较值和操作设置）
         "SmartLoopProcessor", // 智能循环处理器
         "WriteCell",        // 写入单元格
-        "WriteRange"        // 写入范围
+        "WriteRange",       // 写入范围
+        "CellFilter",       // 单元格过滤器
+        "ValueFilter",      // 值过滤器
+        "IntegerFilter",    // 整数过滤器
+        "BooleanFilter"     // 布尔值过滤器
     };
 
     // 显示类节点不需要编辑模式

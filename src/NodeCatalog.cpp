@@ -79,12 +79,21 @@ void NodeCatalog::initializeNodeCatalog()
     );
     
     s_nodeMap["ReadRange"] = NodeInfo(
-        "ReadRange", 
-        "读取范围", 
+        "ReadRange",
+        "读取范围",
         categoryToDisplayName(DataSource),
         "从工作表中读取指定范围的数据",
         categoryToIcon(DataSource),
-        true  // 常用节点
+        false  // 不再是常用节点
+    );
+
+    s_nodeMap["SmartReadRange"] = NodeInfo(
+        "SmartReadRange",
+        "智能范围读取",
+        categoryToDisplayName(DataSource),
+        "支持多种方式读取Excel数据：整张表、自动检测、指定范围等",
+        categoryToIcon(DataSource),
+        true  // 新的常用节点
     );
     
     s_nodeMap["SaveExcel"] = NodeInfo(
@@ -217,6 +226,43 @@ void NodeCatalog::initializeNodeCatalog()
         "提供常量值输出，支持字符串、数值、布尔值",
         categoryToIcon(DataSource),
         true  // 常用节点
+    );
+
+    // 过滤器节点
+    s_nodeMap["CellFilter"] = NodeInfo(
+        "CellFilter",
+        "单元格过滤器",
+        categoryToDisplayName(Processing),
+        "根据地址、值或类型过滤单元格数据",
+        categoryToIcon(Processing),
+        false
+    );
+
+    s_nodeMap["ValueFilter"] = NodeInfo(
+        "ValueFilter",
+        "值过滤器",
+        categoryToDisplayName(Processing),
+        "根据条件过滤值数据（字符串、数值、布尔值）",
+        categoryToIcon(Processing),
+        false
+    );
+
+    s_nodeMap["IntegerFilter"] = NodeInfo(
+        "IntegerFilter",
+        "整数过滤器",
+        categoryToDisplayName(Processing),
+        "根据条件过滤整数数据",
+        categoryToIcon(Processing),
+        false
+    );
+
+    s_nodeMap["BooleanFilter"] = NodeInfo(
+        "BooleanFilter",
+        "布尔值过滤器",
+        categoryToDisplayName(Processing),
+        "根据条件过滤布尔值数据",
+        categoryToIcon(Processing),
+        false
     );
 
     s_initialized = true;

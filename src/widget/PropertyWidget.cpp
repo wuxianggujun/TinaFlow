@@ -452,4 +452,16 @@ PropertyWidget::PropertyItem* PropertyWidget::findProperty(const QString& name)
     return nullptr;
 }
 
+void PropertyWidget::finishLayout()
+{
+    // 添加弹性空间，防止控件被拉伸
+    m_layout->addStretch();
+
+    // 设置布局的对齐方式
+    m_layout->setAlignment(Qt::AlignTop);
+
+    // 设置控件的大小策略
+    setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+}
+
 

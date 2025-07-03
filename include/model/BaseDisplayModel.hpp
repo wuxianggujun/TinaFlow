@@ -131,6 +131,11 @@ protected:
         if (hasValidData()) {
             propertyWidget->addInfoProperty("数据状态", "已连接", "color: #28a745; font-weight: bold;");
 
+            // 数据预览
+            propertyWidget->addSeparator();
+            propertyWidget->addTitle("数据预览");
+            addDataPreview(propertyWidget);
+
             // 调用子类的具体数据显示
             addDataSpecificProperties(propertyWidget);
         } else {
@@ -152,7 +157,28 @@ protected:
         // 默认不添加额外属性
     }
 
+    // 数据预览方法
+    virtual void addDataPreview(PropertyWidget* propertyWidget)
+    {
+        auto data = getData();
+        if (!data) {
+            propertyWidget->addInfoProperty("预览", "无数据", "color: #999; font-style: italic;");
+            return;
+        }
 
+        // 调用子类的具体预览实现
+        QString preview = getDataPreviewString(data);
+
+        propertyWidget->addInfoProperty("当前值", preview,
+            "color: #2196F3; font-weight: bold; padding: 4px; background: #f0f8ff; border-radius: 3px;");
+    }
+
+    // 子类可以重写此方法来提供自定义的数据预览
+    virtual QString getDataPreviewString(std::shared_ptr<DataType> data) const
+    {
+        Q_UNUSED(data);
+        return "数据已连接"; // 默认实现
+    }
 
     QString getDisplayName() const override
     {

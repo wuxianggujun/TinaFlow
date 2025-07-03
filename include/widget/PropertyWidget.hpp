@@ -124,7 +124,10 @@ public:
      */
     bool hasProperties() const { return !m_properties.isEmpty(); }
 
-
+    /**
+     * @brief 完成布局设置（添加弹性空间，防止控件拉伸）
+     */
+    void finishLayout();
 
 signals:
     void propertyChanged(const QString& propertyName, const QVariant& value);

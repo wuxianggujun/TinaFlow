@@ -102,6 +102,48 @@ protected:
         return data && data->isValid();
     }
 
+    QString getDataPreviewString(std::shared_ptr<CellData> data) const override
+    {
+        if (!data || !data->isValid()) {
+            return "无效数据";
+        }
+
+        try {
+            auto cell = data->cell();
+            if (!cell) {
+                return "单元格为空";
+            }
+
+            // 获取单元格地址
+            QString address = QString::fromStdString(cell->cellReference().address());
+
+            // 获取单元格值
+            QString value;
+            if (cell->value().type() == OpenXLSX::XLValueType::Empty) {
+                value = "(空)";
+            } else if (cell->value().type() == OpenXLSX::XLValueType::Boolean) {
+                value = cell->value().get<bool>() ? "TRUE" : "FALSE";
+            } else if (cell->value().type() == OpenXLSX::XLValueType::Integer) {
+                value = QString::number(cell->value().get<int64_t>());
+            } else if (cell->value().type() == OpenXLSX::XLValueType::Float) {
+                value = QString::number(cell->value().get<double>(), 'g', 6);
+            } else if (cell->value().type() == OpenXLSX::XLValueType::String) {
+                value = QString::fromStdString(cell->value().get<std::string>());
+            } else {
+                value = "未知类型";
+            }
+
+            // 限制预览长度
+            if (value.length() > 30) {
+                value = value.left(30) + "...";
+            }
+
+            return QString("%1: %2").arg(address).arg(value);
+        } catch (const std::exception& e) {
+            return QString("错误: %1").arg(e.what());
+        }
+    }
+
     void updateDisplay() override
     {
         qDebug() << "DisplayCellModel::updateDisplay called";
