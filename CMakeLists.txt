@@ -2,20 +2,42 @@ cmake_minimum_required(VERSION 3.20)
 
 project(TinaFlow VERSION 0.1 LANGUAGES CXX)
 
-# 在项目开始时就设置运行时库，确保所有子项目都使用相同的运行时库
+# 运行时库配置 - 为了与Skia兼容
 if (MSVC)
-    # 为了与Skia兼容，在Debug模式下也使用静态Release运行时库
-    # 这是因为Skia的所有版本都是用Release运行时库编译的
+    # 强制使用静态Release运行时库以匹配Skia
+    # 注意：即使在Debug模式下也使用Release运行时库
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
 
-    # 设置全局编译选项，强制所有目标都使用静态Release运行时库
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MT")
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
-    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /MT")
-    set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /MT")
-
-    # 在Debug模式下禁用迭代器调试以匹配Skia
+    # 为了与Skia Release库兼容，在Debug模式下使用Release级别的迭代器调试
     add_compile_definitions($<$<CONFIG:Debug>:_ITERATOR_DEBUG_LEVEL=0>)
+
+    # 添加编译器特定的优化选项
+    add_compile_options(
+        /MP          # 多处理器编译
+        /bigobj      # 大对象文件支持
+        /EHsc        # 异常处理模型
+        /Zc:preprocessor  # 符合标准的预处理器
+        /Zc:__cplusplus   # 正确的__cplusplus宏
+        /permissive-      # 禁用非标准扩展
+        /wd4576      # 禁用特定警告
+        /MT          # 强制使用静态Release运行时库（所有配置）
+        $<$<CONFIG:Release>:/O2>     # Release模式优化
+        $<$<CONFIG:Release>:/GL>     # 全程序优化
+    )
+
+    # 链接器优化
+    add_link_options(
+        $<$<CONFIG:Release>:/LTCG>   # 链接时代码生成
+        $<$<CONFIG:Release>:/OPT:REF> # 移除未引用的函数
+        $<$<CONFIG:Release>:/OPT:ICF> # 相同函数合并
+    )
+
+    # Windows特定定义
+    add_definitions(
+        -D_WIN32_WINNT=0x0601  # Windows 7+
+        -DNOMINMAX             # 禁用min/max宏
+        -D_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS
+    )
 endif()
 
 set(CMAKE_CXX_STANDARD 20)
@@ -67,10 +89,7 @@ set(CMAKE_AUTORCC ON)
 # 明确指定 UI 文件搜索路径
 set(CMAKE_AUTOUIC_SEARCH_PATHS "${PROJECT_SOURCE_DIR}/ui")
 
-if (MSVC)
-    add_compile_options(/MP /bigobj /EHsc /Zc:preprocessor /Zc:__cplusplus /permissive- /wd4576)
-    add_definitions(-D_WIN32_WINNT=0x0601 -DNOMINMAX -D_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS)
-endif()
+# MSVC设置已在上面统一配置
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets Core OpenGL)
 
