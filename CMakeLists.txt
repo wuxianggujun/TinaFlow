@@ -91,7 +91,7 @@ set(CMAKE_AUTOUIC_SEARCH_PATHS "${PROJECT_SOURCE_DIR}/ui")
 
 # MSVC设置已在上面统一配置
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets Core OpenGL)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Core OpenGL OpenGLWidgets)
 
 
 
@@ -121,6 +121,7 @@ target_link_libraries(TinaFlow PRIVATE
         Qt6::Widgets
         Qt6::Core
         Qt6::OpenGL
+        Qt6::OpenGLWidgets
         OpenXLSX
         QtNodes
         qtadvanceddocking-qt6

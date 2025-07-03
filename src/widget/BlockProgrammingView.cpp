@@ -59,38 +59,38 @@ void BlockProgrammingView::setupToolBar()
     
     // 新建积木块
     auto* newAction = m_toolBar->addAction("新建积木");
-    newAction->setIcon(QIcon(":/icons/add.svg"));
+    newAction->setIcon(QIcon(":/icons/actions/plus"));
     connect(newAction, &QAction::triggered, this, &BlockProgrammingView::onNewBlock);
-    
+
     // 删除积木块
     auto* deleteAction = m_toolBar->addAction("删除积木");
-    deleteAction->setIcon(QIcon(":/icons/delete.svg"));
+    deleteAction->setIcon(QIcon(":/icons/actions/trash"));
     connect(deleteAction, &QAction::triggered, this, &BlockProgrammingView::onDeleteBlock);
-    
+
     m_toolBar->addSeparator();
-    
+
     // 清空所有
     auto* clearAction = m_toolBar->addAction("清空所有");
-    clearAction->setIcon(QIcon(":/icons/clear.svg"));
+    clearAction->setIcon(QIcon(":/icons/actions/trash")); // 使用trash图标代替clear
     connect(clearAction, &QAction::triggered, this, &BlockProgrammingView::onClearAll);
-    
+
     m_toolBar->addSeparator();
-    
+
     // 运行脚本
     auto* runAction = m_toolBar->addAction("运行脚本");
-    runAction->setIcon(QIcon(":/icons/run.svg"));
+    runAction->setIcon(QIcon(":/icons/actions/play"));
     connect(runAction, &QAction::triggered, this, &BlockProgrammingView::onRunScript);
-    
+
     m_toolBar->addSeparator();
-    
+
     // 保存脚本
     auto* saveAction = m_toolBar->addAction("保存脚本");
-    saveAction->setIcon(QIcon(":/icons/save.svg"));
+    saveAction->setIcon(QIcon(":/icons/files/save"));
     connect(saveAction, &QAction::triggered, this, &BlockProgrammingView::saveScript);
-    
+
     // 关闭视图
     auto* closeAction = m_toolBar->addAction("关闭");
-    closeAction->setIcon(QIcon(":/icons/close.svg"));
+    closeAction->setIcon(QIcon(":/icons/ui/maximize")); // 使用maximize图标代替close
     connect(closeAction, &QAction::triggered, this, &BlockProgrammingView::closeView);
     
     m_mainLayout->addWidget(m_toolBar);

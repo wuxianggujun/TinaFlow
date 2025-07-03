@@ -28,7 +28,7 @@ int main(int argc, char* argv[])
     QApplication::setStyle(QStyleFactory::create("windowsvista"));
 #endif
 */
-    QCoreApplication::setAttribute(Qt::AA_DontUseNativeMenuWindows);
+    // QCoreApplication::setAttribute(Qt::AA_DontUseNativeMenuWindows);
     
     QApplication app(argc, argv);
 
