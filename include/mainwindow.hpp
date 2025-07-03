@@ -61,10 +61,11 @@ private slots:
     void onNodeSelected(QtNodes::NodeId nodeId);
 
     // 右键菜单相关
-    void showNodeContextMenu(QtNodes::NodeId nodeId, const QPointF& pos);
+    void showNodeContextMenu(QtNodes::NodeId nodeId, const QPointF& pos, bool isMultiSelection = false);
     void showConnectionContextMenu(QtNodes::ConnectionId connectionId, const QPointF& pos);
     void deleteSelectedNode();
     void deleteSelectedConnection();
+    void deleteSelectedNodes(const QList<QtNodes::NodeId>& nodeIds);
     void showAllConnectionsForDeletion();
     void duplicateSelectedNode();
 

@@ -758,7 +758,7 @@ void MainWindow::onNodeSelected(QtNodes::NodeId nodeId)
     updateADSPropertyPanel(nodeId);
 }
 
-void MainWindow::showNodeContextMenu(QtNodes::NodeId nodeId, const QPointF& pos)
+void MainWindow::showNodeContextMenu(QtNodes::NodeId nodeId, const QPointF& pos, bool isMultiSelection)
 {
     m_selectedNodeId = nodeId;
 
@@ -785,37 +785,64 @@ void MainWindow::showNodeContextMenu(QtNodes::NodeId nodeId, const QPointF& pos)
         "}"
     );
 
-    // 获取节点信息
-    auto nodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(nodeId);
-    QString nodeName = nodeDelegate ? nodeDelegate->name() : "未知节点";
+    if (isMultiSelection) {
+        // 多选模式：获取所有选中的节点
+        QList<QGraphicsItem*> selectedItems = m_graphicsScene->selectedItems();
+        QList<QtNodes::NodeId> selectedNodes;
 
-    // 节点信息（只读）
-    QAction* infoAction = contextMenu.addAction(QString("📋 节点: %1").arg(nodeName));
-    infoAction->setEnabled(false);
-
-    contextMenu.addSeparator();
-
-    // 删除节点
-    QAction* deleteAction = contextMenu.addAction("🗑️ 删除节点");
-    deleteAction->setShortcut(QKeySequence::Delete);
-    connect(deleteAction, &QAction::triggered, this, &MainWindow::deleteSelectedNode);
-
-    // 复制节点
-    QAction* duplicateAction = contextMenu.addAction("📋 复制节点");
-    duplicateAction->setShortcut(QKeySequence("Ctrl+D"));
-    connect(duplicateAction, &QAction::triggered, this, &MainWindow::duplicateSelectedNode);
-
-    contextMenu.addSeparator();
-
-    // 属性
-    QAction* propertiesAction = contextMenu.addAction("⚙️ 节点属性");
-    connect(propertiesAction, &QAction::triggered, this, [this, nodeId]() {
-        // 确保属性面板显示该节点
-        updateADSPropertyPanel(nodeId);
-        if (m_adsPanelManager) {
-            m_adsPanelManager->showPanel("property_panel");
+        for (auto* item : selectedItems) {
+            if (auto* nodeObject = qgraphicsitem_cast<QtNodes::NodeGraphicsObject*>(item)) {
+                selectedNodes.append(nodeObject->nodeId());
+            }
         }
-    });
+
+        // 多选信息（只读）
+        QAction* infoAction = contextMenu.addAction(QString("📋 已选中 %1 个节点").arg(selectedNodes.size()));
+        infoAction->setEnabled(false);
+
+        contextMenu.addSeparator();
+
+        // 批量删除节点
+        QAction* deleteAction = contextMenu.addAction("🗑️ 删除选中节点");
+        deleteAction->setShortcut(QKeySequence::Delete);
+        connect(deleteAction, &QAction::triggered, [this, selectedNodes]() {
+            deleteSelectedNodes(selectedNodes);
+        });
+
+        // 多选模式下不显示复制和属性功能
+    } else {
+        // 单选模式：原有逻辑
+        auto nodeDelegate = m_graphModel->delegateModel<QtNodes::NodeDelegateModel>(nodeId);
+        QString nodeName = nodeDelegate ? nodeDelegate->name() : "未知节点";
+
+        // 节点信息（只读）
+        QAction* infoAction = contextMenu.addAction(QString("📋 节点: %1").arg(nodeName));
+        infoAction->setEnabled(false);
+
+        contextMenu.addSeparator();
+
+        // 删除节点
+        QAction* deleteAction = contextMenu.addAction("🗑️ 删除节点");
+        deleteAction->setShortcut(QKeySequence::Delete);
+        connect(deleteAction, &QAction::triggered, this, &MainWindow::deleteSelectedNode);
+
+        // 复制节点
+        QAction* duplicateAction = contextMenu.addAction("📋 复制节点");
+        duplicateAction->setShortcut(QKeySequence("Ctrl+D"));
+        connect(duplicateAction, &QAction::triggered, this, &MainWindow::duplicateSelectedNode);
+
+        contextMenu.addSeparator();
+
+        // 属性
+        QAction* propertiesAction = contextMenu.addAction("⚙️ 节点属性");
+        connect(propertiesAction, &QAction::triggered, this, [this, nodeId]() {
+            // 确保属性面板显示该节点
+            updateADSPropertyPanel(nodeId);
+            if (m_adsPanelManager) {
+                m_adsPanelManager->showPanel("property_panel");
+            }
+        });
+    }
 
     // 转换坐标并显示菜单
     QPoint globalPos = m_graphicsView->mapToGlobal(m_graphicsView->mapFromScene(pos));
@@ -922,8 +949,23 @@ void MainWindow::onDeleteKeyPressed()
         }
     }
 
-    // 如果焦点不在输入控件上，执行删除节点操作
-    deleteSelectedNode();
+    // 检查是否有多个选中的节点
+    QList<QGraphicsItem*> selectedItems = m_graphicsScene->selectedItems();
+    QList<QtNodes::NodeId> selectedNodes;
+
+    for (auto* item : selectedItems) {
+        if (auto* nodeObject = qgraphicsitem_cast<QtNodes::NodeGraphicsObject*>(item)) {
+            selectedNodes.append(nodeObject->nodeId());
+        }
+    }
+
+    if (selectedNodes.size() > 1) {
+        // 批量删除
+        deleteSelectedNodes(selectedNodes);
+    } else {
+        // 单个删除
+        deleteSelectedNode();
+    }
 }
 
 void MainWindow::deleteSelectedConnection()
@@ -975,6 +1017,33 @@ void MainWindow::deleteSelectedConnection()
 
     // 重置选中的连接
     m_selectedConnectionId = QtNodes::ConnectionId{};
+}
+
+void MainWindow::deleteSelectedNodes(const QList<QtNodes::NodeId>& nodeIds)
+{
+    if (nodeIds.isEmpty()) return;
+
+    // 创建批量删除命令
+    QString commandText = tr("删除 %1 个节点").arg(nodeIds.size());
+
+    // 获取命令管理器实例
+    auto& commandManager = CommandManager::instance();
+
+    // 开始宏命令
+    commandManager.beginMacro(commandText);
+
+    // 逐个删除节点
+    for (const auto& nodeId : nodeIds) {
+        if (m_graphModel->allNodeIds().contains(nodeId)) {
+            auto deleteCommand = std::make_unique<DeleteNodeCommand>(m_graphicsScene, nodeId);
+            commandManager.executeCommand(std::move(deleteCommand));
+        }
+    }
+
+    // 结束宏命令
+    commandManager.endMacro();
+
+    ui->statusbar->showMessage(tr("已删除 %1 个节点").arg(nodeIds.size()), Constants::STATUS_MESSAGE_TIMEOUT);
 }
 
 void MainWindow::showAllConnectionsForDeletion()

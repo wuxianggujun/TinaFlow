@@ -12,12 +12,17 @@
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
 #include <QDropEvent>
+#include <QMouseEvent>
+#include <QWheelEvent>
 #include <QMimeData>
 #include <QGraphicsItem>
 #include <QGraphicsPathItem>
+#include <QGraphicsRectItem>
 #include <QMenu>
 #include <QObject>
 #include <QLineF>
+#include <QPen>
+#include <QBrush>
 #include <limits>
 
 /**
@@ -36,16 +41,46 @@ public:
     explicit TinaFlowGraphicsView(QtNodes::DataFlowGraphicsScene* scene, QWidget* parent = nullptr)
         : QtNodes::GraphicsView(scene, parent)
         , m_scene(scene)
+        , m_selectionRect(nullptr)
+        , m_isSelecting(false)
+        , m_isPanning(false)
     {
         // 启用拖拽接受
         setAcceptDrops(true);
+
+        // 禁用默认的拖拽模式，我们要自定义
+        setDragMode(QGraphicsView::NoDrag);
+
         qDebug() << "TinaFlowGraphicsView: Initialized with drag-drop support";
     }
 
 protected:
+    // 鼠标事件处理
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
+
     void contextMenuEvent(QContextMenuEvent* event) override
     {
         QPointF scenePos = mapToScene(event->pos());
+
+        // 检查是否有多个选中的节点
+        QList<QGraphicsItem*> selectedItems = scene()->selectedItems();
+        QList<QtNodes::NodeId> selectedNodes;
+
+        for (auto* item : selectedItems) {
+            QtNodes::NodeId nodeId = findNodeAtItem(item);
+            if (m_scene->graphModel().allNodeIds().contains(nodeId)) {
+                selectedNodes.append(nodeId);
+            }
+        }
+
+        // 如果有多个选中的节点，使用多选模式的节点菜单
+        if (selectedNodes.size() > 1) {
+            // 使用第一个节点的ID，但标记为多选模式
+            emit nodeContextMenuRequested(selectedNodes.first(), scenePos, true);
+            return;
+        }
 
         // 检查鼠标位置下的图形项
         QGraphicsItem* item = m_scene->itemAt(scenePos, transform());
@@ -64,7 +99,7 @@ protected:
         // 检查是否是节点
         QtNodes::NodeId nodeId = findNodeAtItem(item);
         if (m_scene->graphModel().allNodeIds().contains(nodeId)) {
-            emit nodeContextMenuRequested(nodeId, scenePos);
+            emit nodeContextMenuRequested(nodeId, scenePos, false);
             return;
         }
 
@@ -112,6 +147,17 @@ protected:
     }
 
 private:
+    // 选择框相关方法
+    void startSelection(const QPointF& startPos);
+    void updateSelection(const QPointF& currentPos);
+    void finishSelection();
+    void clearSelection();
+
+    // 视图平移相关方法
+    void startPanning(const QPointF& startPos);
+    void updatePanning(const QPointF& currentPos);
+    void finishPanning();
+
     QtNodes::NodeId findNodeAtItem(QGraphicsItem* item)
     {
         // 向上查找节点图形对象
@@ -149,11 +195,21 @@ private:
     }
 
 signals:
-    void nodeContextMenuRequested(QtNodes::NodeId nodeId, const QPointF& pos);
+    void nodeContextMenuRequested(QtNodes::NodeId nodeId, const QPointF& pos, bool isMultiSelection = false);
     void connectionContextMenuRequested(QtNodes::ConnectionId connectionId, const QPointF& pos);
     void sceneContextMenuRequested(const QPointF& pos);
     void nodeCreationFromDragRequested(const QString& nodeType, const QPointF& position);
 
 private:
     QtNodes::DataFlowGraphicsScene* m_scene;
+
+    // 选择框相关
+    QGraphicsRectItem* m_selectionRect;
+    bool m_isSelecting;
+    QPointF m_selectionStartPos;
+
+    // 视图平移相关
+    bool m_isPanning;
+    QPointF m_panStartPos;
+    QPointF m_panLastPos;
 };
