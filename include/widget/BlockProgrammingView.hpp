@@ -16,8 +16,8 @@
 #include <QJsonObject>
 #include <QJsonArray>
 
-// OpenGL渲染器
-#include "OpenGLBlockRenderer.hpp"
+// bgfx渲染器
+#include "BgfxBlockRenderer.hpp"
 
 /**
  * @brief 积木编程视图
@@ -73,7 +73,7 @@ private:
     // 工作区域
     QScrollArea* m_workspace = nullptr;
     QWidget* m_workspaceContent = nullptr;
-    OpenGLBlockRenderer* m_openglRenderer = nullptr;
+    BgfxBlockRenderer* m_bgfxRenderer = nullptr;
     
     // 状态栏
     QWidget* m_statusBar = nullptr;

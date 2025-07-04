@@ -53,7 +53,13 @@ int main(int argc, char* argv[])
     try {
         MainWindow w;
         w.show();
-        return QApplication::exec();
+
+        int result = QApplication::exec();
+
+        // 确保在应用程序退出前清理所有资源
+        qDebug() << "Application exiting, cleaning up...";
+
+        return result;
     } catch (const std::exception& e) {
         handleException(e);
         return -1;

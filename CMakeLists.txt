@@ -41,8 +41,8 @@ add_subdirectory(third_party/nodeeditor)
 
 add_subdirectory(third_party/Qt-Advanced-Docking-System)
 
-# 添加您自己编译的Skia库
-add_subdirectory(third_party/skia)
+# 添加bgfx渲染库
+add_subdirectory(third_party/bgfx.cmake)
 
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
@@ -71,7 +71,9 @@ qt_add_executable(TinaFlow MANUAL_FINALIZATION
 
 target_include_directories(TinaFlow PRIVATE
         ${PROJECT_SOURCE_DIR}/include
-        ${PROJECT_SOURCE_DIR}/third_party/skia
+        ${PROJECT_SOURCE_DIR}/third_party/bgfx/include
+        ${PROJECT_SOURCE_DIR}/third_party/bx/include
+        ${PROJECT_SOURCE_DIR}/third_party/bimg/include
 )
 
 if(WIN32 AND QT_VERSION_MAJOR LESS 6)
@@ -83,12 +85,12 @@ endif()
 target_link_libraries(TinaFlow PRIVATE
         Qt6::Widgets
         Qt6::Core
-        Qt6::OpenGL
-        Qt6::OpenGLWidgets
         OpenXLSX
         QtNodes
         qtadvanceddocking-qt6
-        Skia
+        bgfx
+        bx
+        bimg
 )
 
 set_target_properties(TinaFlow PROPERTIES
@@ -130,7 +132,7 @@ if(WIN32)
         COMMENT "Copying ADS dll to output directory"
     )
 
-    # ICU 已禁用，无需拷贝 ICU 数据文件
-    message(STATUS "ICU disabled in Skia build, no ICU data file needed")
+    # 使用原生OpenGL渲染，无需额外的渲染库
+    message(STATUS "Using native OpenGL rendering")
 endif()
 

@@ -10,7 +10,7 @@
 #include <QMouseEvent>
 #include <QAction>
 #include <QIcon>
-#include "OpenGLBlockRenderer.hpp"
+#include "BgfxBlockRenderer.hpp"
 
 BlockProgrammingView::BlockProgrammingView(QWidget* parent)
     : QWidget(parent), m_scriptName("未命名脚本")
@@ -156,19 +156,19 @@ void BlockProgrammingView::setupWorkspace()
     m_workspace = new QScrollArea();
     m_workspace->setWidgetResizable(true);
 
-    // 创建OpenGL渲染器作为工作区域
-    m_openglRenderer = new OpenGLBlockRenderer();
-    m_openglRenderer->setMinimumSize(800, 600);
+    // 创建bgfx渲染器作为工作区域
+    m_bgfxRenderer = new BgfxBlockRenderer();
+    m_bgfxRenderer->setMinimumSize(800, 600);
 
     // 设置工作区域容器
     m_workspaceContent = new QWidget();
     auto* layout = new QVBoxLayout(m_workspaceContent);
     layout->setContentsMargins(0, 0, 0, 0);
-    layout->addWidget(m_openglRenderer);
+    layout->addWidget(m_bgfxRenderer);
 
     m_workspace->setWidget(m_workspaceContent);
 
-    qDebug() << "BlockProgrammingView: OpenGL renderer integrated into workspace";
+    qDebug() << "BlockProgrammingView: bgfx renderer integrated into workspace";
 }
 
 void BlockProgrammingView::setupStatusBar()
