@@ -70,8 +70,23 @@ void SkiaRenderer::paintGL()
         return;
     }
 
+    // 获取设备像素比例和尺寸
+    qreal dpr = devicePixelRatioF();
+    QSize logicalSize = size();
+
+    // 保存画布状态
+    canvas->save();
+
     // 清除画布为白色
     canvas->clear(SK_ColorWHITE);
+
+    // 设置正确的坐标变换
+    // 1. 缩放到设备像素比例
+    canvas->scale(dpr, dpr);
+
+    // 2. 翻转Y轴，因为OpenGL使用BottomLeft原点，而我们想要TopLeft
+    canvas->translate(0, logicalSize.height());
+    canvas->scale(1, -1);
 
     // 测试绘制一个简单的矩形，确保Skia工作正常
     SkPaint testPaint;
@@ -83,6 +98,9 @@ void SkiaRenderer::paintGL()
 
     // 绘制积木编程内容
     drawBlockProgrammingContent(canvas);
+
+    // 恢复画布状态
+    canvas->restore();
 
     // 提交到GPU
     if (skContext) {
@@ -155,14 +173,17 @@ void SkiaRenderer::createSkiaSurface()
 
     SkColorType colorType = kRGBA_8888_SkColorType;
 
-    // 使用逻辑像素尺寸，让Qt自己处理DPI
-    int w = qMax(1, width());
-    int h = qMax(1, height());
+    // 获取实际的framebuffer尺寸
+    // 在高DPI显示器上，Qt会自动处理缩放，我们需要获取实际的像素尺寸
+    QSize actualSize = size() * devicePixelRatioF();
+    int w = qMax(1, actualSize.width());
+    int h = qMax(1, actualSize.height());
 
-    qDebug() << "SkiaRenderer: Creating surface - Size:" << w << "x" << h << "DPR:" << devicePixelRatioF();
+    qDebug() << "SkiaRenderer: Creating surface - Widget size:" << size()
+             << "Actual size:" << actualSize << "DPR:" << devicePixelRatioF();
 
     GrBackendRenderTarget backendRenderTarget = GrBackendRenderTargets::MakeGL(
-        w, h,  // 使用逻辑像素尺寸
+        w, h,  // 使用实际像素尺寸
         this->format().samples(),  // sample count
         this->format().stencilBufferSize(),  // stencil bits
         fbInfo
@@ -171,7 +192,7 @@ void SkiaRenderer::createSkiaSurface()
     skSurface = SkSurfaces::WrapBackendRenderTarget(
         skContext.get(),
         backendRenderTarget,
-        kTopLeft_GrSurfaceOrigin,  // 使用TopLeft，与Qt坐标系统一致
+        kBottomLeft_GrSurfaceOrigin,  // 回到BottomLeft，这是OpenGL的标准
         colorType,
         nullptr,
         nullptr
@@ -193,42 +214,44 @@ void SkiaRenderer::drawBlockProgrammingContent(SkCanvas* canvas)
         return;
     }
 
-    // 绘制网格背景
-    drawGrid(canvas);
+    // 暂时不绘制网格，先测试积木是否正常
+    // drawGrid(canvas);
 
-    // 绘制示例积木形状（静态绘制，不使用Block类）
+    // 绘制示例积木形状（使用与测试矩形相同的简单方法）
     SkPaint blockPaint;
     blockPaint.setAntiAlias(true);
 
-    // 绘制开始积木
+    // 绘制开始积木 - 使用简单的drawRect，不用drawRoundRect
     blockPaint.setColor(SkColorSetARGB(255, 76, 175, 80)); // 绿色
-    canvas->drawRoundRect(SkRect::MakeXYWH(300, 200, 120, 40), 8, 8, blockPaint);
+    canvas->drawRect(SkRect::MakeXYWH(300, 200, 120, 40), blockPaint);
 
     // 绘制变量积木
     blockPaint.setColor(SkColorSetARGB(255, 156, 39, 176)); // 紫色
-    canvas->drawRoundRect(SkRect::MakeXYWH(450, 200, 120, 40), 8, 8, blockPaint);
+    canvas->drawRect(SkRect::MakeXYWH(450, 200, 120, 40), blockPaint);
 
     // 绘制条件积木
     blockPaint.setColor(SkColorSetARGB(255, 255, 152, 0)); // 橙色
-    canvas->drawRoundRect(SkRect::MakeXYWH(300, 280, 120, 40), 8, 8, blockPaint);
+    canvas->drawRect(SkRect::MakeXYWH(300, 280, 120, 40), blockPaint);
 
-    // 绘制文本标签
+    // 绘制简单的文本标签
     SkPaint textPaint;
     textPaint.setAntiAlias(true);
-    textPaint.setColor(SkColorSetARGB(255, 255, 255, 255)); // 白色文本
+    textPaint.setColor(SkColorSetARGB(255, 0, 0, 0)); // 黑色文本
 
     SkFont font;
     font.setSize(12);
 
-    canvas->drawString("开始", 350, 225, font, textPaint);
-    canvas->drawString("变量", 500, 225, font, textPaint);
-    canvas->drawString("条件", 350, 305, font, textPaint);
+    canvas->drawString("Start", 320, 225, font, textPaint);
+    canvas->drawString("Var", 480, 225, font, textPaint);
+    canvas->drawString("If", 330, 305, font, textPaint);
 
     // 绘制标题
     textPaint.setColor(SkColorSetARGB(255, 50, 50, 50)); // 深灰色
     font.setSize(18);
-    canvas->drawString("积木编程视图 - Skia渲染", 50, 50, font, textPaint);
+    canvas->drawString("Block Programming - Skia", 50, 50, font, textPaint);
 
+    // 暂时不绘制连接点，先确保积木本身正常
+    /*
     // 绘制连接点示例
     SkPaint pointPaint;
     pointPaint.setAntiAlias(true);
@@ -240,12 +263,13 @@ void SkiaRenderer::drawBlockProgrammingContent(SkCanvas* canvas)
     canvas->drawRect(SkRect::MakeXYWH(564, 214, 12, 12), pointPaint);
     // 条件积木的输入连接点
     canvas->drawCircle(300, 300, 6, pointPaint);
+    */
 
-    // 绘制状态信息（使用固定位置，不依赖height()）
+    // 绘制状态信息（使用固定位置）
     font.setSize(14);
     textPaint.setColor(SkColorSetARGB(255, 100, 100, 100)); // 灰色
-    QString statusText = QString("积木编程演示 | 渲染引擎: Skia | 状态: 正常");
-    canvas->drawString(statusText.toUtf8().constData(), 50, 550, font, textPaint);  // 使用固定Y坐标
+    QString statusText = QString("Block Demo | Skia Renderer | Status: OK");
+    canvas->drawString(statusText.toUtf8().constData(), 50, 400, font, textPaint);  // 使用固定Y坐标
 }
 
 // 积木管理方法
