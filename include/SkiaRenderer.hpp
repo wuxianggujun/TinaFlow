@@ -3,15 +3,20 @@
 #include <QOpenGLFunctions>
 #include <QTimer>
 #include <QSurfaceFormat>
+#include <QMouseEvent>
+#include <QResizeEvent>
+#include <QDebug>
+
+// Skia
+#include "include/core/SkCanvas.h"
 #include "include/core/SkSurface.h"
 #include "include/gpu/ganesh/GrDirectContext.h"
 #include "include/gpu/ganesh/gl/GrGLInterface.h"
-
-// 前向声明
-class SkCanvas;
+#include "include/gpu/ganesh/gl/GrGLTypes.h"
+#include "include/gpu/ganesh/SkSurfaceGanesh.h"
 
 /**
- * @brief 基于GitHub示例的简化Skia渲染器
+ * @brief 基于工作示例的Skia渲染器
  */
 class SkiaRenderer : public QOpenGLWidget, protected QOpenGLFunctions
 {
@@ -25,6 +30,7 @@ protected:
     void initializeGL() override;
     void resizeGL(int w, int h) override;
     void paintGL() override;
+    void resizeEvent(QResizeEvent* event) override;
 
     void showEvent(QShowEvent* e) override;
     void hideEvent(QHideEvent* e) override;
@@ -33,12 +39,11 @@ private slots:
     void onTick();
 
 private:
-    void resizeSkiaSurface(int w, int h);
+    void createSkiaSurface();
     void drawBlockProgrammingContent(SkCanvas* canvas);
 
-    sk_sp<GrDirectContext> fContext;
-    sk_sp<SkSurface> fSurface;
-    GLuint fBoundFbo = 0;  // 缓存的FBO ID
+    sk_sp<GrDirectContext> skContext;
+    sk_sp<SkSurface> skSurface;
 
     // 动画
     QTimer m_animationTimer;
