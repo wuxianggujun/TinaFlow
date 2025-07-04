@@ -1,118 +1,45 @@
-# Skia Graphics Library CMake Configuration
+﻿# Skia 库配置 (您自己编译的版本)
 cmake_minimum_required(VERSION 3.20)
 
-project(Skia)
-
-# 设置Skia库的路径（只使用Release版本）
-set(SKIA_RELEASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/release")
-
-# 创建Skia接口库
+# 创建 Skia 库目标 - 使用 INTERFACE 库来正确传递头文件
 add_library(Skia INTERFACE)
 
-# 设置头文件包含目录
-# Skia头文件使用相对路径如"include/core/SkArc.h"，所以我们需要将Skia根目录添加到包含路径
+# 设置头文件路径 - Skia 期望根目录作为包含路径
 target_include_directories(Skia INTERFACE
-    ${SKIA_RELEASE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-# 使用Release版本的Skia库
-set(SKIA_LIB_DIR "${SKIA_RELEASE_DIR}/out/Release-windows-x64")
-
-# 定义所有Skia相关的库文件
-set(SKIA_LIBRARIES
-    skia
-    skottie
-    skparagraph
-    skresources
-    sksg
-    skshaper
-    skunicode_core
-    skunicode_icu
-    svg
-    skcms
-    harfbuzz
-    icu
-    expat
-    libjpeg
-    libpng
-    libwebp
-    libwebp_sse41
-    wuffs
-    zlib
-    bentleyottmann
-    d3d12allocator
-    spirv_cross
+# 链接主要库文件
+target_link_libraries(Skia INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib/skia.lib
 )
 
-# 处理所有Skia库文件
-foreach(lib ${SKIA_LIBRARIES})
-    # 创建导入库目标
-    add_library(${lib}_imported STATIC IMPORTED)
+# 添加 Skia 的所有依赖库
+target_link_libraries(Skia INTERFACE
+    # Skia 相关库
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib/skcms.lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib/skshaper.lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib/svg.lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib/skottie.lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib/sksg.lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib/skresources.lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib/pathkit.lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib/bentleyottmann.lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib/expat.lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib/jsonreader.lib
 
-    # 使用Release版本的库文件
-    set_target_properties(${lib}_imported PROPERTIES
-        IMPORTED_LOCATION_DEBUG "${SKIA_RELEASE_DIR}/out/Release-windows-x64/${lib}.lib"
-        IMPORTED_LOCATION_RELEASE "${SKIA_RELEASE_DIR}/out/Release-windows-x64/${lib}.lib"
-        IMPORTED_LOCATION "${SKIA_RELEASE_DIR}/out/Release-windows-x64/${lib}.lib"
-    )
-
-    # 将导入的库链接到Skia接口库
-    target_link_libraries(Skia INTERFACE ${lib}_imported)
-endforeach()
-
-# 添加系统库依赖（Windows平台）
-if(WIN32)
-    target_link_libraries(Skia INTERFACE
-        user32
-        gdi32
-        winspool
-        comdlg32
-        advapi32
-        shell32
-        ole32
-        oleaut32
-        uuid
-        odbc32
-        odbccp32
-        opengl32
-        d3d12
-        dxgi
-        d3dcompiler
-    )
-endif()
-
-# 设置编译定义
-target_compile_definitions(Skia INTERFACE
-    SK_GANESH=1
-    SK_GRAPHITE=1
-    SK_VULKAN=1
-    SK_DIRECT3D=1
-    SK_GL=1
-    SK_UNICODE_ICU_IMPLEMENTATION=1
-    SK_CODEC_DECODES_JPEG=1
-    SK_CODEC_DECODES_PNG=1
-    SK_CODEC_DECODES_WEBP=1
-    SK_ENCODE_JPEG=1
-    SK_ENCODE_PNG=1
-    SK_ENCODE_WEBP=1
-    SK_XML=1
-    SK_ENABLE_SVG=1
-    SK_ENABLE_SKOTTIE=1
-    SK_ENABLE_PARAGRAPH=1
+    # 系统依赖库
+    opengl32
+    user32
+    gdi32
+    kernel32
+    ole32
+    oleaut32
+    uuid
+    advapi32
+    shell32
+    comdlg32
+    winspool
 )
 
-# 由于使用Release版本的库，统一使用Release定义
-target_compile_definitions(Skia INTERFACE
-    SK_RELEASE
-    NDEBUG
-)
-
-# 设置C++标准
-target_compile_features(Skia INTERFACE cxx_std_17)
-
-# 输出配置信息
-message(STATUS "Skia configuration:")
-message(STATUS "  Release libraries: ${SKIA_RELEASE_DIR}/out/Release-windows-x64")
-message(STATUS "  Include directories: ${SKIA_RELEASE_DIR}/include")
-message(STATUS "  Currently using: ${SKIA_LIB_DIR}")
-message(STATUS "  Note: Using only Release libraries for compatibility")
+message(STATUS "Using custom compiled Skia library with all dependencies")

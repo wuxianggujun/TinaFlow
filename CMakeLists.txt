@@ -2,44 +2,6 @@ cmake_minimum_required(VERSION 3.20)
 
 project(TinaFlow VERSION 0.1 LANGUAGES CXX)
 
-# 运行时库配置 - 为了与Skia兼容
-if (MSVC)
-    # 强制使用静态Release运行时库以匹配Skia
-    # 注意：即使在Debug模式下也使用Release运行时库
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
-
-    # 为了与Skia Release库兼容，在Debug模式下使用Release级别的迭代器调试
-    add_compile_definitions($<$<CONFIG:Debug>:_ITERATOR_DEBUG_LEVEL=0>)
-
-    # 添加编译器特定的优化选项
-    add_compile_options(
-        /MP          # 多处理器编译
-        /bigobj      # 大对象文件支持
-        /EHsc        # 异常处理模型
-        /Zc:preprocessor  # 符合标准的预处理器
-        /Zc:__cplusplus   # 正确的__cplusplus宏
-        /permissive-      # 禁用非标准扩展
-        /wd4576      # 禁用特定警告
-        /MT          # 强制使用静态Release运行时库（所有配置）
-        $<$<CONFIG:Release>:/O2>     # Release模式优化
-        $<$<CONFIG:Release>:/GL>     # 全程序优化
-    )
-
-    # 链接器优化
-    add_link_options(
-        $<$<CONFIG:Release>:/LTCG>   # 链接时代码生成
-        $<$<CONFIG:Release>:/OPT:REF> # 移除未引用的函数
-        $<$<CONFIG:Release>:/OPT:ICF> # 相同函数合并
-    )
-
-    # Windows特定定义
-    add_definitions(
-        -D_WIN32_WINNT=0x0601  # Windows 7+
-        -DNOMINMAX             # 禁用min/max宏
-        -D_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS
-    )
-endif()
-
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /utf-8")
@@ -79,7 +41,7 @@ add_subdirectory(third_party/nodeeditor)
 
 add_subdirectory(third_party/Qt-Advanced-Docking-System)
 
-# 添加Skia库
+# 添加您自己编译的Skia库
 add_subdirectory(third_party/skia)
 
 set(CMAKE_AUTOUIC ON)
@@ -109,6 +71,7 @@ qt_add_executable(TinaFlow MANUAL_FINALIZATION
 
 target_include_directories(TinaFlow PRIVATE
         ${PROJECT_SOURCE_DIR}/include
+        ${PROJECT_SOURCE_DIR}/third_party/skia
 )
 
 if(WIN32 AND QT_VERSION_MAJOR LESS 6)
@@ -167,12 +130,7 @@ if(WIN32)
         COMMENT "Copying ADS dll to output directory"
     )
 
-    # 复制Skia的ICU数据文件到输出目录（统一使用Release版本）
-    add_custom_command(TARGET TinaFlow POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${CMAKE_SOURCE_DIR}/third_party/skia/release/out/Release-windows-x64/icudtl.dat
-        $<TARGET_FILE_DIR:TinaFlow>
-        COMMENT "Copying Skia ICU data file to output directory"
-    )
+    # ICU 已禁用，无需拷贝 ICU 数据文件
+    message(STATUS "ICU disabled in Skia build, no ICU data file needed")
 endif()
 

@@ -2,6 +2,7 @@
 #include <QStyleFactory>
 #include <QMessageBox>
 #include <QDebug>
+#include <QSurfaceFormat>
 #include <exception>
 #include "mainwindow.hpp"
 
