@@ -1,178 +1,226 @@
 #include "SkiaRenderer.hpp"
 #include <QDebug>
 #include <QtMath>
-#include <QOpenGLFunctions>
-
 #include "include/core/SkCanvas.h"
-#include "include/gpu/ganesh/gl/GrGLInterface.h"
-#include "include/gpu/ganesh/gl/GrGLBackendSurface.h"
-#include "include/gpu/ganesh/GrBackendSurface.h"  // 添加这个头文件
-#include "include/effects/SkGradientShader.h"
-#include "include/core/SkFont.h"
 #include "include/core/SkPaint.h"
+#include "include/core/SkFont.h"
+#include "include/core/SkPath.h"
+#include "include/core/SkColorSpace.h"
+#include "include/gpu/ganesh/GrDirectContext.h"
+#include "include/gpu/ganesh/GrBackendSurface.h"
+#include "include/gpu/ganesh/gl/GrGLBackendSurface.h"
 #include "include/gpu/ganesh/SkSurfaceGanesh.h"
 #include "include/gpu/ganesh/gl/GrGLDirectContext.h"
+#include "include/gpu/ganesh/gl/GrGLInterface.h"
 
-// ---------- 构造 / 析构 ----------
-SkiaRenderer::SkiaRenderer(QWidget* p):QOpenGLWidget(p)
+SkiaRenderer::SkiaRenderer(QWidget* parent)
+    : QOpenGLWidget(parent), fContext(nullptr), fSurface(nullptr), m_animationTime(0.0f)
 {
-    connect(&timer,&QTimer::timeout,this,&SkiaRenderer::onTick);
-}
-SkiaRenderer::~SkiaRenderer(){ purge(); }
+    // 设置OpenGL格式
+    QSurfaceFormat fmt;
+    fmt.setRenderableType(QSurfaceFormat::OpenGL);
+    fmt.setVersion(3, 3);
+    fmt.setProfile(QSurfaceFormat::CoreProfile);
+    setFormat(fmt);
 
-// ---------- 初始化 ----------
+    // 设置动画定时器
+    connect(&m_animationTimer, &QTimer::timeout, this, &SkiaRenderer::onTick);
+}
+
+SkiaRenderer::~SkiaRenderer()
+{
+    makeCurrent();
+    fSurface.reset();
+    fContext.reset();
+    doneCurrent();
+}
+
 void SkiaRenderer::initializeGL()
 {
     initializeOpenGLFunctions();
 
-    // 1) 创建 Skia GL 接口 + 上下文
-    auto iface = GrGLMakeNativeInterface();
-    if(!iface) qFatal("GrGL interface nullptr");
-    fCtx = GrDirectContexts::MakeGL(iface);
-    if(!fCtx) qFatal("Create GrDirectContext failed");
+    auto interface = GrGLMakeNativeInterface();
+    fContext = GrDirectContexts::MakeGL(interface);  // 使用正确的API
 
-    qDebug()<<"SkiaRenderer: GL ready:"
-            << reinterpret_cast<const char*>(glGetString(GL_VERSION));
+    if (!fContext) {
+        qCritical() << "Failed to create Skia GrDirectContext";
+        return;
+    }
 
-    // 当 Qt 销毁 context 时清理
-    connect(context(),&QOpenGLContext::aboutToBeDestroyed,
-            this,&SkiaRenderer::purge);
+    qDebug() << "SkiaRenderer: GL ready:"
+             << reinterpret_cast<const char*>(glGetString(GL_VERSION));
+
+    resizeSkiaSurface(width(), height());
 }
 
-void SkiaRenderer::resizeGL(int,int){ /*Surface 在 paintGL 内按需重建*/ }
+void SkiaRenderer::resizeGL(int w, int h)
+{
+    resizeSkiaSurface(w, h);
+}
 
 void SkiaRenderer::showEvent(QShowEvent* e)
 {
     QOpenGLWidget::showEvent(e);
-    if(!timer.isActive()) timer.start(33);
+    if (!m_animationTimer.isActive()) {
+        m_animationTimer.start(33);  // ~30 FPS
+        qDebug() << "Animation timer started";
+    }
 }
+
 void SkiaRenderer::hideEvent(QHideEvent* e)
 {
     QOpenGLWidget::hideEvent(e);
-    timer.stop();
+    m_animationTimer.stop();
+    qDebug() << "Animation timer stopped";
 }
 
-// ---------- 核心绘制 ----------
 void SkiaRenderer::paintGL()
 {
-    if(!fCtx) return;
-
-    // Qt 每帧可能换新的 FBO
-    GLuint fbo = defaultFramebufferObject();
-    if(!fSurf || fbo!=currFbo){
-        currFbo = fbo;
-        // 尝试从 LRU 缓存复用
-        auto it = std::find_if(cache.begin(),cache.end(),
-                               [fbo](const CacheEntry& c){return c.fbo==fbo;});
-        if(it!=cache.end()){
-            fSurf = it->surf;                // 命中缓存
-            cache.erase(it); cache.prepend({fbo,fSurf});
-        }else{
-            recreateSurface(width()*devicePixelRatio(),
-                            height()*devicePixelRatio(),fbo);
-            cache.prepend({fbo,fSurf});
-            while(cache.size()>3) cache.removeLast();
-        }
+    if (!fSurface) {
+        qDebug() << "paintGL: No surface available";
+        return;
     }
 
-    if(!fSurf) return;
-
-    // -------- 真正绘制 --------
-    SkCanvas* cv = fSurf->getCanvas();
-    cv->clear(SK_ColorWHITE);
-    drawScene(cv);
-
-    // -------- 提交 --------
-    fCtx->flushAndSubmit();  // 修复API调用
-    glBindFramebuffer(GL_FRAMEBUFFER,fbo);   // 恢复给 Qt
-}
-
-// ---------- recreateSurface ----------
-GrGLenum SkiaRenderer::detectColorFormat(GLuint fbo)
-{
-    // 简化实现，直接返回最兼容的格式，避免复杂的OpenGL查询
-    Q_UNUSED(fbo)
-    return GL_RGBA8;  // 使用最兼容的格式
-}
-
-void SkiaRenderer::recreateSurface(int w,int h,GLuint fbo)
-{
-    makeCurrent();               // 已经 current，但显式保证
-
-    // 1) 关闭 sRGB 写（Qt 若为 SRGB FBO，保持线性写入更安全）
-    glDisable(GL_FRAMEBUFFER_SRGB);
-
-    // 2) 真实样本 / 模版
-    GLint samples=0, stencil=0;
-    glBindFramebuffer(GL_FRAMEBUFFER,fbo);
-    glGetIntegerv(GL_SAMPLES,&samples);
-    glGetIntegerv(GL_STENCIL_BITS,&stencil);
-
-    // 3) BackendRenderTarget
-    GrGLFramebufferInfo fbInfo{fbo, detectColorFormat(fbo)};
-    GrBackendRenderTarget rt = GrBackendRenderTargets::MakeGL(
-        w,h,samples,stencil,fbInfo);
-    if(!rt.isValid()){
-        qWarning()<<"BackendRenderTarget invalid, retry without MSAA";
-        rt = GrBackendRenderTargets::MakeGL(w,h,0,stencil,fbInfo);
+    SkCanvas* canvas = fSurface->getCanvas();
+    if (!canvas) {
+        qDebug() << "paintGL: No canvas available";
+        return;
     }
-    if(!rt.isValid()){ fSurf.reset(); return; }
 
-    // 4) Wrap 成 SkSurface (TopLeft 与 Qt 对齐)
+    // 清除为白色背景
+    canvas->clear(SK_ColorWHITE);
+
+    // 添加调试信息
+    static int frameCount = 0;
+    frameCount++;
+    if (frameCount % 60 == 0) {  // 每60帧打印一次
+        qDebug() << "paintGL: Frame" << frameCount << "Animation time:" << m_animationTime;
+    }
+
+    // 绘制内容
+    drawBlockProgrammingContent(canvas);
+
+    // 确保所有绘制命令都被提交到GPU
+    fContext->flushAndSubmit();
+}
+
+void SkiaRenderer::resizeSkiaSurface(int w, int h)
+{
+    if (!fContext) return;
+
+    GrGLFramebufferInfo fbInfo;
+    fbInfo.fFBOID = defaultFramebufferObject();
+    fbInfo.fFormat = GL_RGBA8;
+
+    GrBackendRenderTarget backendRenderTarget = GrBackendRenderTargets::MakeGL(
+        w, h, /*sampleCnt*/ 0, /*stencilBits*/ 8, fbInfo);
+
+    SkColorType colorType = kRGBA_8888_SkColorType;
     SkSurfaceProps props;
-    fSurf = SkSurfaces::WrapBackendRenderTarget(
-        fCtx.get(),rt,kTopLeft_GrSurfaceOrigin,
-        kRGBA_8888_SkColorType,nullptr,&props);
+
+    fSurface = SkSurfaces::WrapBackendRenderTarget(
+        fContext.get(),
+        backendRenderTarget,
+        kTopLeft_GrSurfaceOrigin,  // 改为TopLeft，与Qt对齐
+        colorType,
+        nullptr,
+        &props
+    );
+
+    if (!fSurface) {
+        qCritical() << "Failed to create Skia surface";
+    } else {
+        qDebug() << "Skia surface created successfully, size:" << w << "x" << h;
+    }
 }
 
-void SkiaRenderer::purge()
+void SkiaRenderer::onTick()
 {
-    cache.clear();
-    fSurf.reset();
-    if(fCtx){ fCtx->abandonContext(); fCtx.reset(); }
+    m_animationTime += 0.033f;
+    update();
 }
 
-// ---------- 动画 ----------
-void SkiaRenderer::onTick(){ t += 0.033f; update(); }
-
-// ---------- 绘制内容 ----------
-SkPath SkiaRenderer::makePuzzle(const QRectF& r,qreal w,qreal h) const
+void SkiaRenderer::drawBlockProgrammingContent(SkCanvas* canvas)
 {
-    SkPath p; p.moveTo(r.left(),r.top());
-    p.lineTo(r.left()+w,r.top());
-    p.cubicTo(r.left()+w,r.top(),
-              r.left()+w/2,r.top()+h,
-              r.left()+w,r.top()+2*h);
-    p.lineTo(r.right()-w,r.top());
-    p.lineTo(r.right(),r.top());
-    p.lineTo(r.right(),r.bottom()-2*h);
-    p.cubicTo(r.right(),r.bottom()-2*h,
-              r.right()-w/2,r.bottom()-h,
-              r.right()-w,r.bottom());
-    p.lineTo(r.left()+w,r.bottom());
-    p.close();
-    return p;
-}
+    if (!canvas) {
+        qDebug() << "drawBlockProgrammingContent: No canvas!";
+        return;
+    }
 
-void SkiaRenderer::drawScene(SkCanvas* c)
-{
-    // --- 网格背景 ---
-    SkPaint g; g.setColor(SkColorSetARGB(40,120,120,120));
-    for(int x=0;x<width();x+=20) c->drawLine(x,0,x,height(),g);
-    for(int y=0;y<height();y+=20) c->drawLine(0,y,width(),y,g);
+    static int drawCount = 0;
+    drawCount++;
+    if (drawCount % 60 == 0) {  // 每60帧打印一次
+        qDebug() << "drawBlockProgrammingContent: Draw call" << drawCount
+                 << "Size:" << width() << "x" << height();
+    }
 
-    // --- 三块积木 ---
-    SkPaint p; p.setAntiAlias(true);
-    p.setColor(SkColorSetARGB(255,33,150,243));
-    c->drawPath(makePuzzle({40,40,120,40}),p);
-    p.setColor(SkColorSetARGB(255,76,175,80));
-    c->drawPath(makePuzzle({200,90,140,40}),p);
-    p.setColor(SkColorSetARGB(255,255,152,0));
-    float dx = 15.f*qSin(t*2.f);
-    c->drawPath(makePuzzle({100+dx,190,160,40}),p);
+    // 首先绘制一些明显的测试图形
+    SkPaint testPaint;
+    testPaint.setAntiAlias(true);
 
-    // --- 文本 ---
-    SkPaint tp; tp.setAntiAlias(true); tp.setColor(SK_ColorBLACK);
-    SkFont  f;  f.setSize(22);
-    c->drawString("Block Programming - Skia/GL",50,30,f,tp);
+    // 绘制一个大红色矩形
+    testPaint.setColor(SK_ColorRED);
+    testPaint.setStyle(SkPaint::kFill_Style);
+    canvas->drawRect(SkRect::MakeXYWH(50, 50, 200, 100), testPaint);
+
+    // 绘制一个蓝色圆形
+    testPaint.setColor(SK_ColorBLUE);
+    canvas->drawCircle(400, 100, 50, testPaint);
+
+    // 绘制一个绿色边框矩形
+    testPaint.setColor(SK_ColorGREEN);
+    testPaint.setStyle(SkPaint::kStroke_Style);
+    testPaint.setStrokeWidth(5);
+    canvas->drawRect(SkRect::MakeXYWH(100, 200, 150, 80), testPaint);
+
+    // 绘制网格背景
+    SkPaint gridPaint;
+    gridPaint.setColor(SkColorSetARGB(255, 100, 100, 100));  // 完全不透明的灰色
+    gridPaint.setStrokeWidth(1);
+
+    int gridSize = 20;
+    for (int x = 0; x < width(); x += gridSize) {
+        canvas->drawLine(x, 0, x, height(), gridPaint);
+    }
+    for (int y = 0; y < height(); y += gridSize) {
+        canvas->drawLine(0, y, width(), y, gridPaint);
+    }
+
+    // 绘制示例积木块
+    SkPaint blockPaint;
+    blockPaint.setAntiAlias(true);
+
+    // 积木块1 - 蓝色矩形
+    blockPaint.setColor(SkColorSetARGB(255, 30, 136, 229));
+    canvas->drawRoundRect(SkRect::MakeXYWH(50, 50, 120, 40), 8, 8, blockPaint);
+
+    // 积木块2 - 绿色矩形
+    blockPaint.setColor(SkColorSetARGB(255, 76, 175, 80));
+    canvas->drawRoundRect(SkRect::MakeXYWH(200, 100, 140, 40), 8, 8, blockPaint);
+
+    // 积木块3 - 橙色（带动画）
+    float animOffset = sin(m_animationTime * 2.0f) * 10.0f;
+    blockPaint.setColor(SkColorSetARGB(255, 255, 152, 0));
+    canvas->drawRoundRect(SkRect::MakeXYWH(100 + animOffset, 200, 160, 40), 8, 8, blockPaint);
+
+    // 绘制文本
+    SkPaint textPaint;
+    textPaint.setAntiAlias(true);
+    textPaint.setColor(SK_ColorBLACK);
+
+    SkFont font;
+    font.setSize(24);
+
+    canvas->drawString("Block Programming View - Skia Rendering", 50, 30, font, textPaint);
+
+    // 绘制状态信息
+    font.setSize(16);
+    textPaint.setColor(SkColorSetARGB(255, 100, 100, 100));
+
+    QString statusText = QString("Animation Time: %1s | Size: %2x%3")
+                        .arg(m_animationTime, 0, 'f', 2)
+                        .arg(width())
+                        .arg(height());
+
+    canvas->drawString(statusText.toUtf8().constData(), 50, height() - 20, font, textPaint);
 }
