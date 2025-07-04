@@ -16,8 +16,8 @@
 #include <QJsonObject>
 #include <QJsonArray>
 
-// Skia渲染器
-#include "SkiaRenderer.hpp"
+// OpenGL渲染器
+#include "OpenGLBlockRenderer.hpp"
 
 /**
  * @brief 积木编程视图
@@ -73,7 +73,7 @@ private:
     // 工作区域
     QScrollArea* m_workspace = nullptr;
     QWidget* m_workspaceContent = nullptr;
-    SkiaRenderer* m_skiaRenderer = nullptr;
+    OpenGLBlockRenderer* m_openglRenderer = nullptr;
     
     // 状态栏
     QWidget* m_statusBar = nullptr;
