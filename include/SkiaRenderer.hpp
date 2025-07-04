@@ -1,26 +1,22 @@
 #pragma once
 
-#include <QtOpenGLWidgets/QOpenGLWidget>
-#include <QOpenGLFunctions>
+#include <QWidget>
 #include <QTimer>
+#include <QPaintEvent>
+#include <QResizeEvent>
+#include <QShowEvent>
+#include <QHideEvent>
 
-// Skia Ganesh-GL 新 API (m132+)
-#include "include/core/SkBitmap.h"
-#include "include/gpu/ganesh/GrDirectContext.h"
-#include "include/gpu/ganesh/SkSurfaceGanesh.h"
-#include "include/gpu/ganesh/gl/GrGLInterface.h"
-#include "include/gpu/ganesh/gl/GrGLBackendSurface.h"
-#include "include/gpu/ganesh/GrContextOptions.h"
+// Skia CPU 渲染 API
 #include "include/core/SkSurface.h"
 #include "include/core/SkPath.h"
 #include "include/core/SkCanvas.h"
 #include "include/core/SkPaint.h"
-#include "include/gpu/ganesh/gl/GrGLDirectContext.h"
 
 /**
- * @brief Skia OpenGL渲染器，基于您提供的AI示例代码
+ * @brief Skia CPU渲染器，避免OpenGL兼容性问题
  */
-class SkiaRenderer : public QOpenGLWidget, protected QOpenGLFunctions
+class SkiaRenderer : public QWidget
 {
     Q_OBJECT
 
@@ -29,12 +25,9 @@ public:
     ~SkiaRenderer() override;
 
 protected:
-    // Qt-OpenGL lifecycle
-    void initializeGL() override;
-    void resizeGL(int w, int h) override;
-    void paintGL() override;
-
-    // 窗口状态管理
+    // Qt Widget lifecycle
+    void paintEvent(QPaintEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
 
@@ -45,15 +38,11 @@ private:
     // helper methods
     SkPath makePuzzlePath(const QRectF& r, qreal notchW = 8, qreal notchH = 4);
     void drawBlockProgrammingContent(SkCanvas* canvas);
-    void cleanupGPUResources(); // 安全清理GPU资源
-    void rebuildSurface(int w, int h, GLuint fbo); // 重建Surface的辅助方法
+    void initializeSkia(); // 初始化Skia CPU渲染
 
-    // Skia objects - 使用新的API
-    sk_sp<GrDirectContext> fContext;
-    sk_sp<SkSurface> fSurface;
-
-    // FBO缓存 - 解决Intel Xe等显卡每帧换FBO的问题
-    GLuint m_cachedFbo;
+    // Skia objects - CPU渲染
+    sk_sp<SkSurface> m_surface;
+    uint8_t* m_skiaImage; // 图像缓冲区
 
     // Animation
     QTimer* m_animationTimer;

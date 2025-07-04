@@ -1,22 +1,27 @@
 #include "SkiaRenderer.hpp"
 #include <QDebug>
 #include <QRectF>
+#include <QPainter>
 
-// 额外的 Skia 头文件
+// Skia CPU 渲染头文件
 #include "include/effects/SkGradientShader.h"
 #include "include/core/SkFont.h"
-#include "include/gpu/ganesh/GrBackendSurface.h"
-#include "include/gpu/ganesh/gl/GrGLDirectContext.h"
+#include "include/core/SkImageInfo.h"
+#include "include/core/SkPixmap.h"
 
 SkiaRenderer::SkiaRenderer(QWidget* parent)
-    : QOpenGLWidget(parent)
+    : QWidget(parent)  // 改为普通QWidget，避免OpenGL冲突
     , m_animationTime(0.0f)
-    , m_cachedFbo(0)
+    , m_skiaImage(nullptr)
 {
-    // 设置动画定时器 - 但不立即启动，等窗口显示时再启动
+    // 设置动画定时器
     m_animationTimer = new QTimer(this);
     connect(m_animationTimer, &QTimer::timeout, this, &SkiaRenderer::updateAnimation);
-    // 不在构造函数中启动定时器，避免后台运行
+
+    // 设置最小尺寸
+    setMinimumSize(800, 600);
+
+    qDebug() << "SkiaRenderer: Using CPU rendering to avoid OpenGL conflicts";
 }
 
 SkiaRenderer::~SkiaRenderer()
@@ -26,161 +31,99 @@ SkiaRenderer::~SkiaRenderer()
         m_animationTimer->stop();
     }
 
-    // 安全清理GPU资源
-    if (context()) {
-        makeCurrent();
-        cleanupGPUResources();
-        doneCurrent();
+    // 清理Skia资源
+    if (m_skiaImage) {
+        delete[] m_skiaImage;
+        m_skiaImage = nullptr;
     }
 }
 
-void SkiaRenderer::initializeGL()
+void SkiaRenderer::initializeSkia()
 {
-    initializeOpenGLFunctions();
+    // 初始化CPU渲染的Skia surface
+    const int w = width();
+    const int h = height();
 
-    // 步骤1：检查OpenGL版本和信息
-    const char* version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
-    const char* vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
-    const char* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
-    qDebug() << "=== OpenGL Info ===";
-    qDebug() << "Version:" << (version ? version : "Unknown");
-    qDebug() << "Vendor:" << (vendor ? vendor : "Unknown");
-    qDebug() << "Renderer:" << (renderer ? renderer : "Unknown");
-
-    // 步骤2：创建 Skia GL 接口 - 关键调试点①
-    auto interface = GrGLMakeNativeInterface();
-    qDebug() << "① GrGL interface =" << (bool)interface;
-
-    if (!interface) {
-        qCritical() << "Failed to create GrGL interface - 您的Skia包可能是CPU-only版本!";
+    if (w <= 0 || h <= 0) {
+        qWarning() << "Invalid widget size for Skia initialization:" << w << "x" << h;
         return;
     }
 
-    // 步骤3：创建GPU上下文 - 关键调试点②
-    GrContextOptions opts;
-    fContext = GrDirectContexts::MakeGL(interface, opts);
-    qDebug() << "② DirectContext =" << (bool)fContext;
+    // 创建图像缓冲区
+    if (m_skiaImage) {
+        delete[] m_skiaImage;
+    }
 
-    if (!fContext) {
-        qCritical() << "Failed to create DirectContext - GPU后端不支持或驱动问题!";
+    const size_t imageSize = w * h * 4; // RGBA
+    m_skiaImage = new uint8_t[imageSize];
+
+    // 创建Skia CPU surface
+    SkImageInfo info = SkImageInfo::MakeN32Premul(w, h);
+    m_surface = SkSurfaces::WrapPixels(info, m_skiaImage, w * 4);
+
+    if (!m_surface) {
+        qCritical() << "Failed to create Skia CPU surface";
         return;
     }
 
-    qDebug() << "Skia GPU context created successfully";
-
-    // 连接Qt信号以处理上下文销毁
-    connect(context(), &QOpenGLContext::aboutToBeDestroyed,
-            this, &SkiaRenderer::cleanupGPUResources);
+    qDebug() << "Skia CPU surface created successfully, size:" << w << "x" << h;
 }
 
-void SkiaRenderer::resizeGL(int w, int h)
+void SkiaRenderer::resizeEvent(QResizeEvent* event)
 {
-    if (!fContext) {
-        qWarning() << "resizeGL called but no valid DirectContext!";
-        return;
-    }
+    QWidget::resizeEvent(event);
 
-    qDebug() << "=== resizeGL Debug ===";
-    qDebug() << "Size:" << w << "x" << h;
+    qDebug() << "SkiaRenderer resized to:" << width() << "x" << height();
 
-    // 重置缓存的FBO，强制在下一次paintGL时重建Surface
-    m_cachedFbo = 0;
-    fSurface.reset();
+    // 重新初始化Skia surface
+    initializeSkia();
 
-    qDebug() << "Surface reset, will be recreated in paintGL";
+    // 触发重绘
+    update();
 }
 
-void SkiaRenderer::paintGL()
+void SkiaRenderer::paintEvent(QPaintEvent* event)
 {
-    if (!fContext) {
-        qWarning() << "paintGL called but no valid DirectContext!";
-        return;
-    }
+    Q_UNUSED(event)
 
-    // 检查上下文是否被放弃
-    if (fContext->abandoned()) {
-        qWarning() << "DirectContext was abandoned! Recreating...";
-        fContext.reset();
-        fSurface.reset();
-        return;
-    }
-
-    // 调试输出：验证参数不匹配问题
-    static bool firstFrame = true;
-    if (firstFrame) {
-        qDebug() << "=== First Frame Debug Info ===";
-        qDebug() << "Qt format samples/stencil:" << context()->format().samples() << context()->format().stencilBufferSize();
-
-        GLint realSamples = 0, realStencil = 0;
-        glGetIntegerv(GL_SAMPLES, &realSamples);
-        glGetIntegerv(GL_STENCIL_BITS, &realStencil);
-        qDebug() << "Real GL samples/stencil:" << realSamples << realStencil;
-
-        if (realSamples != context()->format().samples() || realStencil != context()->format().stencilBufferSize()) {
-            qWarning() << "*** PARAMETER MISMATCH DETECTED! This was causing the crash. ***";
-        }
-        firstFrame = false;
-    }
-
-    // 关键修复：每帧检测FBO是否变化，变就重建SkSurface
-    GLuint currFbo = defaultFramebufferObject();
-    if (!fSurface || currFbo != m_cachedFbo) {
-        qDebug() << "FBO changed from" << m_cachedFbo << "to" << currFbo << "- rebuilding Surface";
-
-        m_cachedFbo = currFbo; // 记录最新FBO
-
-        // 获取当前窗口信息
-        const int w = width();
-        const int h = height();
-        const qreal dpr = devicePixelRatio();
-
-        // 调用新的重建Surface方法
-        rebuildSurface(w * dpr, h * dpr, currFbo);
-
-        if (!fSurface) {
-            qCritical() << "Failed to create GPU surface - cannot continue rendering";
+    // 确保Skia surface已初始化
+    if (!m_surface) {
+        initializeSkia();
+        if (!m_surface) {
+            qWarning() << "Cannot paint - Skia surface not available";
             return;
         }
-
-        qDebug() << "Surface recreated successfully for FBO" << currFbo;
     }
 
-    try {
-        SkCanvas* canvas = fSurface->getCanvas();
-        if (!canvas) {
-            qCritical() << "Failed to get canvas from GPU surface!";
-            return;
-        }
+    // 使用Skia绘制到CPU缓冲区
+    SkCanvas* canvas = m_surface->getCanvas();
+    if (!canvas) {
+        qWarning() << "Cannot get canvas from Skia surface";
+        return;
+    }
 
-        canvas->clear(SK_ColorWHITE);
+    // 清除画布
+    canvas->clear(SK_ColorWHITE);
 
-        // 绘制积木编程内容
-        drawBlockProgrammingContent(canvas);
+    // 绘制积木编程内容
+    drawBlockProgrammingContent(canvas);
 
-        // 安全地flush GPU命令 - 现在使用正确的FBO参数，应该不会崩溃了
-        if (fContext && !fContext->abandoned()) {
-            fContext->flushAndSubmit();
-        } else {
-            qWarning() << "Cannot flush - context is abandoned or null";
-        }
+    // 将Skia渲染结果转换为QImage并用QPainter绘制到Qt widget
+    const int w = width();
+    const int h = height();
 
-    } catch (const std::exception& e) {
-        qCritical() << "Exception in paintGL:" << e.what();
-        // 重置surface，下一帧会重新创建
-        fSurface.reset();
-        m_cachedFbo = 0;
-    } catch (...) {
-        qCritical() << "Unknown exception in paintGL - resetting surface";
-        // 重置surface，下一帧会重新创建
-        fSurface.reset();
-        m_cachedFbo = 0;
+    if (w > 0 && h > 0 && m_skiaImage) {
+        QImage qimg(m_skiaImage, w, h, w * 4, QImage::Format_RGBA8888);
+
+        QPainter painter(this);
+        painter.drawImage(0, 0, qimg);
     }
 }
 
 void SkiaRenderer::updateAnimation()
 {
-    // 只有在窗口可见且有有效上下文时才更新动画
-    if (!isVisible() || !fContext || fContext->abandoned()) {
+    // 只有在窗口可见时才更新动画
+    if (!isVisible()) {
         return;
     }
 
@@ -190,7 +133,13 @@ void SkiaRenderer::updateAnimation()
 
 void SkiaRenderer::showEvent(QShowEvent* event)
 {
-    QOpenGLWidget::showEvent(event);
+    QWidget::showEvent(event);
+
+    // 初始化Skia（如果还没有初始化）
+    if (!m_surface) {
+        initializeSkia();
+    }
+
     // 窗口显示时启动动画
     if (m_animationTimer && !m_animationTimer->isActive()) {
         m_animationTimer->start(33);
@@ -200,7 +149,7 @@ void SkiaRenderer::showEvent(QShowEvent* event)
 
 void SkiaRenderer::hideEvent(QHideEvent* event)
 {
-    QOpenGLWidget::hideEvent(event);
+    QWidget::hideEvent(event);
     // 窗口隐藏时停止动画，避免后台误触重绘
     if (m_animationTimer && m_animationTimer->isActive()) {
         m_animationTimer->stop();
@@ -208,79 +157,7 @@ void SkiaRenderer::hideEvent(QHideEvent* event)
     }
 }
 
-void SkiaRenderer::rebuildSurface(int w, int h, GLuint fbo)
-{
-    makeCurrent();
-
-    // 1. 查询实际的 FBO 参数 - 关键修复！
-    GLint samples = 0, stencil = 0, fmt = 0;
-    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-    glGetIntegerv(GL_SAMPLES, &samples);
-    glGetIntegerv(GL_STENCIL_BITS, &stencil);
-    glGetFramebufferAttachmentParameteriv(
-        GL_FRAMEBUFFER,
-        GL_COLOR_ATTACHMENT0,
-        GL_FRAMEBUFFER_ATTACHMENT_COMPONENT_TYPE,
-        &fmt);
-
-    // 如果查询失败，使用常见默认值
-    if (!fmt) fmt = GL_SRGB8_ALPHA8;
-
-    // 调试输出：对比 Qt 认为的 vs 实际的参数
-    qDebug() << "=== FBO Parameter Comparison ===";
-    qDebug() << "Qt format samples/stencil:" << context()->format().samples() << context()->format().stencilBufferSize();
-    qDebug() << "Real GL samples/stencil:" << samples << stencil;
-    qDebug() << "Real GL format:" << QString("0x%1").arg(fmt, 0, 16);
-
-    // 2. 格式转换：GL_SRGB8_ALPHA8 -> GL_RGBA8 (Skia 兼容)
-    GrGLenum skiaFormat = fmt;
-    if (fmt == GL_SRGB8_ALPHA8) {
-        skiaFormat = GL_RGBA8;  // Skia 更好地支持 RGBA8
-        qDebug() << "Converting GL_SRGB8_ALPHA8 to GL_RGBA8 for Skia compatibility";
-    }
-
-    // 3. 使用转换后的格式重新封装
-    GrGLFramebufferInfo fbInfo{fbo, skiaFormat};
-    GrBackendRenderTarget rt = GrBackendRenderTargets::MakeGL(
-        w, h, samples, stencil, fbInfo);
-
-    if (!rt.isValid()) {
-        qCritical() << "Invalid BackendRenderTarget with real parameters";
-        qCritical() << "FBO:" << fbo << "Size:" << w << "x" << h << "Samples:" << samples << "Stencil:" << stencil;
-        return;
-    }
-
-    SkSurfaceProps props;
-    fSurface = SkSurfaces::WrapBackendRenderTarget(
-        fContext.get(), rt,
-        kBottomLeft_GrSurfaceOrigin,
-        kRGBA_8888_SkColorType,
-        nullptr, &props);
-
-    if (!fSurface) {
-        qCritical() << "WrapBackendRenderTarget failed even with correct parameters";
-        return;
-    }
-
-    qDebug() << "GPU Surface created successfully with real FBO parameters";
-    qDebug() << "FBO:" << fbo << "Size:" << w << "x" << h << "Samples:" << samples << "Stencil:" << stencil;
-}
-
-
-
-void SkiaRenderer::cleanupGPUResources()
-{
-    if (fSurface) {
-        fSurface.reset();
-        qDebug() << "Skia surface released";
-    }
-
-    if (fContext) {
-        fContext->abandonContext();
-        fContext.reset();
-        qDebug() << "Skia GPU context abandoned and released";
-    }
-}
+// GPU相关方法已删除，现在使用CPU渲染
 
 
 
