@@ -38,6 +38,7 @@ private:
 
     sk_sp<GrDirectContext> fContext;
     sk_sp<SkSurface> fSurface;
+    GLuint fBoundFbo = 0;  // 缓存的FBO ID
 
     // 动画
     QTimer m_animationTimer;

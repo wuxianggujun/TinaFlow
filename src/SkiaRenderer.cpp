@@ -6,6 +6,7 @@
 #include "include/core/SkFont.h"
 #include "include/core/SkPath.h"
 #include "include/core/SkColorSpace.h"
+#include "include/effects/SkGradientShader.h"
 #include "include/gpu/ganesh/GrDirectContext.h"
 #include "include/gpu/ganesh/GrBackendSurface.h"
 #include "include/gpu/ganesh/gl/GrGLBackendSurface.h"
@@ -23,6 +24,9 @@ SkiaRenderer::SkiaRenderer(QWidget* parent)
     fmt.setProfile(QSurfaceFormat::CoreProfile);
     setFormat(fmt);
 
+    // ❶ 关键修复：关闭Qt的partial-update blit，避免Intel GPU驱动兼容性问题
+    setUpdateBehavior(QOpenGLWidget::NoPartialUpdate);
+
     // 设置动画定时器
     connect(&m_animationTimer, &QTimer::timeout, this, &SkiaRenderer::onTick);
 }
@@ -38,6 +42,9 @@ SkiaRenderer::~SkiaRenderer()
 void SkiaRenderer::initializeGL()
 {
     initializeOpenGLFunctions();
+
+    // ❶ 关键修复：彻底"封印" scissor，防止Qt在blit时重新开启
+    glDisable(GL_SCISSOR_TEST);
 
     auto interface = GrGLMakeNativeInterface();
     fContext = GrDirectContexts::MakeGL(interface);  // 使用正确的API
@@ -76,61 +83,72 @@ void SkiaRenderer::hideEvent(QHideEvent* e)
 
 void SkiaRenderer::paintGL()
 {
-    if (!fSurface) {
-        qDebug() << "paintGL: No surface available";
-        return;
-    }
+    /* ★ 1. 让整张 FBO 可写 — 在 *Qt 已经* 改完脏矩形之后 */
+    const qreal dpr = devicePixelRatioF();
+    glViewport(0, 0, int(width()*dpr), int(height()*dpr));
+    glDisable(GL_SCISSOR_TEST);
 
-    SkCanvas* canvas = fSurface->getCanvas();
-    if (!canvas) {
-        qDebug() << "paintGL: No canvas available";
-        return;
-    }
+    if (!fSurface || defaultFramebufferObject() != fBoundFbo)
+        resizeSkiaSurface(width(), height());
 
-    // 清除为白色背景
-    canvas->clear(SK_ColorWHITE);
+    if (!fSurface) return;
 
-    // 添加调试信息
-    static int frameCount = 0;
-    frameCount++;
-    if (frameCount % 60 == 0) {  // 每60帧打印一次
-        qDebug() << "paintGL: Frame" << frameCount << "Animation time:" << m_animationTime;
-    }
+    SkCanvas* cv = fSurface->getCanvas();
+    cv->resetMatrix();                    // 保证坐标系总是正确
+    cv->scale(dpr, dpr);
 
-    // 绘制内容
-    drawBlockProgrammingContent(canvas);
+    // ❷ 关键修复：只画渐变，不再先清黑
+    SkColor cols[2] = { SK_ColorYELLOW, SK_ColorGREEN };
+    SkPoint pts[2] = { {0,0}, {float(width()),float(height())} };
+    SkPaint g;
+    g.setShader(SkGradientShader::MakeLinear(pts, cols, nullptr, 2, SkTileMode::kClamp));
+    g.setBlendMode(SkBlendMode::kSrc);              // 保证一定覆盖
+    cv->drawRect(SkRect::MakeWH(width(), height()), g);
 
-    // 确保所有绘制命令都被提交到GPU
     fContext->flushAndSubmit();
+
+    /* ★ 2. 再次覆盖  —— Qt 在返回前还会再开一次 scissor！ */
+    glViewport(0, 0, int(width()*dpr), int(height()*dpr));
+    glDisable(GL_SCISSOR_TEST);
 }
 
 void SkiaRenderer::resizeSkiaSurface(int w, int h)
 {
-    if (!fContext) return;
+    fSurface.reset();
+    if (!fContext || w <= 0 || h <= 0) return;
 
-    GrGLFramebufferInfo fbInfo;
-    fbInfo.fFBOID = defaultFramebufferObject();
-    fbInfo.fFormat = GL_RGBA8;
+    // 关键修复：使用像素尺寸而不是逻辑尺寸
+    const qreal dpr = devicePixelRatioF();          // Hi-DPI 缩放系数
+    const int   fbW = int(w * dpr + 0.5);
+    const int   fbH = int(h * dpr + 0.5);
 
-    GrBackendRenderTarget backendRenderTarget = GrBackendRenderTargets::MakeGL(
-        w, h, /*sampleCnt*/ 0, /*stencilBits*/ 8, fbInfo);
+    GLuint fbo = defaultFramebufferObject();
+    fBoundFbo  = fbo;
 
-    SkColorType colorType = kRGBA_8888_SkColorType;
-    SkSurfaceProps props;
+    qDebug() << "=== FBO Info ===";
+    qDebug() << "FBO ID:" << fbo;
+    qDebug() << "Logical size:" << w << "x" << h;
+    qDebug() << "DPR:" << dpr;
+    qDebug() << "Pixel size:" << fbW << "x" << fbH;
+
+    GrGLFramebufferInfo fbInfo{ fbo, GL_RGBA8 };
+    auto backendRT = GrBackendRenderTargets::MakeGL(
+        fbW, fbH, format().samples(), format().stencilBufferSize(), fbInfo);
+
+    if (!backendRT.isValid()) {
+        qWarning() << "[SKIA] backendRT invalid, fallback no-MSAA";
+        backendRT = GrBackendRenderTargets::MakeGL(fbW, fbH, 0, 0, fbInfo);
+    }
 
     fSurface = SkSurfaces::WrapBackendRenderTarget(
-        fContext.get(),
-        backendRenderTarget,
-        kTopLeft_GrSurfaceOrigin,  // 改为TopLeft，与Qt对齐
-        colorType,
-        nullptr,
-        &props
-    );
+        fContext.get(), backendRT,
+        kBottomLeft_GrSurfaceOrigin, kRGBA_8888_SkColorType, nullptr, nullptr);
 
     if (!fSurface) {
-        qCritical() << "Failed to create Skia surface";
+        qCritical() << "[SKIA] WrapBackendRenderTarget FAILED";
     } else {
-        qDebug() << "Skia surface created successfully, size:" << w << "x" << h;
+        qDebug() << "[SKIA] Surface created successfully";
+        qDebug() << "Pixel size:" << fbW << "x" << fbH << "DPR:" << dpr;
     }
 }
 
@@ -154,24 +172,35 @@ void SkiaRenderer::drawBlockProgrammingContent(SkCanvas* canvas)
                  << "Size:" << width() << "x" << height();
     }
 
-    // 首先绘制一些明显的测试图形
+    // 首先测试最基础的绘制 - 填充整个画布
+    SkPaint bgPaint;
+    bgPaint.setColor(SkColorSetARGB(100, 255, 0, 0));  // 半透明红色背景
+    canvas->drawRect(SkRect::MakeXYWH(0, 0, width(), height()), bgPaint);
+
+    // 绘制一些明显的测试图形
     SkPaint testPaint;
     testPaint.setAntiAlias(true);
 
-    // 绘制一个大红色矩形
+    // 绘制一个大红色矩形 - 使用更大的尺寸
     testPaint.setColor(SK_ColorRED);
     testPaint.setStyle(SkPaint::kFill_Style);
-    canvas->drawRect(SkRect::MakeXYWH(50, 50, 200, 100), testPaint);
+    canvas->drawRect(SkRect::MakeXYWH(100, 100, 300, 200), testPaint);
 
-    // 绘制一个蓝色圆形
+    // 绘制一个蓝色圆形 - 使用更大的半径
     testPaint.setColor(SK_ColorBLUE);
-    canvas->drawCircle(400, 100, 50, testPaint);
+    canvas->drawCircle(500, 200, 80, testPaint);
 
-    // 绘制一个绿色边框矩形
+    // 绘制一个绿色边框矩形 - 使用更粗的线条
     testPaint.setColor(SK_ColorGREEN);
     testPaint.setStyle(SkPaint::kStroke_Style);
+    testPaint.setStrokeWidth(10);
+    canvas->drawRect(SkRect::MakeXYWH(200, 350, 200, 100), testPaint);
+
+    // 绘制一些对角线
+    testPaint.setColor(SK_ColorBLACK);
     testPaint.setStrokeWidth(5);
-    canvas->drawRect(SkRect::MakeXYWH(100, 200, 150, 80), testPaint);
+    canvas->drawLine(0, 0, width(), height(), testPaint);
+    canvas->drawLine(width(), 0, 0, height(), testPaint);
 
     // 绘制网格背景
     SkPaint gridPaint;
