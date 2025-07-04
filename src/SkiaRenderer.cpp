@@ -214,14 +214,14 @@ void SkiaRenderer::drawBlockProgrammingContent(SkCanvas* canvas)
         return;
     }
 
-    // 暂时不绘制网格，先测试积木是否正常
+    // 暂时不绘制网格，网格绘制可能也有问题
     // drawGrid(canvas);
 
-    // 绘制示例积木形状（使用与测试矩形相同的简单方法）
+    // 绘制示例积木形状（使用简单矩形，drawRoundRect会导致卡死）
     SkPaint blockPaint;
     blockPaint.setAntiAlias(true);
 
-    // 绘制开始积木 - 使用简单的drawRect，不用drawRoundRect
+    // 绘制开始积木 - 使用drawRect，避免卡死
     blockPaint.setColor(SkColorSetARGB(255, 76, 175, 80)); // 绿色
     canvas->drawRect(SkRect::MakeXYWH(300, 200, 120, 40), blockPaint);
 
@@ -236,19 +236,20 @@ void SkiaRenderer::drawBlockProgrammingContent(SkCanvas* canvas)
     // 绘制简单的文本标签
     SkPaint textPaint;
     textPaint.setAntiAlias(true);
-    textPaint.setColor(SkColorSetARGB(255, 0, 0, 0)); // 黑色文本
+    textPaint.setColor(SkColorSetARGB(255, 255, 255, 255)); // 白色文本，在彩色背景上更明显
 
     SkFont font;
-    font.setSize(12);
+    font.setSize(14);  // 稍微大一点的字体
 
-    canvas->drawString("Start", 320, 225, font, textPaint);
-    canvas->drawString("Var", 480, 225, font, textPaint);
-    canvas->drawString("If", 330, 305, font, textPaint);
+    // 测试单个文本绘制 - 调整位置，确保在积木内部
+    canvas->drawString("Start", 330, 220, font, textPaint);
+    // canvas->drawString("Var", 480, 225, font, textPaint);
+    // canvas->drawString("If", 330, 305, font, textPaint);
 
-    // 绘制标题
-    textPaint.setColor(SkColorSetARGB(255, 50, 50, 50)); // 深灰色
-    font.setSize(18);
-    canvas->drawString("Block Programming - Skia", 50, 50, font, textPaint);
+    // 暂时不绘制标题
+    // textPaint.setColor(SkColorSetARGB(255, 50, 50, 50)); // 深灰色
+    // font.setSize(18);
+    // canvas->drawString("Block Programming - Skia", 50, 50, font, textPaint);
 
     // 暂时不绘制连接点，先确保积木本身正常
     /*
@@ -265,11 +266,11 @@ void SkiaRenderer::drawBlockProgrammingContent(SkCanvas* canvas)
     canvas->drawCircle(300, 300, 6, pointPaint);
     */
 
-    // 绘制状态信息（使用固定位置）
-    font.setSize(14);
-    textPaint.setColor(SkColorSetARGB(255, 100, 100, 100)); // 灰色
-    QString statusText = QString("Block Demo | Skia Renderer | Status: OK");
-    canvas->drawString(statusText.toUtf8().constData(), 50, 400, font, textPaint);  // 使用固定Y坐标
+    // 暂时不绘制状态信息
+    // font.setSize(14);
+    // textPaint.setColor(SkColorSetARGB(255, 100, 100, 100)); // 灰色
+    // QString statusText = QString("Block Demo | Skia Renderer | Status: OK");
+    // canvas->drawString(statusText.toUtf8().constData(), 50, 400, font, textPaint);  // 使用固定Y坐标
 }
 
 // 积木管理方法
