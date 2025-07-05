@@ -13,9 +13,10 @@ BgfxManager::~BgfxManager()
 
 bool BgfxManager::initialize(void* windowHandle, uint32_t width, uint32_t height)
 {
+    // 如果已经初始化，先关闭再重新初始化
     if (m_initialized) {
-        qDebug() << "BgfxManager: Already initialized";
-        return true;
+        qDebug() << "BgfxManager: Already initialized, shutting down and reinitializing";
+        shutdown();
     }
     
     qDebug() << "BgfxManager: Initializing bgfx with resolution:" << width << "x" << height;

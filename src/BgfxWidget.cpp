@@ -31,8 +31,10 @@ BgfxWidget::~BgfxWidget()
 
 void BgfxWidget::initializeBgfx()
 {
+    // 如果已经初始化，先清理再重新初始化
     if (m_viewId != UINT16_MAX) {
-        return; // 已经初始化
+        qDebug() << "BgfxWidget::initializeBgfx - already initialized, reinitializing";
+        shutdownBgfx();
     }
 
     qDebug() << "BgfxWidget::initializeBgfx - initializing";
