@@ -71,105 +71,17 @@ qt_add_executable(TinaFlow MANUAL_FINALIZATION
         ${SOURCES}
 )
 
-# 着色器编译
-set(SHADER_OUT_DIR ${CMAKE_BINARY_DIR}/include/generated/shaders)
+# ============ 着色器编译 ============
+include(${CMAKE_SOURCE_DIR}/cmake/simple_shaders.cmake)
 
-# 确保输出目录存在
-file(MAKE_DIRECTORY ${SHADER_OUT_DIR})
-
-# 使用bgfx_compile_shaders直接编译为头文件
-bgfx_compile_shaders(
-    TYPE VERTEX
-    SHADERS ${CMAKE_SOURCE_DIR}/resources/shaders/vs_simple.sc
-    VARYING_DEF ${CMAKE_SOURCE_DIR}/resources/shaders/varying.def.sc
-    OUTPUT_DIR ${SHADER_OUT_DIR}
-    INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/third_party/bgfx.cmake/bgfx/src
-    AS_HEADERS
+compile_all_shaders(
+    ${CMAKE_SOURCE_DIR}/resources/shaders          # 着色器源目录
+    ${CMAKE_BINARY_DIR}/include/generated/shaders  # 输出目录
+    my_shaders                                      # 目标名称
+    TinaFlow                                        # 主项目目标名称
 )
 
-bgfx_compile_shaders(
-    TYPE FRAGMENT
-    SHADERS ${CMAKE_SOURCE_DIR}/resources/shaders/fs_simple.sc
-    VARYING_DEF ${CMAKE_SOURCE_DIR}/resources/shaders/varying.def.sc
-    OUTPUT_DIR ${SHADER_OUT_DIR}
-    INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/third_party/bgfx.cmake/bgfx/src
-    AS_HEADERS
-)
-
-# 编译圆角着色器
-bgfx_compile_shaders(
-    TYPE VERTEX
-    SHADERS ${CMAKE_SOURCE_DIR}/resources/shaders/vs_rounded.sc
-    VARYING_DEF ${CMAKE_SOURCE_DIR}/resources/shaders/varying.def.sc
-    OUTPUT_DIR ${SHADER_OUT_DIR}
-    INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/third_party/bgfx.cmake/bgfx/src
-    AS_HEADERS
-)
-
-bgfx_compile_shaders(
-    TYPE FRAGMENT
-    SHADERS ${CMAKE_SOURCE_DIR}/resources/shaders/fs_rounded.sc
-    VARYING_DEF ${CMAKE_SOURCE_DIR}/resources/shaders/varying.def.sc
-    OUTPUT_DIR ${SHADER_OUT_DIR}
-    INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/third_party/bgfx.cmake/bgfx/src
-    AS_HEADERS
-)
-
-# 将着色器源文件添加到目标中以触发编译
-target_sources(TinaFlow PRIVATE
-    ${CMAKE_SOURCE_DIR}/resources/shaders/vs_simple.sc
-    ${CMAKE_SOURCE_DIR}/resources/shaders/fs_simple.sc
-    ${CMAKE_SOURCE_DIR}/resources/shaders/vs_rounded.sc
-    ${CMAKE_SOURCE_DIR}/resources/shaders/fs_rounded.sc
-)
-
-# 收集所有着色器源文件
-file(GLOB SHADER_SOURCES "${CMAKE_SOURCE_DIR}/resources/shaders/*.sc")
-
-# 生成统一的着色器头文件
-set(UNIFIED_SHADER_HEADER ${SHADER_OUT_DIR}/shaders.h)
-
-# 简化：直接生成统一头文件，依赖于着色器源文件
-add_custom_command(
-    OUTPUT ${UNIFIED_SHADER_HEADER}
-    COMMAND ${CMAKE_COMMAND}
-        -DSHADER_SOURCE_DIR=${CMAKE_SOURCE_DIR}/resources/shaders
-        -DSHADER_OUT_DIR=${SHADER_OUT_DIR}
-        -DOUTPUT_FILE=${UNIFIED_SHADER_HEADER}
-        -P ${CMAKE_SOURCE_DIR}/cmake/generate_unified_shader_header.cmake
-    DEPENDS
-        ${SHADER_SOURCES}
-        ${CMAKE_SOURCE_DIR}/cmake/generate_unified_shader_header.cmake
-    COMMENT "Generating unified shader header"
-)
-
-# 创建自定义目标来确保统一头文件生成
-add_custom_target(generate_unified_shader_header
-    DEPENDS ${UNIFIED_SHADER_HEADER}
-    COMMENT "Smart shader management"
-)
-
-# 添加强制清理和重新编译着色器的目标
-add_custom_target(clean_shaders
-    COMMAND ${CMAKE_COMMAND}
-        -DSHADER_SOURCE_DIR=${CMAKE_SOURCE_DIR}/resources/shaders
-        -DSHADER_OUT_DIR=${SHADER_OUT_DIR}
-        -DACTION=CLEAN
-        -P ${CMAKE_SOURCE_DIR}/cmake/manage_shaders.cmake
-    COMMENT "Force cleaning all compiled shaders"
-)
-
-add_custom_target(force_rebuild_shaders
-    COMMAND ${CMAKE_COMMAND}
-        -DSHADER_SOURCE_DIR=${CMAKE_SOURCE_DIR}/resources/shaders
-        -DSHADER_OUT_DIR=${SHADER_OUT_DIR}
-        -DACTION=ALL
-        -P ${CMAKE_SOURCE_DIR}/cmake/manage_shaders.cmake
-    COMMENT "Force rebuilding all shaders"
-)
-
-# 确保TinaFlow依赖于统一头文件生成
-add_dependencies(TinaFlow generate_unified_shader_header)
+#add_shader_clean(clean_shaders ${CMAKE_BINARY_DIR}/include/generated/shaders)
 
 message(STATUS "Shader compilation configured using bgfx_compile_shaders with AS_HEADERS")
 
@@ -178,7 +90,7 @@ target_include_directories(TinaFlow PRIVATE
         ${PROJECT_SOURCE_DIR}/third_party/bgfx.cmake/bgfx/include
         ${PROJECT_SOURCE_DIR}/third_party/bgfx.cmake/bx/include
         ${PROJECT_SOURCE_DIR}/third_party/bgfx.cmake/bimg/include
-        ${SHADER_OUT_DIR}
+        ${CMAKE_BINARY_DIR}/include/generated/shaders
 )
 
 if(WIN32 AND QT_VERSION_MAJOR LESS 6)
