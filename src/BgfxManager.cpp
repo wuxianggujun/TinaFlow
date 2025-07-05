@@ -13,12 +13,20 @@ BgfxManager::~BgfxManager()
 
 bool BgfxManager::initialize(void* windowHandle, uint32_t width, uint32_t height)
 {
-    // 如果已经初始化，先关闭再重新初始化
+    // 如果已经初始化，检查是否需要重新初始化
     if (m_initialized) {
-        qDebug() << "BgfxManager: Already initialized, shutting down and reinitializing";
-        shutdown();
+        if (m_currentWindowHandle == windowHandle &&
+            m_currentWidth == width &&
+            m_currentHeight == height) {
+            qDebug() << "BgfxManager: Already initialized with same parameters, reusing";
+            return true;
+        } else {
+            qDebug() << "BgfxManager: Parameters changed, shutting down and reinitializing";
+            qDebug() << "BgfxManager: Old window:" << m_currentWindowHandle << "New window:" << windowHandle;
+            shutdown();
+        }
     }
-    
+
     qDebug() << "BgfxManager: Initializing bgfx with resolution:" << width << "x" << height;
     
     bgfx::Init init;
@@ -38,16 +46,19 @@ bool BgfxManager::initialize(void* windowHandle, uint32_t width, uint32_t height
     bgfx::setDebug(BGFX_DEBUG_TEXT);
     
     m_initialized = true;
+    m_currentWindowHandle = windowHandle;
+    m_currentWidth = width;
+    m_currentHeight = height;
     m_nextViewId = 0;
-    
+
     // 重置视图ID使用状态
     for (int i = 0; i < MAX_VIEWS; ++i) {
         m_viewIds[i] = false;
     }
-    
+
     qDebug() << "BgfxManager: bgfx initialized successfully!";
     qDebug() << "BgfxManager: Renderer:" << bgfx::getRendererName(bgfx::getRendererType());
-    
+
     return true;
 }
 
@@ -60,7 +71,10 @@ void BgfxManager::shutdown()
     qDebug() << "BgfxManager: Shutting down bgfx";
     bgfx::shutdown();
     m_initialized = false;
-    
+    m_currentWindowHandle = nullptr;
+    m_currentWidth = 0;
+    m_currentHeight = 0;
+
     qDebug() << "BgfxManager: bgfx shutdown complete";
 }
 
@@ -73,9 +87,13 @@ void BgfxManager::reset(uint32_t width, uint32_t height)
     
     if (bgfx::getInternalData()->context != nullptr) {
         bgfx::reset(width, height, BGFX_RESET_NONE);
+        m_currentWidth = width;
+        m_currentHeight = height;
         qDebug() << "BgfxManager: Reset to resolution:" << width << "x" << height;
     }
 }
+
+
 
 bgfx::ViewId BgfxManager::getNextViewId()
 {

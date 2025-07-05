@@ -89,7 +89,8 @@ private:
 
     // bgfx状态
     bgfx::ViewId m_viewId = UINT16_MAX;
-    
+    bool m_resourcesInitialized = false;
+
     // 视图状态
     float m_zoom = 1.0f;
     QPointF m_pan = QPointF(0, 0);

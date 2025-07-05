@@ -7,17 +7,17 @@ BgfxWidget::BgfxWidget(QWidget* parent)
 {
     setMinimumSize(400, 300);
 
-    // 禁用Qt双缓冲，这对bgfx很重要
-    setAttribute(Qt::WA_PaintOnScreen, true);
-
-    // 确保窗口属性正确设置
-    setAttribute(Qt::WA_NoSystemBackground, true);
-    setAttribute(Qt::WA_OpaquePaintEvent, true);
+    // 确保窗口属性正确设置，让bgfx完全控制渲染
+    setAttribute(Qt::WA_NoSystemBackground, true);  // 不绘制系统背景
+    setAttribute(Qt::WA_OpaquePaintEvent, true);    // widget完全不透明，提高性能
 
     // 初始化矩阵
     bx::mtxIdentity(m_viewMatrix);
     bx::mtxIdentity(m_projMatrix);
     bx::mtxIdentity(m_transformMatrix);
+
+    // 连接渲染定时器信号
+    connect(&m_renderTimer, &QTimer::timeout, this, &BgfxWidget::onRenderTimer);
 
     qDebug() << "BgfxWidget: Initialized";
 }
@@ -31,29 +31,48 @@ BgfxWidget::~BgfxWidget()
 
 void BgfxWidget::initializeBgfx()
 {
-    // 如果已经初始化，先清理再重新初始化
-    if (m_viewId != UINT16_MAX) {
-        qDebug() << "BgfxWidget::initializeBgfx - already initialized, reinitializing";
-        shutdownBgfx();
-    }
-
     qDebug() << "BgfxWidget::initializeBgfx - initializing";
     qDebug() << "Widget size:" << width() << "x" << height();
     qDebug() << "Real size:" << realWidth() << "x" << realHeight();
 
-    // 使用BgfxManager初始化bgfx（如果还没有初始化）
-    if (!BgfxManager::instance().initialize(reinterpret_cast<void*>(winId()),
-                                           static_cast<uint32_t>(realWidth()),
-                                           static_cast<uint32_t>(realHeight()))) {
+    void* currentWindowHandle = reinterpret_cast<void*>(winId());
+    uint32_t currentWidth = static_cast<uint32_t>(realWidth());
+    uint32_t currentHeight = static_cast<uint32_t>(realHeight());
+
+    // 检查是否需要重新初始化
+    bool needsReinitialization = false;
+    if (m_viewId != UINT16_MAX) {
+        // 检查窗口句柄是否变化
+        if (BgfxManager::instance().getCurrentWindowHandle() != currentWindowHandle) {
+            qDebug() << "BgfxWidget: Window handle changed from"
+                     << BgfxManager::instance().getCurrentWindowHandle()
+                     << "to" << currentWindowHandle;
+            needsReinitialization = true;
+        }
+    }
+
+    // 如果需要重新初始化，先清理资源
+    if (needsReinitialization) {
+        qDebug() << "BgfxWidget::initializeBgfx - reinitializing due to window handle change";
+        shutdownBgfx();
+    }
+
+    // 使用BgfxManager初始化bgfx
+    if (!BgfxManager::instance().initialize(currentWindowHandle, currentWidth, currentHeight)) {
         qCritical() << "BgfxWidget: Failed to initialize bgfx through BgfxManager";
         return;
     }
 
-    // 获取一个视图ID
-    m_viewId = BgfxManager::instance().getNextViewId();
+    // 获取视图ID（只在还没有时才获取新的）
     if (m_viewId == UINT16_MAX) {
-        qCritical() << "BgfxWidget: Failed to get view ID";
-        return;
+        m_viewId = BgfxManager::instance().getNextViewId();
+        if (m_viewId == UINT16_MAX) {
+            qCritical() << "BgfxWidget: Failed to get view ID";
+            return;
+        }
+        qDebug() << "BgfxWidget: Allocated new view ID:" << m_viewId;
+    } else {
+        qDebug() << "BgfxWidget: Reusing existing view ID:" << m_viewId;
     }
 
     // 设置视图的清屏状态
@@ -64,12 +83,17 @@ void BgfxWidget::initializeBgfx()
 
     qDebug() << "BgfxWidget: Initialized with view ID:" << m_viewId;
 
-    // 调用子类的初始化方法
-    initializeResources();
+    // 调用子类的初始化方法（只在重新初始化时调用）
+    if (needsReinitialization || !m_resourcesInitialized) {
+        initializeResources();
+        m_resourcesInitialized = true;
+    }
 
     // 启动渲染定时器
-    connect(&m_renderTimer, &QTimer::timeout, this, &BgfxWidget::onRenderTimer);
-    m_renderTimer.start(16); // 60 FPS
+    if (!m_renderTimer.isActive()) {
+        m_renderTimer.start(16); // 60 FPS
+        qDebug() << "BgfxWidget: Started render timer";
+    }
 }
 
 void BgfxWidget::shutdownBgfx()
@@ -78,8 +102,12 @@ void BgfxWidget::shutdownBgfx()
         return;
     }
 
+    // 停止渲染定时器
+    m_renderTimer.stop();
+
     // 调用子类的清理方法
     cleanupResources();
+    m_resourcesInitialized = false;
 
     // 释放视图ID
     BgfxManager::instance().releaseViewId(m_viewId);

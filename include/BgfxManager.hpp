@@ -25,7 +25,10 @@ public:
     
     // 重置分辨率
     void reset(uint32_t width, uint32_t height);
-    
+
+    // 获取当前窗口句柄
+    void* getCurrentWindowHandle() const { return m_currentWindowHandle; }
+
     // 获取下一个可用的视图ID
     bgfx::ViewId getNextViewId();
     
@@ -41,6 +44,9 @@ private:
     BgfxManager& operator=(const BgfxManager&) = delete;
     
     bool m_initialized = false;
+    void* m_currentWindowHandle = nullptr;
+    uint32_t m_currentWidth = 0;
+    uint32_t m_currentHeight = 0;
     bgfx::ViewId m_nextViewId = 0;
     static constexpr bgfx::ViewId MAX_VIEWS = 255;
     bool m_viewIds[MAX_VIEWS] = {false};
