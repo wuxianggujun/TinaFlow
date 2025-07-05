@@ -4,6 +4,7 @@
 #include <QDebug>
 #include <vector>
 #include <memory>
+#include <algorithm>
 
 /**
  * @brief RAII封装的bgfx几何体资源管理类
@@ -167,10 +168,69 @@ struct BlockInstance
     uint32_t color;         // 颜色
     int connectorType;      // 连接器类型 (0=无, 1=凸起, -1=凹陷)
 
+    // 选择和交互状态
+    bool isSelected = false;        // 是否被选中
+    bool isDragging = false;        // 是否正在拖动
+    int blockId = -1;              // 积木唯一ID
+
+    // 边界框信息 (相对于积木中心的偏移)
+    float width = 120.0f;          // 积木宽度
+    float height = 40.0f;          // 积木高度
+
+    // 原始颜色（用于恢复选择状态）
+    uint32_t originalColor;
+
     BlockInstance(float x = 0.0f, float y = 0.0f, float z = 0.0f,
-                  uint32_t color = 0xffffffff, int connectorType = 0)
-        : x(x), y(y), z(z), color(color), connectorType(connectorType)
+                  uint32_t color = 0xffffffff, int connectorType = 0, int id = -1)
+        : x(x), y(y), z(z), color(color), connectorType(connectorType),
+          blockId(id), originalColor(color)
     {}
+
+    /**
+     * @brief 检查点是否在积木边界内
+     * @param px 点的x坐标（世界坐标）
+     * @param py 点的y坐标（世界坐标）
+     * @return 如果点在积木内返回true
+     */
+    bool containsPoint(float px, float py) const {
+        float halfWidth = width * 0.5f;
+        float halfHeight = height * 0.5f;
+        return (px >= x - halfWidth && px <= x + halfWidth &&
+                py >= y - halfHeight && py <= y + halfHeight);
+    }
+
+    /**
+     * @brief 设置选择状态
+     * @param selected 是否选中
+     */
+    void setSelected(bool selected) {
+        isSelected = selected;
+        if (selected) {
+            // 选中时使用高亮颜色（增加亮度）
+            color = brightenColor(originalColor);
+        } else {
+            // 取消选中时恢复原始颜色
+            color = originalColor;
+        }
+    }
+
+private:
+    /**
+     * @brief 增加颜色亮度
+     */
+    uint32_t brightenColor(uint32_t originalColor) const {
+        uint8_t r = (originalColor >> 24) & 0xFF;
+        uint8_t g = (originalColor >> 16) & 0xFF;
+        uint8_t b = (originalColor >> 8) & 0xFF;
+        uint8_t a = originalColor & 0xFF;
+
+        // 增加亮度（限制在255以内）
+        r = std::min(255, static_cast<int>(r * 1.3f));
+        g = std::min(255, static_cast<int>(g * 1.3f));
+        b = std::min(255, static_cast<int>(b * 1.3f));
+
+        return (r << 24) | (g << 16) | (b << 8) | a;
+    }
 };
 
 /**
@@ -220,13 +280,66 @@ public:
      */
     void invalidateResources();
 
+    /**
+     * @brief 根据世界坐标查找积木
+     * @param worldX 世界坐标X
+     * @param worldY 世界坐标Y
+     * @return 找到的积木指针，如果没找到返回nullptr
+     */
+    BlockInstance* findBlockAt(float worldX, float worldY);
+
+    /**
+     * @brief 获取指定ID的积木
+     * @param blockId 积木ID
+     * @return 积木指针，如果没找到返回nullptr
+     */
+    BlockInstance* getBlockById(int blockId);
+
+    /**
+     * @brief 设置积木选择状态
+     * @param blockId 积木ID
+     * @param selected 是否选中
+     */
+    void setBlockSelected(int blockId, bool selected);
+
+    /**
+     * @brief 清除所有积木的选择状态
+     */
+    void clearSelection();
+
+    /**
+     * @brief 获取所有选中的积木
+     * @return 选中积木的ID列表
+     */
+    std::vector<int> getSelectedBlocks() const;
+
+    /**
+     * @brief 移动积木位置
+     * @param blockId 积木ID
+     * @param newX 新的X坐标
+     * @param newY 新的Y坐标
+     */
+    void moveBlock(int blockId, float newX, float newY);
+
+    /**
+     * @brief 获取积木数量
+     */
+    size_t getBlockCount() const { return m_blocks.size(); }
+
+    /**
+     * @brief 获取积木列表（只读）
+     */
+    const std::vector<BlockInstance>& getBlocks() const { return m_blocks; }
+
 private:
     BgfxGeometry m_connectorGeometry;   // 凸起积木几何体
     BgfxGeometry m_receptorGeometry;    // 凹陷积木几何体
     BgfxGeometry m_simpleGeometry;      // 简单积木几何体
-    
+    BgfxGeometry m_selectionBorder;     // 选择边框几何体
+
     std::vector<BlockInstance> m_blocks; // 积木实例列表
-    
+    int m_nextBlockId = 0;              // 下一个积木ID
+
     // 渲染状态缓存
     uint64_t m_renderState = BGFX_STATE_WRITE_RGB
                            | BGFX_STATE_WRITE_A

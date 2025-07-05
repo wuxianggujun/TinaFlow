@@ -83,6 +83,17 @@ void BlockProgrammingView::setupToolBar()
 
     m_toolBar->addSeparator();
 
+    // 重置视图
+    auto* resetViewAction = m_toolBar->addAction("重置视图");
+    resetViewAction->setIcon(QIcon(":/icons/actions/home")); // 使用home图标
+    connect(resetViewAction, &QAction::triggered, [this]() {
+        if (m_bgfxRenderer) {
+            m_bgfxRenderer->resetView();
+        }
+    });
+
+    m_toolBar->addSeparator();
+
     // 保存脚本
     auto* saveAction = m_toolBar->addAction("保存脚本");
     saveAction->setIcon(QIcon(":/icons/files/save"));
@@ -160,6 +171,13 @@ void BlockProgrammingView::setupWorkspace()
     m_bgfxRenderer = new BgfxBlockRenderer();
     m_bgfxRenderer->setMinimumSize(800, 600);
 
+    // 连接缩放变化信号
+    connect(m_bgfxRenderer, &BgfxBlockRenderer::zoomChanged, this, [this](float zoom) {
+        if (m_zoomLabel) {
+            m_zoomLabel->setText(QString("缩放: %1%").arg(QString::number(zoom * 100, 'f', 1)));
+        }
+    });
+
     // 设置工作区域容器
     m_workspaceContent = new QWidget();
     auto* layout = new QVBoxLayout(m_workspaceContent);
@@ -182,9 +200,13 @@ void BlockProgrammingView::setupStatusBar()
     
     m_statusLabel = new QLabel(QString("脚本: %1 | 积木块: 0").arg(m_scriptName));
     m_statusLabel->setStyleSheet("QLabel { color: #666; font-size: 11px; }");
-    
+
+    m_zoomLabel = new QLabel("缩放: 100%");
+    m_zoomLabel->setStyleSheet("QLabel { color: #666; font-size: 11px; }");
+
     layout->addWidget(m_statusLabel);
     layout->addStretch();
+    layout->addWidget(m_zoomLabel);
     
     m_mainLayout->addWidget(m_statusBar);
 }

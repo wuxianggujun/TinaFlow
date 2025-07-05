@@ -92,7 +92,35 @@ bool BlockGeometryManager::initialize(const bgfx::VertexLayout& layout)
             return false;
         }
     }
-    
+
+    // 创建选择边框几何体（线框）
+    {
+        const uint32_t borderColor = 0xffffff00; // 黄色边框
+        const float borderWidth = 2.0f;
+        const float halfWidth = blockWidth * 0.5f + borderWidth;
+        const float halfHeight = blockHeight * 0.5f + borderWidth;
+
+        // 创建线框顶点（8个顶点，4条边）
+        static PosColorTexVertex vertices[] = {
+            // 外边框
+            {-halfWidth, -halfHeight, 0.0f, borderColor, 0.0f, 0.0f},
+            { halfWidth, -halfHeight, 0.0f, borderColor, 1.0f, 0.0f},
+            { halfWidth,  halfHeight, 0.0f, borderColor, 1.0f, 1.0f},
+            {-halfWidth,  halfHeight, 0.0f, borderColor, 0.0f, 1.0f},
+        };
+
+        // 线框索引（4条边，每条边2个点）
+        static uint16_t indices[] = {
+            0, 1,  1, 2,  2, 3,  3, 0  // 4条边
+        };
+
+        if (!m_selectionBorder.create(vertices, sizeof(vertices), 4,
+                                     indices, sizeof(indices), 8, PosColorTexVertex::ms_layout)) {
+            qWarning() << "Failed to create selection border geometry";
+            return false;
+        }
+    }
+
     // 减少日志输出
     // qDebug() << "BlockGeometryManager: All geometries created successfully";
     return true;
@@ -100,7 +128,16 @@ bool BlockGeometryManager::initialize(const bgfx::VertexLayout& layout)
 
 void BlockGeometryManager::addBlock(const BlockInstance& instance)
 {
-    m_blocks.push_back(instance);
+    BlockInstance newInstance = instance;
+    // 如果没有指定ID，自动分配一个
+    if (newInstance.blockId == -1) {
+        newInstance.blockId = m_nextBlockId++;
+    } else {
+        // 更新下一个ID，确保不重复
+        m_nextBlockId = std::max(m_nextBlockId, newInstance.blockId + 1);
+    }
+
+    m_blocks.push_back(newInstance);
     // 减少日志输出 - 只在调试时启用
     // qDebug() << "BlockGeometryManager: Added block at (" << instance.x << "," << instance.y
     //          << ") type:" << instance.connectorType << "total blocks:" << m_blocks.size();
@@ -109,6 +146,7 @@ void BlockGeometryManager::addBlock(const BlockInstance& instance)
 void BlockGeometryManager::clearBlocks()
 {
     m_blocks.clear();
+    m_nextBlockId = 0; // 重置ID计数器
 }
 
 void BlockGeometryManager::render(bgfx::ViewId viewId, bgfx::ProgramHandle program,
@@ -188,6 +226,51 @@ void BlockGeometryManager::render(bgfx::ViewId viewId, bgfx::ProgramHandle progr
             // }
         }
     }
+
+    // 渲染选中积木的边框
+    if (m_selectionBorder.isValid()) {
+        for (const auto& block : m_blocks) {
+            if (block.isSelected) {
+                // 创建积木自身的平移矩阵
+                float blockTransform[16];
+                bx::mtxTranslate(blockTransform, block.x, block.y, block.z + 0.01f); // 稍微提高Z值避免Z-fighting
+
+                // 组合变换矩阵
+                float finalTransform[16];
+                bx::mtxMul(finalTransform, blockTransform, baseTransform);
+
+                // 设置变换矩阵
+                bgfx::setTransform(finalTransform);
+
+                // 设置线框渲染状态
+                uint64_t borderState = BGFX_STATE_WRITE_RGB
+                                     | BGFX_STATE_WRITE_A
+                                     | BGFX_STATE_WRITE_Z
+                                     | BGFX_STATE_DEPTH_TEST_LESS
+                                     | BGFX_STATE_BLEND_ALPHA
+                                     | BGFX_STATE_PT_LINES; // 线框模式
+                bgfx::setState(borderState);
+
+                // 绑定边框几何体
+                m_selectionBorder.bind();
+
+                // 设置圆角参数（边框不需要圆角）
+                if (bgfx::isValid(roundedParamsUniform)) {
+                    float roundedParams[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+                    bgfx::setUniform(roundedParamsUniform, roundedParams);
+                }
+
+                // 设置连接器配置（边框不需要连接器）
+                if (bgfx::isValid(connectorConfigUniform)) {
+                    float connectorConfig[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+                    bgfx::setUniform(connectorConfigUniform, connectorConfig);
+                }
+
+                // 提交边框渲染
+                bgfx::submit(viewId, program);
+            }
+        }
+    }
 }
 
 void BlockGeometryManager::invalidateResources()
@@ -195,4 +278,61 @@ void BlockGeometryManager::invalidateResources()
     m_connectorGeometry.invalidateResources();
     m_receptorGeometry.invalidateResources();
     m_simpleGeometry.invalidateResources();
+    m_selectionBorder.invalidateResources();
+}
+
+BlockInstance* BlockGeometryManager::findBlockAt(float worldX, float worldY)
+{
+    // 从后往前遍历，优先选择最后绘制的（最上层的）积木
+    for (auto it = m_blocks.rbegin(); it != m_blocks.rend(); ++it) {
+        if (it->containsPoint(worldX, worldY)) {
+            qDebug() << "Found block" << it->blockId << "at (" << it->x << "," << it->y << ")";
+            return &(*it);
+        }
+    }
+    return nullptr;
+}
+
+BlockInstance* BlockGeometryManager::getBlockById(int blockId)
+{
+    auto it = std::find_if(m_blocks.begin(), m_blocks.end(),
+                          [blockId](const BlockInstance& block) {
+                              return block.blockId == blockId;
+                          });
+    return (it != m_blocks.end()) ? &(*it) : nullptr;
+}
+
+void BlockGeometryManager::setBlockSelected(int blockId, bool selected)
+{
+    BlockInstance* block = getBlockById(blockId);
+    if (block) {
+        block->setSelected(selected);
+    }
+}
+
+void BlockGeometryManager::clearSelection()
+{
+    for (auto& block : m_blocks) {
+        block.setSelected(false);
+    }
+}
+
+std::vector<int> BlockGeometryManager::getSelectedBlocks() const
+{
+    std::vector<int> selectedIds;
+    for (const auto& block : m_blocks) {
+        if (block.isSelected) {
+            selectedIds.push_back(block.blockId);
+        }
+    }
+    return selectedIds;
+}
+
+void BlockGeometryManager::moveBlock(int blockId, float newX, float newY)
+{
+    BlockInstance* block = getBlockById(blockId);
+    if (block) {
+        block->x = newX;
+        block->y = newY;
+    }
 }

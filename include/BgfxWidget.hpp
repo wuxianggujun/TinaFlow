@@ -24,6 +24,9 @@ class BgfxWidget : public QWidget
 {
     Q_OBJECT
 
+signals:
+    void zoomChanged(float zoom);
+
 public:
     explicit BgfxWidget(QWidget* parent = nullptr);
     ~BgfxWidget() override;

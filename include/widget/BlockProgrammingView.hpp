@@ -78,6 +78,7 @@ private:
     // 状态栏
     QWidget* m_statusBar = nullptr;
     QLabel* m_statusLabel = nullptr;
+    QLabel* m_zoomLabel = nullptr;
     
     // 数据
     QString m_scriptName;

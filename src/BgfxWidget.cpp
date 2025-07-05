@@ -126,25 +126,24 @@ void BgfxWidget::updateMatrices()
         return;
     }
     
-    // 创建正交投影矩阵 (适合2D渲染)
-    bx::mtxOrtho(m_projMatrix, 0.0f, static_cast<float>(realWidth()), 
-                 static_cast<float>(realHeight()), 0.0f, -1.0f, 1.0f, 
+    // 创建正交投影矩阵 (适合2D渲染) - 左上原点，+Y向下
+    // 参数顺序：left, right, bottom, top, near, far
+    bx::mtxOrtho(m_projMatrix, 0.0f, static_cast<float>(realWidth()),
+                 static_cast<float>(realHeight()), 0.0f, -1.0f, 1.0f,
                  0.0f, bgfx::getCaps()->homogeneousDepth);
     
     // 创建视图矩阵 (单位矩阵)
     bx::mtxIdentity(m_viewMatrix);
     
     // 创建包含缩放和平移的变换矩阵
-    float centerX = static_cast<float>(realWidth()) * 0.5f;
-    float centerY = static_cast<float>(realHeight()) * 0.5f;
-
-    // 先缩放，再平移到屏幕中心
+    // 在新坐标系中：左上原点，+Y向下
+    // 变换顺序：先缩放，再平移（矩阵乘法顺序相反）
     float scale[16], translate[16];
     bx::mtxScale(scale, m_zoom, m_zoom, 1.0f);
-    bx::mtxTranslate(translate, centerX + static_cast<float>(m_pan.x()),
-                     centerY + static_cast<float>(m_pan.y()), 0.0f);
+    bx::mtxTranslate(translate, static_cast<float>(m_pan.x()),
+                     static_cast<float>(m_pan.y()), 0.0f);
 
-    // 组合矩阵：translate * scale
+    // 组合矩阵：translate * scale (先应用scale，再应用translate)
     bx::mtxMul(m_transformMatrix, translate, scale);
     
     // 设置视图变换
@@ -154,9 +153,15 @@ void BgfxWidget::updateMatrices()
 // 视图控制
 void BgfxWidget::setZoom(float zoom)
 {
-    m_zoom = qBound(0.1f, zoom, 5.0f);
-    updateMatrices();
-    update();
+    const float minZoom = 0.1f;
+    const float maxZoom = 10.0f;
+    float newZoom = qBound(minZoom, zoom, maxZoom);
+    if (qAbs(newZoom - m_zoom) > 0.001f) {
+        m_zoom = newZoom;
+        updateMatrices();
+        update();
+        emit zoomChanged(m_zoom);
+    }
 }
 
 void BgfxWidget::setPan(const QPointF& pan)
@@ -169,22 +174,20 @@ void BgfxWidget::setPan(const QPointF& pan)
 // 坐标变换
 QPointF BgfxWidget::screenToWorld(const QPointF& screenPos) const
 {
-    float centerX = static_cast<float>(realWidth()) * 0.5f;
-    float centerY = static_cast<float>(realHeight()) * 0.5f;
-
-    float wx = (screenPos.x() - (centerX + m_pan.x())) / m_zoom;
-    float wy = (screenPos.y() - (centerY + m_pan.y())) / m_zoom;
+    // 新坐标系：左上原点，+Y向下
+    // 逆变换：先减去平移偏移，再除以缩放
+    float wx = (screenPos.x() - m_pan.x()) / m_zoom;
+    float wy = (screenPos.y() - m_pan.y()) / m_zoom;
 
     return QPointF(wx, wy);
 }
 
 QPointF BgfxWidget::worldToScreen(const QPointF& worldPos) const
 {
-    float centerX = static_cast<float>(realWidth()) * 0.5f;
-    float centerY = static_cast<float>(realHeight()) * 0.5f;
-
-    float sx = (worldPos.x() * m_zoom) + centerX + m_pan.x();
-    float sy = (worldPos.y() * m_zoom) + centerY + m_pan.y();
+    // 新坐标系：左上原点，+Y向下
+    // 正变换：先缩放，再加上平移偏移
+    float sx = (worldPos.x() * m_zoom) + m_pan.x();
+    float sy = (worldPos.y() * m_zoom) + m_pan.y();
 
     return QPointF(sx, sy);
 }
@@ -329,35 +332,49 @@ void BgfxWidget::wheelEvent(QWheelEvent* event)
     // 获取鼠标在当前控件中的位置
     QPointF mousePos = event->position();
 
-    // 获取屏幕中心点
-    float centerX = static_cast<float>(realWidth()) * 0.5f;
-    float centerY = static_cast<float>(realHeight()) * 0.5f;
-    QPointF centerPos(centerX, centerY);
+    // 1. 记录缩放前鼠标位置对应的世界坐标
+    QPointF worldPosBeforeZoom = screenToWorld(mousePos);
 
-    // 保存旧的缩放级别
-    float oldZoom = m_zoom;
+    // 2. 计算更平滑的缩放因子（减小步长，提高流畅度）
+    float wheelDelta = event->angleDelta().y();
+    float scaleFactor = 1.0f + (wheelDelta / 2400.0f); // 减小步长，提高流畅度
 
-    // 计算并应用新的缩放级别
-    float scaleFactor = 1.0f + (event->angleDelta().y() / 1200.0f);
-    m_zoom *= scaleFactor;
-    m_zoom = qBound(0.1f, m_zoom, 5.0f); // 限制缩放范围
+    float newZoom = m_zoom * scaleFactor;
 
-    // 计算缩放比例
-    float zoomRatio = m_zoom / oldZoom;
+    // 设置缩放范围
+    const float minZoom = 0.1f;
+    const float maxZoom = 10.0f;
 
-    // 这是实现"以鼠标为中心缩放"的核心公式
-    // 它计算出新的屏幕平移量(pan)，以确保鼠标下的点在缩放后位置不变
-    // 公式: new_pan = (mouse_pos - center_pos) * (1 - zoom_ratio) + old_pan * zoom_ratio
-    QPointF mouseRelativeToCenter = mousePos - centerPos;
+    // 平滑地处理边界限制，避免突然停止
+    if (newZoom < minZoom) {
+        newZoom = minZoom;
+    } else if (newZoom > maxZoom) {
+        newZoom = maxZoom;
+    }
 
+    // 只有当缩放真的发生变化时才进行计算
+    if (qAbs(newZoom - m_zoom) < 0.001f) {
+        return; // 避免微小的变化导致的抖动
+    }
+
+    // 3. 应用新的缩放
+    m_zoom = newZoom;
+
+    // 4. 计算新的平移，使得鼠标下的世界坐标仍然对应到相同的屏幕位置
+    // 根据 screenToWorld 的公式：world = (screen - pan) / zoom
+    // 反推：pan = screen - world * zoom
     QPointF newPan;
-    newPan = mouseRelativeToCenter * (1.0f - zoomRatio) + m_pan * zoomRatio;
+    newPan.setX(mousePos.x() - worldPosBeforeZoom.x() * m_zoom);
+    newPan.setY(mousePos.y() - worldPosBeforeZoom.y() * m_zoom);
 
     m_pan = newPan;
 
     // 更新矩阵并触发重绘
     updateMatrices();
     update();
+
+    // 发射缩放变化信号
+    emit zoomChanged(m_zoom);
 
     QWidget::wheelEvent(event);
 }
