@@ -15,6 +15,9 @@ class BgfxBlockRenderer : public BgfxWidget
 {
     Q_OBJECT
 
+signals:
+    void mouseWorldPosChanged(float x, float y);
+
 public:
     explicit BgfxBlockRenderer(QWidget* parent = nullptr);
     ~BgfxBlockRenderer() override;

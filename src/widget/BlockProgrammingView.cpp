@@ -178,6 +178,13 @@ void BlockProgrammingView::setupWorkspace()
         }
     });
 
+    // 连接鼠标坐标变化信号
+    connect(m_bgfxRenderer, &BgfxBlockRenderer::mouseWorldPosChanged, this, [this](float x, float y) {
+        if (m_coordLabel) {
+            m_coordLabel->setText(QString("坐标: (%1, %2)").arg(QString::number(x, 'f', 1)).arg(QString::number(y, 'f', 1)));
+        }
+    });
+
     // 设置工作区域容器
     m_workspaceContent = new QWidget();
     auto* layout = new QVBoxLayout(m_workspaceContent);
@@ -204,8 +211,12 @@ void BlockProgrammingView::setupStatusBar()
     m_zoomLabel = new QLabel("缩放: 100%");
     m_zoomLabel->setStyleSheet("QLabel { color: #666; font-size: 11px; }");
 
+    m_coordLabel = new QLabel("坐标: (0, 0)");
+    m_coordLabel->setStyleSheet("QLabel { color: #666; font-size: 11px; }");
+
     layout->addWidget(m_statusLabel);
     layout->addStretch();
+    layout->addWidget(m_coordLabel);
     layout->addWidget(m_zoomLabel);
     
     m_mainLayout->addWidget(m_statusBar);

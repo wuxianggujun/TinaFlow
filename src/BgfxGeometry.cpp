@@ -93,29 +93,43 @@ bool BlockGeometryManager::initialize(const bgfx::VertexLayout& layout)
         }
     }
 
-    // 创建选择边框几何体（线框）
+    // 创建选择边框几何体（填充边框）
     {
         const uint32_t borderColor = 0xffffff00; // 黄色边框
-        const float borderWidth = 2.0f;
-        const float halfWidth = blockWidth * 0.5f + borderWidth;
-        const float halfHeight = blockHeight * 0.5f + borderWidth;
+        const float borderWidth = 3.0f; // 增加边框宽度
+        const float outerHalfWidth = blockWidth * 0.5f + borderWidth;
+        const float outerHalfHeight = blockHeight * 0.5f + borderWidth;
+        const float innerHalfWidth = blockWidth * 0.5f;
+        const float innerHalfHeight = blockHeight * 0.5f;
 
-        // 创建线框顶点（8个顶点，4条边）
+        // 创建边框顶点（8个顶点，形成边框矩形）
         static PosColorTexVertex vertices[] = {
-            // 外边框
-            {-halfWidth, -halfHeight, 0.0f, borderColor, 0.0f, 0.0f},
-            { halfWidth, -halfHeight, 0.0f, borderColor, 1.0f, 0.0f},
-            { halfWidth,  halfHeight, 0.0f, borderColor, 1.0f, 1.0f},
-            {-halfWidth,  halfHeight, 0.0f, borderColor, 0.0f, 1.0f},
+            // 外边框的4个顶点
+            {-outerHalfWidth, -outerHalfHeight, 0.0f, borderColor, 0.0f, 0.0f},
+            { outerHalfWidth, -outerHalfHeight, 0.0f, borderColor, 1.0f, 0.0f},
+            { outerHalfWidth,  outerHalfHeight, 0.0f, borderColor, 1.0f, 1.0f},
+            {-outerHalfWidth,  outerHalfHeight, 0.0f, borderColor, 0.0f, 1.0f},
+            // 内边框的4个顶点
+            {-innerHalfWidth, -innerHalfHeight, 0.0f, borderColor, 0.25f, 0.25f},
+            { innerHalfWidth, -innerHalfHeight, 0.0f, borderColor, 0.75f, 0.25f},
+            { innerHalfWidth,  innerHalfHeight, 0.0f, borderColor, 0.75f, 0.75f},
+            {-innerHalfWidth,  innerHalfHeight, 0.0f, borderColor, 0.25f, 0.75f},
         };
 
-        // 线框索引（4条边，每条边2个点）
+        // 边框索引（8个三角形，形成边框）
         static uint16_t indices[] = {
-            0, 1,  1, 2,  2, 3,  3, 0  // 4条边
+            // 上边框
+            0, 1, 5,  0, 5, 4,
+            // 右边框
+            1, 2, 6,  1, 6, 5,
+            // 下边框
+            2, 3, 7,  2, 7, 6,
+            // 左边框
+            3, 0, 4,  3, 4, 7
         };
 
-        if (!m_selectionBorder.create(vertices, sizeof(vertices), 4,
-                                     indices, sizeof(indices), 8, PosColorTexVertex::ms_layout)) {
+        if (!m_selectionBorder.create(vertices, sizeof(vertices), 8,
+                                     indices, sizeof(indices), 24, PosColorTexVertex::ms_layout)) {
             qWarning() << "Failed to create selection border geometry";
             return false;
         }
@@ -242,13 +256,12 @@ void BlockGeometryManager::render(bgfx::ViewId viewId, bgfx::ProgramHandle progr
                 // 设置变换矩阵
                 bgfx::setTransform(finalTransform);
 
-                // 设置线框渲染状态
+                // 设置边框渲染状态（填充模式）
                 uint64_t borderState = BGFX_STATE_WRITE_RGB
                                      | BGFX_STATE_WRITE_A
                                      | BGFX_STATE_WRITE_Z
                                      | BGFX_STATE_DEPTH_TEST_LESS
-                                     | BGFX_STATE_BLEND_ALPHA
-                                     | BGFX_STATE_PT_LINES; // 线框模式
+                                     | BGFX_STATE_BLEND_ALPHA; // 移除线框模式
                 bgfx::setState(borderState);
 
                 // 绑定边框几何体
@@ -306,7 +319,10 @@ void BlockGeometryManager::setBlockSelected(int blockId, bool selected)
 {
     BlockInstance* block = getBlockById(blockId);
     if (block) {
+        qDebug() << "BlockGeometryManager: Setting block" << blockId << "selected =" << selected;
         block->setSelected(selected);
+    } else {
+        qDebug() << "BlockGeometryManager: Block" << blockId << "not found for selection";
     }
 }
 

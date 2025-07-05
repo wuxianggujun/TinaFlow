@@ -77,22 +77,11 @@ void BgfxBlockRenderer::createTestBlocks()
     // 清除现有积木
     clearBlocks();
 
-    // 使用新的坐标系：左上原点、+Y向下
-    float blockWidth = 120.0f;
-    float blockHeight = 40.0f;
-    float spacing = 50.0f;
+    // 简化测试：只创建一个积木在明显的位置
+    addBlock(200.0f, 150.0f, 1, 0xff0000ff);   // 红色积木，在屏幕中央偏上
 
-    // 在屏幕可见区域内放置积木
-    // 第一行积木（靠近顶部）
-    addBlock(100.0f, 100.0f, 1, 0xffe2904a);   // 左上凸起积木 (橙色)
-    addBlock(300.0f, 100.0f, -1, 0xff4ae290);  // 右上凹陷积木 (绿色)
-
-    // 第二行积木（中间位置）
-    addBlock(100.0f, 200.0f, 0, 0xffffff90);   // 左中简单积木 (黄色)
-    addBlock(300.0f, 200.0f, 1, 0xffff4a90);   // 右中凸起积木 (紫色)
-
-    qDebug() << "BgfxBlockRenderer: Created test blocks in new coordinate system (top-left origin, +Y down)";
-    qDebug() << "Block positions: (100,100), (300,100), (100,200), (300,200)";
+    qDebug() << "BgfxBlockRenderer: Created single test block at (200, 150)";
+    qDebug() << "Block boundary should be: [140, 130] to [260, 170]";
 }
 
 void BgfxBlockRenderer::updateBlockPositions()
@@ -132,6 +121,14 @@ void BgfxBlockRenderer::selectBlock(int blockId, bool multiSelect)
 
     // 选中指定积木
     m_geometryManager.setBlockSelected(blockId, true);
+
+    // 添加调试信息
+    std::vector<int> selectedBlocks = m_geometryManager.getSelectedBlocks();
+    qDebug() << "BgfxBlockRenderer: Selected blocks:" << selectedBlocks.size();
+    for (int id : selectedBlocks) {
+        qDebug() << "  Block" << id << "is selected";
+    }
+
     update(); // 触发重绘
 }
 
@@ -175,8 +172,8 @@ void BgfxBlockRenderer::mousePressEvent(QMouseEvent* event)
         // 转换为世界坐标
         QPointF worldPos = screenToWorld(mousePos);
 
-        // 添加调试信息（简化版）
-        qDebug() << "BgfxBlockRenderer: Mouse click at world pos:" << worldPos;
+        // 简化调试信息
+        qDebug() << "Click at:" << worldPos;
 
         // 查找点击的积木
         BlockInstance* clickedBlock = m_geometryManager.findBlockAt(worldPos.x(), worldPos.y());
@@ -185,9 +182,15 @@ void BgfxBlockRenderer::mousePressEvent(QMouseEvent* event)
             // 检查是否按住Ctrl键进行多选
             bool multiSelect = (event->modifiers() & Qt::ControlModifier) != 0;
 
-            if (clickedBlock->isSelected && multiSelect) {
-                // 如果积木已选中且按住Ctrl，则取消选择
-                m_geometryManager.setBlockSelected(clickedBlock->blockId, false);
+            if (clickedBlock->isSelected) {
+                if (multiSelect) {
+                    // 如果积木已选中且按住Ctrl，则取消选择
+                    qDebug() << "BgfxBlockRenderer: Deselecting block" << clickedBlock->blockId << "(Ctrl+click)";
+                    m_geometryManager.setBlockSelected(clickedBlock->blockId, false);
+                } else {
+                    // 如果积木已选中且没按Ctrl，则取消选择（切换模式）
+                    m_geometryManager.clearSelection();
+                }
             } else {
                 // 选择积木
                 selectBlock(clickedBlock->blockId, multiSelect);
@@ -225,9 +228,13 @@ void BgfxBlockRenderer::mousePressEvent(QMouseEvent* event)
 
 void BgfxBlockRenderer::mouseMoveEvent(QMouseEvent* event)
 {
-    if (m_isBlockDragging && !m_draggingBlocks.empty()) {
-        QPointF mousePos = event->position();
+    QPointF mousePos = event->position();
 
+    // 发射鼠标世界坐标变化信号
+    QPointF worldPos = screenToWorld(mousePos);
+    emit mouseWorldPosChanged(worldPos.x(), worldPos.y());
+
+    if (m_isBlockDragging && !m_draggingBlocks.empty()) {
         // 计算鼠标移动的距离（屏幕坐标）
         QPointF screenDelta = mousePos - m_dragLastPos;
 
