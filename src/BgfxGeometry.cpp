@@ -93,15 +93,17 @@ bool BlockGeometryManager::initialize(const bgfx::VertexLayout& layout)
         }
     }
     
-    qDebug() << "BlockGeometryManager: All geometries created successfully";
+    // 减少日志输出
+    // qDebug() << "BlockGeometryManager: All geometries created successfully";
     return true;
 }
 
 void BlockGeometryManager::addBlock(const BlockInstance& instance)
 {
     m_blocks.push_back(instance);
-    qDebug() << "BlockGeometryManager: Added block at (" << instance.x << "," << instance.y
-             << ") type:" << instance.connectorType << "total blocks:" << m_blocks.size();
+    // 减少日志输出 - 只在调试时启用
+    // qDebug() << "BlockGeometryManager: Added block at (" << instance.x << "," << instance.y
+    //          << ") type:" << instance.connectorType << "total blocks:" << m_blocks.size();
 }
 
 void BlockGeometryManager::clearBlocks()
@@ -119,11 +121,12 @@ void BlockGeometryManager::render(bgfx::ViewId viewId, bgfx::ProgramHandle progr
     }
     
     // 渲染所有积木实例
-    static bool logged = false;
-    if (!logged) {
-        qDebug() << "BlockGeometryManager::render: Rendering" << m_blocks.size() << "blocks";
-        logged = true;
-    }
+    // 减少日志输出
+    // static bool logged = false;
+    // if (!logged) {
+    //     qDebug() << "BlockGeometryManager::render: Rendering" << m_blocks.size() << "blocks";
+    //     logged = true;
+    // }
 
     for (const auto& block : m_blocks) {
         // 使用基础变换，但修正积木间距
@@ -176,12 +179,13 @@ void BlockGeometryManager::render(bgfx::ViewId viewId, bgfx::ProgramHandle progr
             // 提交渲染
             bgfx::submit(viewId, program);
 
-            static int submitCount = 0;
-            submitCount++;
-            if (submitCount <= 10) { // 只打印前10次
-                qDebug() << "BlockGeometryManager: Submitted block" << submitCount
-                         << "at (" << block.x << "," << block.y << ") type:" << block.connectorType;
-            }
+            // 减少日志输出
+            // static int submitCount = 0;
+            // submitCount++;
+            // if (submitCount <= 10) { // 只打印前10次
+            //     qDebug() << "BlockGeometryManager: Submitted block" << submitCount
+            //              << "at (" << block.x << "," << block.y << ") type:" << block.connectorType;
+            // }
         }
     }
 }

@@ -2,6 +2,7 @@
 
 #include "BgfxWidget.hpp"
 #include "BgfxGeometry.hpp"
+#include "BgfxResourceManager.hpp"
 #include <bgfx/bgfx.h>
 
 /**
@@ -39,15 +40,9 @@ protected:
     void onBgfxReset();
 
 private:
-
-    // bgfx资源
-    bgfx::ProgramHandle m_program = BGFX_INVALID_HANDLE;
-    bgfx::VertexLayout m_vertexLayout;
-
-    // 圆角着色器的uniform句柄
-    bgfx::UniformHandle m_roundedParamsUniform = BGFX_INVALID_HANDLE;
-    bgfx::UniformHandle m_connectorConfigUniform = BGFX_INVALID_HANDLE;
-
     // 几何体管理器
     BlockGeometryManager m_geometryManager;
+
+    // 顶点布局
+    bgfx::VertexLayout m_vertexLayout;
 };

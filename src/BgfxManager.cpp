@@ -1,4 +1,6 @@
 #include "BgfxManager.hpp"
+#include "BgfxResourceManager.hpp"
+#include <QDebug>
 
 BgfxManager& BgfxManager::instance()
 {
@@ -67,8 +69,12 @@ void BgfxManager::shutdown()
     if (!m_initialized) {
         return;
     }
-    
+
     qDebug() << "BgfxManager: Shutting down bgfx";
+
+    // 在关闭bgfx之前清理资源管理器
+    BgfxResourceManager::instance().cleanup();
+
     bgfx::shutdown();
     m_initialized = false;
     m_currentWindowHandle = nullptr;
