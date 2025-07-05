@@ -41,8 +41,10 @@ add_subdirectory(third_party/nodeeditor)
 
 add_subdirectory(third_party/Qt-Advanced-Docking-System)
 
-# 添加bgfx渲染库
 add_subdirectory(third_party/bgfx.cmake)
+
+# 包含bgfx工具函数
+include(${CMAKE_SOURCE_DIR}/third_party/bgfx.cmake/cmake/bgfxToolUtils.cmake)
 
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
@@ -69,11 +71,70 @@ qt_add_executable(TinaFlow MANUAL_FINALIZATION
         ${SOURCES}
 )
 
+# 着色器编译
+set(SHADER_OUT_DIR ${CMAKE_BINARY_DIR}/include/generated/shaders)
+
+# 确保输出目录存在
+file(MAKE_DIRECTORY ${SHADER_OUT_DIR})
+
+# 使用bgfx_compile_shaders直接编译为头文件
+bgfx_compile_shaders(
+    TYPE VERTEX
+    SHADERS ${CMAKE_SOURCE_DIR}/resources/shaders/vs_simple.sc
+    VARYING_DEF ${CMAKE_SOURCE_DIR}/resources/shaders/varying.def.sc
+    OUTPUT_DIR ${SHADER_OUT_DIR}
+    INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/third_party/bgfx.cmake/bgfx/src
+    AS_HEADERS
+)
+
+bgfx_compile_shaders(
+    TYPE FRAGMENT
+    SHADERS ${CMAKE_SOURCE_DIR}/resources/shaders/fs_simple.sc
+    VARYING_DEF ${CMAKE_SOURCE_DIR}/resources/shaders/varying.def.sc
+    OUTPUT_DIR ${SHADER_OUT_DIR}
+    INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/third_party/bgfx.cmake/bgfx/src
+    AS_HEADERS
+)
+
+# 将着色器源文件添加到目标中以触发编译
+target_sources(TinaFlow PRIVATE
+    ${CMAKE_SOURCE_DIR}/resources/shaders/vs_simple.sc
+    ${CMAKE_SOURCE_DIR}/resources/shaders/fs_simple.sc
+)
+
+# 生成统一的着色器头文件
+set(UNIFIED_SHADER_HEADER ${SHADER_OUT_DIR}/shaders.h)
+
+add_custom_command(
+    OUTPUT ${UNIFIED_SHADER_HEADER}
+    COMMAND ${CMAKE_COMMAND}
+        -DSHADER_DIR=${SHADER_OUT_DIR}
+        -DOUTPUT_FILE=${UNIFIED_SHADER_HEADER}
+        -P ${CMAKE_SOURCE_DIR}/cmake/generate_unified_shader_header.cmake
+    DEPENDS
+        ${CMAKE_SOURCE_DIR}/resources/shaders/vs_simple.sc
+        ${CMAKE_SOURCE_DIR}/resources/shaders/fs_simple.sc
+        ${CMAKE_SOURCE_DIR}/cmake/generate_unified_shader_header.cmake
+    COMMENT "Generating unified shader header dynamically"
+)
+
+# 创建自定义目标来确保统一头文件生成
+add_custom_target(generate_unified_shader_header
+    DEPENDS ${UNIFIED_SHADER_HEADER}
+    COMMENT "Generating unified shader header"
+)
+
+# 确保TinaFlow依赖于统一头文件生成
+add_dependencies(TinaFlow generate_unified_shader_header)
+
+message(STATUS "Shader compilation configured using bgfx_compile_shaders with AS_HEADERS")
+
 target_include_directories(TinaFlow PRIVATE
         ${PROJECT_SOURCE_DIR}/include
-        ${PROJECT_SOURCE_DIR}/third_party/bgfx/include
-        ${PROJECT_SOURCE_DIR}/third_party/bx/include
-        ${PROJECT_SOURCE_DIR}/third_party/bimg/include
+        ${PROJECT_SOURCE_DIR}/third_party/bgfx.cmake/bgfx/include
+        ${PROJECT_SOURCE_DIR}/third_party/bgfx.cmake/bx/include
+        ${PROJECT_SOURCE_DIR}/third_party/bgfx.cmake/bimg/include
+        ${SHADER_OUT_DIR}
 )
 
 if(WIN32 AND QT_VERSION_MAJOR LESS 6)

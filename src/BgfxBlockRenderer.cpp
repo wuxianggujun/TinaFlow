@@ -2,6 +2,88 @@
 #include <QDebug>
 #include <QTimer>
 
+// 包含bgfx工具函数用于加载着色器
+#include <QFile>
+#include <bgfx/bgfx.h>
+#include <bx/file.h>
+
+// 包含生成的统一着色器头文件
+#include "shaders.h"
+
+// 从内嵌数据加载着色器的函数
+static bgfx::ShaderHandle loadShaderFromMemory(const uint8_t* data, uint32_t size)
+{
+    if (!data || size == 0) {
+        return BGFX_INVALID_HANDLE;
+    }
+    const bgfx::Memory* mem = bgfx::copy(data, size);
+    return bgfx::createShader(mem);
+}
+
+// 根据当前渲染器类型获取平台名称
+static std::string getRendererPlatformName(bgfx::RendererType::Enum rendererType)
+{
+    switch (rendererType) {
+        case bgfx::RendererType::Direct3D11:
+        case bgfx::RendererType::Direct3D12:
+            return "dx11"; // 使用DX11着色器作为DirectX的通用选择
+        case bgfx::RendererType::OpenGL:
+            return "glsl";
+        case bgfx::RendererType::OpenGLES:
+            return "essl";
+        case bgfx::RendererType::Vulkan:
+            return "spirv";
+        case bgfx::RendererType::Metal:
+            return "metal";
+        default:
+            return "dx11"; // 默认后备选择
+    }
+}
+
+// 通用着色器加载函数 - 支持任何着色器名称
+static bgfx::ShaderHandle loadShaderForCurrentRenderer(const char* shaderName)
+{
+    bgfx::RendererType::Enum rendererType = bgfx::getRendererType();
+    std::string platformName = getRendererPlatformName(rendererType);
+
+    // 使用动态查找获取着色器数据
+    ShaderData shaderData = getShaderData(shaderName, platformName);
+
+    if (shaderData.data == nullptr) {
+        qWarning() << "Shader not found:" << shaderName << "for platform:" << platformName.c_str();
+
+        // 尝试后备平台
+        if (platformName != "dx11") {
+            qDebug() << "Trying fallback platform: dx11";
+            shaderData = getShaderData(shaderName, "dx11");
+        }
+
+        if (shaderData.data == nullptr) {
+            qWarning() << "Shader not found even with fallback platform";
+            return BGFX_INVALID_HANDLE;
+        }
+    }
+
+    qDebug() << "Loading shader:" << shaderName << "for platform:" << platformName.c_str()
+             << "size:" << shaderData.size << "bytes";
+
+    return loadShaderFromMemory(shaderData.data, shaderData.size);
+}
+
+static bgfx::ProgramHandle loadProgram(const char* vsName, const char* fsName)
+{
+    bgfx::ShaderHandle vsh = loadShaderForCurrentRenderer(vsName);
+    bgfx::ShaderHandle fsh = loadShaderForCurrentRenderer(fsName);
+
+    if (!bgfx::isValid(vsh) || !bgfx::isValid(fsh)) {
+        qWarning() << "Failed to load shaders:" << vsName << fsName;
+        return BGFX_INVALID_HANDLE;
+    }
+
+    qDebug() << "Successfully loaded shaders for renderer:" << bgfx::getRendererName(bgfx::getRendererType());
+    return bgfx::createProgram(vsh, fsh, true);
+}
+
 BgfxBlockRenderer::BgfxBlockRenderer(QWidget* parent)
     : QWidget(parent)
 {
@@ -25,10 +107,16 @@ void BgfxBlockRenderer::shutdownBgfx()
     if (!m_bgfxInitialized) {
         return;
     }
-    
+
+    // 清理着色器程序
+    if (bgfx::isValid(m_program)) {
+        bgfx::destroy(m_program);
+        m_program = BGFX_INVALID_HANDLE;
+    }
+
     bgfx::shutdown();
     m_bgfxInitialized = false;
-    
+
     qDebug() << "bgfx shutdown complete";
 }
 
@@ -63,11 +151,21 @@ void BgfxBlockRenderer::showEvent(QShowEvent* event)
     
     // 设置视图0的清屏状态
     bgfx::setViewClear(0, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x336699ff, 1.0f, 0);
-    
+
+    // 创建着色器程序
+    m_program = loadProgram("vs_simple", "fs_simple");
+
+    if (bgfx::isValid(m_program)) {
+        qDebug() << "Shader program created successfully";
+    } else {
+        qWarning() << "Failed to create shader program - will use default rendering";
+    }
+
     m_bgfxInitialized = true;
-    
+
     qDebug() << "bgfx initialized successfully!";
     qDebug() << "Renderer:" << bgfx::getRendererName(bgfx::getRendererType());
+    qDebug() << "Shader program created successfully";
     
     // 启动渲染定时器
     connect(&m_renderTimer, &QTimer::timeout, this, &BgfxBlockRenderer::onRenderTimer);
@@ -87,8 +185,13 @@ void BgfxBlockRenderer::paintEvent(QPaintEvent* event)
     
     // 这个虚拟绘制调用确保视图0被清除
     bgfx::touch(0);
-    
-    
+
+    // 绘制调试信息
+    renderDebugInfo();
+
+    // 绘制测试几何体
+    renderTestGeometry();
+
     // 提交帧
     bgfx::frame();
 }
@@ -184,6 +287,76 @@ void BgfxBlockRenderer::wheelEvent(QWheelEvent* event)
 {
     float scaleFactor = 1.0f + (event->angleDelta().y() / 1200.0f);
     setZoom(m_zoom * scaleFactor);
-    
+
     QWidget::wheelEvent(event);
+}
+
+void BgfxBlockRenderer::renderDebugInfo()
+{
+    // 使用bgfx的调试文本系统
+    bgfx::dbgTextClear();
+    bgfx::dbgTextPrintf(0, 1, 0x0f, "=== bgfx Renderer ===");
+    bgfx::dbgTextPrintf(0, 2, 0x0f, "Widget Size: %dx%d", width(), height());
+    bgfx::dbgTextPrintf(0, 3, 0x0f, "Real Size: %.0fx%.0f", realWidth(), realHeight());
+    bgfx::dbgTextPrintf(0, 4, 0x0f, "DPI Ratio: %.2f", devicePixelRatio());
+    bgfx::dbgTextPrintf(0, 5, 0x0f, "Renderer: %s", bgfx::getRendererName(bgfx::getRendererType()));
+    bgfx::dbgTextPrintf(0, 6, 0x0f, "Clear Color: 0x336699ff (Blue-Gray)");
+    bgfx::dbgTextPrintf(0, 7, 0x0f, "Initialized: %s", m_bgfxInitialized ? "YES" : "NO");
+    bgfx::dbgTextPrintf(0, 8, 0x0f, "Shader Program: %s", bgfx::isValid(m_program) ? "VALID" : "INVALID");
+}
+
+void BgfxBlockRenderer::renderTestGeometry()
+{
+    // 创建简单的矩形顶点数据
+    struct PosColorVertex {
+        float x, y, z;
+        uint32_t abgr;
+    };
+
+    static PosColorVertex vertices[] = {
+        {100.0f, 100.0f, 0.0f, 0xff0000ff}, // 红色
+        {300.0f, 100.0f, 0.0f, 0xff00ff00}, // 绿色
+        {300.0f, 200.0f, 0.0f, 0xffff0000}, // 蓝色
+        {100.0f, 200.0f, 0.0f, 0xffffff00}, // 黄色
+    };
+
+    static uint16_t indices[] = {0, 1, 2, 2, 3, 0};
+
+    // 创建顶点布局
+    bgfx::VertexLayout layout;
+    layout.begin()
+        .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+        .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
+        .end();
+
+    // 创建临时的顶点和索引缓冲区
+    bgfx::VertexBufferHandle vbh = bgfx::createVertexBuffer(
+        bgfx::makeRef(vertices, sizeof(vertices)), layout);
+    bgfx::IndexBufferHandle ibh = bgfx::createIndexBuffer(
+        bgfx::makeRef(indices, sizeof(indices)));
+
+    // 设置变换矩阵
+    float mtx[16];
+    bx::mtxIdentity(mtx);
+    bgfx::setTransform(mtx);
+
+    // 设置顶点和索引缓冲区
+    bgfx::setVertexBuffer(0, vbh);
+    bgfx::setIndexBuffer(ibh);
+
+    // 设置渲染状态
+    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+
+    // 提交绘制调用
+    if (bgfx::isValid(m_program)) {
+        // 使用我们的着色器程序
+        bgfx::submit(0, m_program);
+    } else {
+        // 使用默认着色器（无着色器程序）
+        bgfx::submit(0, BGFX_INVALID_HANDLE);
+    }
+
+    // 清理临时缓冲区
+    bgfx::destroy(vbh);
+    bgfx::destroy(ibh);
 }

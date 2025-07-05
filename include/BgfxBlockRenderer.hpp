@@ -58,13 +58,18 @@ private:
     qreal realHeight() const { return height() * devicePixelRatio(); }
     
     void shutdownBgfx();
-    
+
+    // 渲染方法
+    void renderDebugInfo();
+    void renderTestGeometry();
+
     // 坐标变换
     QPointF screenToWorld(const QPointF& screenPos) const;
     QPointF worldToScreen(const QPointF& worldPos) const;
     
     // bgfx资源
     bgfx::ViewId m_viewId = 0;
+    bgfx::ProgramHandle m_program = BGFX_INVALID_HANDLE;
 
     // 视图状态
     float m_zoom = 1.0f;
