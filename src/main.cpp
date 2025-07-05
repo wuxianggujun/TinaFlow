@@ -5,6 +5,7 @@
 #include <QSurfaceFormat>
 #include <exception>
 #include "mainwindow.hpp"
+#include "BgfxManager.hpp"
 
 // 全局异常处理器
 void handleException(const std::exception& e) {
@@ -58,6 +59,9 @@ int main(int argc, char* argv[])
 
         // 确保在应用程序退出前清理所有资源
         qDebug() << "Application exiting, cleaning up...";
+
+        // 关闭bgfx
+        BgfxManager::instance().shutdown();
 
         return result;
     } catch (const std::exception& e) {

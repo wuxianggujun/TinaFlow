@@ -179,13 +179,22 @@ void BlockScriptModel::onExecuteScript()
 
 void BlockScriptModel::openBlockEditor()
 {
-    // 如果已经有打开的视图，先关闭它
+    // 如果已经有视图，重用它而不是创建新的
     if (m_blockProgrammingView) {
-        m_blockProgrammingView->close();
-        m_blockProgrammingView = nullptr;
+        // 更新现有视图的配置
+        m_blockProgrammingView->setScriptName(m_scriptName);
+        m_blockProgrammingView->setBlockConfiguration(m_blockConfiguration);
+
+        // 显示并激活现有视图
+        m_blockProgrammingView->show();
+        m_blockProgrammingView->raise();
+        m_blockProgrammingView->activateWindow();
+
+        qDebug() << "BlockScriptModel: Reused existing block programming view for script:" << m_scriptName;
+        return;
     }
 
-    // 创建新的积木编程视图
+    // 创建新的积木编程视图（仅在没有现有视图时）
     m_blockProgrammingView = new BlockProgrammingView();
     m_blockProgrammingView->setScriptName(m_scriptName);
     m_blockProgrammingView->setBlockConfiguration(m_blockConfiguration);
@@ -201,7 +210,7 @@ void BlockScriptModel::openBlockEditor()
     m_blockProgrammingView->raise();
     m_blockProgrammingView->activateWindow();
 
-    qDebug() << "BlockScriptModel: Opened block programming view for script:" << m_scriptName;
+    qDebug() << "BlockScriptModel: Created new block programming view for script:" << m_scriptName;
 }
 
 void BlockScriptModel::executeBlockScript()
