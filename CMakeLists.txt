@@ -129,6 +129,7 @@ file(GLOB SHADER_SOURCES "${CMAKE_SOURCE_DIR}/resources/shaders/*.sc")
 # 生成统一的着色器头文件
 set(UNIFIED_SHADER_HEADER ${SHADER_OUT_DIR}/shaders.h)
 
+# 简化：直接生成统一头文件，依赖于着色器源文件
 add_custom_command(
     OUTPUT ${UNIFIED_SHADER_HEADER}
     COMMAND ${CMAKE_COMMAND}
@@ -139,13 +140,32 @@ add_custom_command(
     DEPENDS
         ${SHADER_SOURCES}
         ${CMAKE_SOURCE_DIR}/cmake/generate_unified_shader_header.cmake
-    COMMENT "Generating unified shader header from source files"
+    COMMENT "Generating unified shader header"
 )
 
 # 创建自定义目标来确保统一头文件生成
 add_custom_target(generate_unified_shader_header
     DEPENDS ${UNIFIED_SHADER_HEADER}
-    COMMENT "Generating unified shader header"
+    COMMENT "Smart shader management"
+)
+
+# 添加强制清理和重新编译着色器的目标
+add_custom_target(clean_shaders
+    COMMAND ${CMAKE_COMMAND}
+        -DSHADER_SOURCE_DIR=${CMAKE_SOURCE_DIR}/resources/shaders
+        -DSHADER_OUT_DIR=${SHADER_OUT_DIR}
+        -DACTION=CLEAN
+        -P ${CMAKE_SOURCE_DIR}/cmake/manage_shaders.cmake
+    COMMENT "Force cleaning all compiled shaders"
+)
+
+add_custom_target(force_rebuild_shaders
+    COMMAND ${CMAKE_COMMAND}
+        -DSHADER_SOURCE_DIR=${CMAKE_SOURCE_DIR}/resources/shaders
+        -DSHADER_OUT_DIR=${SHADER_OUT_DIR}
+        -DACTION=ALL
+        -P ${CMAKE_SOURCE_DIR}/cmake/manage_shaders.cmake
+    COMMENT "Force rebuilding all shaders"
 )
 
 # 确保TinaFlow依赖于统一头文件生成
