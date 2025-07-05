@@ -35,4 +35,7 @@ private:
     bgfx::VertexBufferHandle m_vertexBuffer = BGFX_INVALID_HANDLE;
     bgfx::IndexBufferHandle m_indexBuffer = BGFX_INVALID_HANDLE;
     bgfx::VertexLayout m_vertexLayout;
+
+    // 圆角着色器的uniform句柄
+    bgfx::UniformHandle m_roundedParamsUniform = BGFX_INVALID_HANDLE;
 };

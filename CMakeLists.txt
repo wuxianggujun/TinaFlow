@@ -96,11 +96,35 @@ bgfx_compile_shaders(
     AS_HEADERS
 )
 
+# 编译圆角着色器
+bgfx_compile_shaders(
+    TYPE VERTEX
+    SHADERS ${CMAKE_SOURCE_DIR}/resources/shaders/vs_rounded.sc
+    VARYING_DEF ${CMAKE_SOURCE_DIR}/resources/shaders/varying.def.sc
+    OUTPUT_DIR ${SHADER_OUT_DIR}
+    INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/third_party/bgfx.cmake/bgfx/src
+    AS_HEADERS
+)
+
+bgfx_compile_shaders(
+    TYPE FRAGMENT
+    SHADERS ${CMAKE_SOURCE_DIR}/resources/shaders/fs_rounded.sc
+    VARYING_DEF ${CMAKE_SOURCE_DIR}/resources/shaders/varying.def.sc
+    OUTPUT_DIR ${SHADER_OUT_DIR}
+    INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/third_party/bgfx.cmake/bgfx/src
+    AS_HEADERS
+)
+
 # 将着色器源文件添加到目标中以触发编译
 target_sources(TinaFlow PRIVATE
     ${CMAKE_SOURCE_DIR}/resources/shaders/vs_simple.sc
     ${CMAKE_SOURCE_DIR}/resources/shaders/fs_simple.sc
+    ${CMAKE_SOURCE_DIR}/resources/shaders/vs_rounded.sc
+    ${CMAKE_SOURCE_DIR}/resources/shaders/fs_rounded.sc
 )
+
+# 收集所有着色器源文件
+file(GLOB SHADER_SOURCES "${CMAKE_SOURCE_DIR}/resources/shaders/*.sc")
 
 # 生成统一的着色器头文件
 set(UNIFIED_SHADER_HEADER ${SHADER_OUT_DIR}/shaders.h)
@@ -108,14 +132,14 @@ set(UNIFIED_SHADER_HEADER ${SHADER_OUT_DIR}/shaders.h)
 add_custom_command(
     OUTPUT ${UNIFIED_SHADER_HEADER}
     COMMAND ${CMAKE_COMMAND}
-        -DSHADER_DIR=${SHADER_OUT_DIR}
+        -DSHADER_SOURCE_DIR=${CMAKE_SOURCE_DIR}/resources/shaders
+        -DSHADER_OUT_DIR=${SHADER_OUT_DIR}
         -DOUTPUT_FILE=${UNIFIED_SHADER_HEADER}
         -P ${CMAKE_SOURCE_DIR}/cmake/generate_unified_shader_header.cmake
     DEPENDS
-        ${CMAKE_SOURCE_DIR}/resources/shaders/vs_simple.sc
-        ${CMAKE_SOURCE_DIR}/resources/shaders/fs_simple.sc
+        ${SHADER_SOURCES}
         ${CMAKE_SOURCE_DIR}/cmake/generate_unified_shader_header.cmake
-    COMMENT "Generating unified shader header dynamically"
+    COMMENT "Generating unified shader header from source files"
 )
 
 # 创建自定义目标来确保统一头文件生成

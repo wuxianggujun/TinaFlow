@@ -1,6 +1,8 @@
 #include "BgfxBlockRenderer.hpp"
 #include <QDebug>
 #include <QTimer>
+#include <vector>
+#include <cmath>
 
 // 包含bgfx工具函数用于加载着色器
 #include <QFile>
@@ -9,6 +11,29 @@
 
 // 包含生成的统一着色器头文件
 #include "shaders.h"
+
+// 定义包含纹理坐标的顶点结构
+struct PosColorTexVertex
+{
+    float x, y, z;
+    uint32_t abgr;
+    float u, v;
+
+    static void init()
+    {
+        ms_layout
+            .begin()
+            .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+            .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
+            .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+            .end();
+    }
+
+    static bgfx::VertexLayout ms_layout;
+};
+
+// 定义静态成员
+bgfx::VertexLayout PosColorTexVertex::ms_layout;
 
 // 从内嵌数据加载着色器的函数
 static bgfx::ShaderHandle loadShaderFromMemory(const uint8_t* data, uint32_t size)
@@ -102,25 +127,50 @@ struct PosColorVertex {
 
 bgfx::VertexLayout PosColorVertex::ms_layout;
 
-// 创建矩形几何体
-static void createRectangleGeometry(bgfx::VertexBufferHandle& vbh, bgfx::IndexBufferHandle& ibh, bgfx::VertexLayout& layout)
+// 使用着色器实现圆角的简单矩形几何体
+static void createBlockGeometry(bgfx::VertexBufferHandle& vbh, bgfx::IndexBufferHandle& ibh, bgfx::VertexLayout& layout)
 {
     // 初始化顶点布局
-    PosColorVertex::init();
-    layout = PosColorVertex::ms_layout;
+    PosColorTexVertex::init();
+    layout = PosColorTexVertex::ms_layout;
 
-    // 创建矩形顶点数据 (中心在原点，大小200x100)
-    static PosColorVertex vertices[] = {
-        {-100.0f, -50.0f, 0.0f, 0xff0000ff}, // 左下 - 红色
-        { 100.0f, -50.0f, 0.0f, 0xff00ff00}, // 右下 - 绿色
-        { 100.0f,  50.0f, 0.0f, 0xffff0000}, // 右上 - 蓝色
-        {-100.0f,  50.0f, 0.0f, 0xffffff00}, // 左上 - 黄色
+    // 积木尺寸定义
+    const float blockWidth = 120.0f;
+    const float blockHeight = 40.0f;
+
+    // 主体颜色
+    const uint32_t mainColor = 0xff4a90e2ff;      // 蓝色主体
+    const uint32_t connectorColor = 0xff357abdff; // 深蓝色连接器
+
+    // 创建简单的矩形几何体，圆角由着色器处理
+    static PosColorTexVertex vertices[] = {
+        // 主体矩形
+        {-blockWidth/2, -blockHeight/2, 0.0f, mainColor, -1.0f, -1.0f}, // 左下
+        { blockWidth/2, -blockHeight/2, 0.0f, mainColor,  1.0f, -1.0f}, // 右下
+        { blockWidth/2,  blockHeight/2, 0.0f, mainColor,  1.0f,  1.0f}, // 右上
+        {-blockWidth/2,  blockHeight/2, 0.0f, mainColor, -1.0f,  1.0f}, // 左上
+
+        // 顶部连接器 - 左侧
+        {-blockWidth/4 - 6.0f,  blockHeight/2, 0.0f, connectorColor, 0.0f, 0.0f},
+        {-blockWidth/4 + 6.0f,  blockHeight/2, 0.0f, connectorColor, 0.0f, 0.0f},
+        {-blockWidth/4 + 6.0f,  blockHeight/2 + 4.0f, 0.0f, connectorColor, 0.0f, 0.0f},
+        {-blockWidth/4 - 6.0f,  blockHeight/2 + 4.0f, 0.0f, connectorColor, 0.0f, 0.0f},
+
+        // 顶部连接器 - 右侧
+        { blockWidth/4 - 6.0f,  blockHeight/2, 0.0f, connectorColor, 0.0f, 0.0f},
+        { blockWidth/4 + 6.0f,  blockHeight/2, 0.0f, connectorColor, 0.0f, 0.0f},
+        { blockWidth/4 + 6.0f,  blockHeight/2 + 4.0f, 0.0f, connectorColor, 0.0f, 0.0f},
+        { blockWidth/4 - 6.0f,  blockHeight/2 + 4.0f, 0.0f, connectorColor, 0.0f, 0.0f},
     };
 
-    // 创建索引数据 (两个三角形组成矩形)
+    // 创建简单的索引数据
     static uint16_t indices[] = {
-        0, 1, 2, // 第一个三角形
-        2, 3, 0  // 第二个三角形
+        // 主体矩形
+        0, 1, 2,  2, 3, 0,
+
+        // 连接器
+        4, 5, 6,   6, 7, 4,   // 左侧连接器
+        8, 9, 10,  10, 11, 8, // 右侧连接器
     };
 
     // 创建顶点缓冲区
@@ -149,22 +199,32 @@ BgfxBlockRenderer::~BgfxBlockRenderer()
 
 void BgfxBlockRenderer::initializeResources()
 {
-    // 创建着色器程序
-    m_program = loadProgram("vs_simple", "fs_simple");
+    // 创建圆角着色器程序
+    m_program = loadProgram("vs_rounded", "fs_rounded");
 
     if (bgfx::isValid(m_program)) {
-        qDebug() << "Shader program created successfully";
+        qDebug() << "Rounded shader program created successfully";
+
+        // 创建圆角参数的uniform
+        m_roundedParamsUniform = bgfx::createUniform("u_roundedParams", bgfx::UniformType::Vec4);
+        if (bgfx::isValid(m_roundedParamsUniform)) {
+            qDebug() << "Created rounded params uniform";
+        } else {
+            qWarning() << "Failed to create rounded params uniform";
+        }
     } else {
-        qWarning() << "Failed to create shader program - will use default rendering";
+        qWarning() << "Failed to create rounded shader program - falling back to simple shader";
+        // 回退到简单着色器
+        m_program = loadProgram("vs_simple", "fs_simple");
     }
 
-    // 创建几何体
-    createRectangleGeometry(m_vertexBuffer, m_indexBuffer, m_vertexLayout);
+    // 创建积木几何体
+    createBlockGeometry(m_vertexBuffer, m_indexBuffer, m_vertexLayout);
 
     if (bgfx::isValid(m_vertexBuffer) && bgfx::isValid(m_indexBuffer)) {
-        qDebug() << "Rectangle geometry created successfully";
+        qDebug() << "Block geometry created successfully";
     } else {
-        qWarning() << "Failed to create rectangle geometry";
+        qWarning() << "Failed to create block geometry";
     }
 }
 
@@ -184,6 +244,11 @@ void BgfxBlockRenderer::cleanupResources()
     if (bgfx::isValid(m_indexBuffer)) {
         bgfx::destroy(m_indexBuffer);
         m_indexBuffer = BGFX_INVALID_HANDLE;
+    }
+
+    if (bgfx::isValid(m_roundedParamsUniform)) {
+        bgfx::destroy(m_roundedParamsUniform);
+        m_roundedParamsUniform = BGFX_INVALID_HANDLE;
     }
 }
 
@@ -245,6 +310,13 @@ void BgfxBlockRenderer::renderTestGeometry()
     // 设置顶点和索引缓冲区
     bgfx::setVertexBuffer(0, m_vertexBuffer);
     bgfx::setIndexBuffer(m_indexBuffer);
+
+    // 设置圆角参数uniform
+    if (bgfx::isValid(m_roundedParamsUniform)) {
+        // 设置圆角参数：width=120, height=40, cornerRadius=8, unused=0
+        float roundedParams[4] = {120.0f, 40.0f, 8.0f, 0.0f};
+        bgfx::setUniform(m_roundedParamsUniform, roundedParams);
+    }
 
     // 设置渲染状态 (启用深度测试和写入)
     bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_LESS);
