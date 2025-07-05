@@ -70,6 +70,9 @@ private:
     // bgfx资源
     bgfx::ViewId m_viewId = 0;
     bgfx::ProgramHandle m_program = BGFX_INVALID_HANDLE;
+    bgfx::VertexBufferHandle m_vertexBuffer = BGFX_INVALID_HANDLE;
+    bgfx::IndexBufferHandle m_indexBuffer = BGFX_INVALID_HANDLE;
+    bgfx::VertexLayout m_vertexLayout;
 
     // 视图状态
     float m_zoom = 1.0f;

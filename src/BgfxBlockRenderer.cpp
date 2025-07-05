@@ -84,6 +84,57 @@ static bgfx::ProgramHandle loadProgram(const char* vsName, const char* fsName)
     return bgfx::createProgram(vsh, fsh, true);
 }
 
+// 顶点结构
+struct PosColorVertex {
+    float x, y, z;
+    uint32_t abgr;
+
+    static void init() {
+        ms_layout
+            .begin()
+            .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+            .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
+            .end();
+    }
+
+    static bgfx::VertexLayout ms_layout;
+};
+
+bgfx::VertexLayout PosColorVertex::ms_layout;
+
+// 创建矩形几何体
+static void createRectangleGeometry(bgfx::VertexBufferHandle& vbh, bgfx::IndexBufferHandle& ibh, bgfx::VertexLayout& layout)
+{
+    // 初始化顶点布局
+    PosColorVertex::init();
+    layout = PosColorVertex::ms_layout;
+
+    // 创建矩形顶点数据 (中心在原点，大小200x100)
+    static PosColorVertex vertices[] = {
+        {-100.0f, -50.0f, 0.0f, 0xff0000ff}, // 左下 - 红色
+        { 100.0f, -50.0f, 0.0f, 0xff00ff00}, // 右下 - 绿色
+        { 100.0f,  50.0f, 0.0f, 0xffff0000}, // 右上 - 蓝色
+        {-100.0f,  50.0f, 0.0f, 0xffffff00}, // 左上 - 黄色
+    };
+
+    // 创建索引数据 (两个三角形组成矩形)
+    static uint16_t indices[] = {
+        0, 1, 2, // 第一个三角形
+        2, 3, 0  // 第二个三角形
+    };
+
+    // 创建顶点缓冲区
+    vbh = bgfx::createVertexBuffer(
+        bgfx::makeRef(vertices, sizeof(vertices)),
+        layout
+    );
+
+    // 创建索引缓冲区
+    ibh = bgfx::createIndexBuffer(
+        bgfx::makeRef(indices, sizeof(indices))
+    );
+}
+
 BgfxBlockRenderer::BgfxBlockRenderer(QWidget* parent)
     : QWidget(parent)
 {
@@ -108,10 +159,20 @@ void BgfxBlockRenderer::shutdownBgfx()
         return;
     }
 
-    // 清理着色器程序
+    // 清理bgfx资源
     if (bgfx::isValid(m_program)) {
         bgfx::destroy(m_program);
         m_program = BGFX_INVALID_HANDLE;
+    }
+
+    if (bgfx::isValid(m_vertexBuffer)) {
+        bgfx::destroy(m_vertexBuffer);
+        m_vertexBuffer = BGFX_INVALID_HANDLE;
+    }
+
+    if (bgfx::isValid(m_indexBuffer)) {
+        bgfx::destroy(m_indexBuffer);
+        m_indexBuffer = BGFX_INVALID_HANDLE;
     }
 
     bgfx::shutdown();
@@ -159,6 +220,15 @@ void BgfxBlockRenderer::showEvent(QShowEvent* event)
         qDebug() << "Shader program created successfully";
     } else {
         qWarning() << "Failed to create shader program - will use default rendering";
+    }
+
+    // 创建几何体
+    createRectangleGeometry(m_vertexBuffer, m_indexBuffer, m_vertexLayout);
+
+    if (bgfx::isValid(m_vertexBuffer) && bgfx::isValid(m_indexBuffer)) {
+        qDebug() << "Rectangle geometry created successfully";
+    } else {
+        qWarning() << "Failed to create rectangle geometry";
     }
 
     m_bgfxInitialized = true;
@@ -307,56 +377,56 @@ void BgfxBlockRenderer::renderDebugInfo()
 
 void BgfxBlockRenderer::renderTestGeometry()
 {
-    // 创建简单的矩形顶点数据
-    struct PosColorVertex {
-        float x, y, z;
-        uint32_t abgr;
-    };
+    // 只有在几何体和着色器都有效时才渲染
+    if (!bgfx::isValid(m_vertexBuffer) || !bgfx::isValid(m_indexBuffer)) {
+        return;
+    }
 
-    static PosColorVertex vertices[] = {
-        {100.0f, 100.0f, 0.0f, 0xff0000ff}, // 红色
-        {300.0f, 100.0f, 0.0f, 0xff00ff00}, // 绿色
-        {300.0f, 200.0f, 0.0f, 0xffff0000}, // 蓝色
-        {100.0f, 200.0f, 0.0f, 0xffffff00}, // 黄色
-    };
+    // 创建正交投影矩阵 (适合2D渲染)
+    float proj[16];
+    bx::mtxOrtho(proj, 0.0f, static_cast<float>(realWidth()), static_cast<float>(realHeight()), 0.0f, -1.0f, 1.0f, 0.0f, bgfx::getCaps()->homogeneousDepth);
 
-    static uint16_t indices[] = {0, 1, 2, 2, 3, 0};
+    // 创建视图矩阵 (包含缩放和平移)
+    float view[16];
+    bx::mtxIdentity(view);
 
-    // 创建顶点布局
-    bgfx::VertexLayout layout;
-    layout.begin()
-        .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
-        .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
-        .end();
+    // 应用平移和缩放
+    float transform[16];
+    bx::mtxIdentity(transform);
 
-    // 创建临时的顶点和索引缓冲区
-    bgfx::VertexBufferHandle vbh = bgfx::createVertexBuffer(
-        bgfx::makeRef(vertices, sizeof(vertices)), layout);
-    bgfx::IndexBufferHandle ibh = bgfx::createIndexBuffer(
-        bgfx::makeRef(indices, sizeof(indices)));
+    // 平移到屏幕中心，然后应用用户的平移和缩放
+    float centerX = static_cast<float>(realWidth()) * 0.5f;
+    float centerY = static_cast<float>(realHeight()) * 0.5f;
+
+    // 组合变换：先缩放，再平移到中心，最后应用用户平移
+    float scale[16], translate[16], userTranslate[16];
+    bx::mtxScale(scale, m_zoom, m_zoom, 1.0f);
+    bx::mtxTranslate(translate, centerX, centerY, 0.0f);
+    bx::mtxTranslate(userTranslate, static_cast<float>(m_pan.x()), static_cast<float>(m_pan.y()), 0.0f);
+
+    // 组合矩阵：userTranslate * translate * scale
+    float temp[16];
+    bx::mtxMul(temp, scale, translate);
+    bx::mtxMul(transform, temp, userTranslate);
 
     // 设置变换矩阵
-    float mtx[16];
-    bx::mtxIdentity(mtx);
-    bgfx::setTransform(mtx);
+    bgfx::setTransform(transform);
+
+    // 设置视图和投影矩阵
+    bgfx::setViewTransform(0, view, proj);
 
     // 设置顶点和索引缓冲区
-    bgfx::setVertexBuffer(0, vbh);
-    bgfx::setIndexBuffer(ibh);
+    bgfx::setVertexBuffer(0, m_vertexBuffer);
+    bgfx::setIndexBuffer(m_indexBuffer);
 
-    // 设置渲染状态
-    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A);
+    // 设置渲染状态 (启用深度测试和写入)
+    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_LESS);
 
     // 提交绘制调用
     if (bgfx::isValid(m_program)) {
-        // 使用我们的着色器程序
         bgfx::submit(0, m_program);
     } else {
-        // 使用默认着色器（无着色器程序）
+        // 如果没有着色器程序，仍然提交以显示几何体（使用内置着色器）
         bgfx::submit(0, BGFX_INVALID_HANDLE);
     }
-
-    // 清理临时缓冲区
-    bgfx::destroy(vbh);
-    bgfx::destroy(ibh);
 }
