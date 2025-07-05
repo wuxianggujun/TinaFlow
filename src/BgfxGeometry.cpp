@@ -185,3 +185,10 @@ void BlockGeometryManager::render(bgfx::ViewId viewId, bgfx::ProgramHandle progr
         }
     }
 }
+
+void BlockGeometryManager::invalidateResources()
+{
+    m_connectorGeometry.invalidateResources();
+    m_receptorGeometry.invalidateResources();
+    m_simpleGeometry.invalidateResources();
+}

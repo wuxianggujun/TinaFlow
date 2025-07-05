@@ -60,25 +60,25 @@ public:
                 const void* indexData, uint32_t indexSize, uint32_t indexCount,
                 const bgfx::VertexLayout& layout)
     {
-        cleanup(); // 清理旧资源
-        
+        safeCleanup(); // 安全清理旧资源
+
         // 创建顶点缓冲区
         m_vertexBuffer = bgfx::createVertexBuffer(
             bgfx::makeRef(vertexData, vertexSize),
             layout
         );
-        
+
         // 创建索引缓冲区
         m_indexBuffer = bgfx::createIndexBuffer(
             bgfx::makeRef(indexData, indexSize)
         );
-        
+
         if (bgfx::isValid(m_vertexBuffer) && bgfx::isValid(m_indexBuffer)) {
             m_vertexCount = vertexCount;
             m_indexCount = indexCount;
             return true;
         } else {
-            cleanup();
+            safeCleanup();
             return false;
         }
     }
@@ -112,6 +112,17 @@ public:
      */
     uint32_t getIndexCount() const { return m_indexCount; }
 
+    /**
+     * @brief 标记资源为无效（当bgfx重新初始化时调用）
+     */
+    void invalidateResources()
+    {
+        m_vertexBuffer = BGFX_INVALID_HANDLE;
+        m_indexBuffer = BGFX_INVALID_HANDLE;
+        m_vertexCount = 0;
+        m_indexCount = 0;
+    }
+
 private:
     void cleanup()
     {
@@ -119,14 +130,25 @@ private:
             bgfx::destroy(m_vertexBuffer);
             m_vertexBuffer = BGFX_INVALID_HANDLE;
         }
-        
+
         if (bgfx::isValid(m_indexBuffer)) {
             bgfx::destroy(m_indexBuffer);
             m_indexBuffer = BGFX_INVALID_HANDLE;
         }
-        
+
         m_vertexCount = 0;
         m_indexCount = 0;
+    }
+
+    void safeCleanup()
+    {
+        // 检查bgfx是否仍然有效，避免在重新初始化时崩溃
+        if (bgfx::getRendererType() != bgfx::RendererType::Noop) {
+            cleanup();
+        } else {
+            // bgfx已经关闭，只需要重置句柄
+            invalidateResources();
+        }
     }
 
 private:
@@ -192,6 +214,11 @@ public:
                 bgfx::UniformHandle roundedParamsUniform,
                 bgfx::UniformHandle connectorConfigUniform,
                 const float* baseTransform);
+
+    /**
+     * @brief 标记所有几何体资源为无效（当bgfx重新初始化时调用）
+     */
+    void invalidateResources();
 
 private:
     BgfxGeometry m_connectorGeometry;   // 凸起积木几何体

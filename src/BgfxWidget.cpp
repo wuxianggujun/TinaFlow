@@ -85,6 +85,10 @@ void BgfxWidget::initializeBgfx()
 
     // 调用子类的初始化方法（只在重新初始化时调用）
     if (needsReinitialization || !m_resourcesInitialized) {
+        if (needsReinitialization) {
+            // 通知子类bgfx重新初始化
+            onBgfxReset();
+        }
         initializeResources();
         m_resourcesInitialized = true;
     }

@@ -161,14 +161,6 @@ void BgfxBlockRenderer::cleanupResources()
 
 void BgfxBlockRenderer::render()
 {
-    // 检查缩放是否变化，如果变化则更新积木位置
-    static float lastZoom = -1.0f;
-    float currentZoom = getZoom();
-    if (abs(currentZoom - lastZoom) > 0.001f) {
-        lastZoom = currentZoom;
-        updateBlockPositions();
-    }
-
     // 获取基础变换矩阵
     float baseTransform[16];
     getTransformMatrix(baseTransform);
@@ -217,120 +209,20 @@ void BgfxBlockRenderer::updateBlockPositions()
     createTestBlocks();
 }
 
-/*void BgfxBlockRenderer::renderTestGeometry()
+void BgfxBlockRenderer::setZoom(float zoom)
 {
-    // 检查资源是否有效 - 分别检查
-    bool connectorValid = bgfx::isValid(m_connectorVertexBuffer) && bgfx::isValid(m_connectorIndexBuffer);
-    bool receptorValid = bgfx::isValid(m_receptorVertexBuffer) && bgfx::isValid(m_receptorIndexBuffer);
+    // 调用基类方法
+    BgfxWidget::setZoom(zoom);
 
-    static bool warned = false;
-    if (!warned) {
-        qDebug() << "BgfxBlockRenderer: Connector buffers valid:" << connectorValid;
-        qDebug() << "BgfxBlockRenderer: Receptor buffers valid:" << receptorValid;
-        qDebug() << "BgfxBlockRenderer: Connector VB:" << bgfx::isValid(m_connectorVertexBuffer)
-                 << "IB:" << bgfx::isValid(m_connectorIndexBuffer);
-        qDebug() << "BgfxBlockRenderer: Receptor VB:" << bgfx::isValid(m_receptorVertexBuffer)
-                 << "IB:" << bgfx::isValid(m_receptorIndexBuffer);
-        warned = true;
-    }
+    // 更新积木位置以适应新的缩放级别
+    updateBlockPositions();
+}
 
-    if (!connectorValid && !receptorValid) {
-        qWarning() << "BgfxBlockRenderer: No valid geometry buffers!";
-        return;
-    }
+void BgfxBlockRenderer::onBgfxReset()
+{
+    // 标记所有几何体资源为无效
+    m_geometryManager.invalidateResources();
 
-    // 获取基类计算好的变换矩阵
-    float transform[16];
-    getTransformMatrix(transform);
-
-    // 计算合适的间距 - 基于积木宽度和缩放
-    float zoom = getZoom();
-    float blockWidth = 120.0f;
-    float spacing = (blockWidth + 50.0f) * zoom; // 积木宽度 + 50像素间距，随缩放调整
-
-    // 渲染凸起积木 (左侧) - 只有在资源有效时才渲染
-    if (connectorValid) {
-        // 设置变换矩阵 - 左侧位置
-        float leftTransform[16];
-        getTransformMatrix(leftTransform);
-        // 向左偏移
-        leftTransform[12] -= spacing;
-        bgfx::setTransform(leftTransform);
-
-        // 设置顶点和索引缓冲区
-        bgfx::setVertexBuffer(0, m_connectorVertexBuffer);
-        bgfx::setIndexBuffer(m_connectorIndexBuffer);
-
-        // 设置渲染状态 (每次都重新设置)
-        bgfx::setState(BGFX_STATE_WRITE_RGB
-                     | BGFX_STATE_WRITE_A
-                     | BGFX_STATE_WRITE_Z
-                     | BGFX_STATE_DEPTH_TEST_LESS
-                     | BGFX_STATE_BLEND_ALPHA);
-
-        // 设置圆角参数uniform
-        if (bgfx::isValid(m_roundedParamsUniform)) {
-            float roundedParams[4] = {120.0f, 40.0f, 8.0f, 0.0f};
-            bgfx::setUniform(m_roundedParamsUniform, roundedParams);
-        }
-
-        // 设置连接器配置uniform (顶部凸起)
-        if (bgfx::isValid(m_connectorConfigUniform)) {
-            float connectorConfig[4] = {1.0f, 0.0f, 0.0f, 0.0f}; // top=1
-            bgfx::setUniform(m_connectorConfigUniform, connectorConfig);
-        }
-
-        // 提交凸起积木
-        if (bgfx::isValid(m_program)) {
-            bgfx::submit(getViewId(), m_program);
-            static bool logged1 = false;
-            if (!logged1) {
-                qDebug() << "BgfxBlockRenderer: Submitted connector block";
-                logged1 = true;
-            }
-        }
-    }
-
-    // 渲染凹陷积木 (右侧) - 只有在资源有效时才渲染
-    if (receptorValid) {
-        // 设置变换矩阵 - 右侧位置
-        float rightTransform[16];
-        getTransformMatrix(rightTransform);
-        // 向右偏移
-        rightTransform[12] += spacing;
-        bgfx::setTransform(rightTransform);
-
-        // 设置顶点和索引缓冲区
-        bgfx::setVertexBuffer(0, m_receptorVertexBuffer);
-        bgfx::setIndexBuffer(m_receptorIndexBuffer);
-
-        // 设置渲染状态 (每次都重新设置)
-        bgfx::setState(BGFX_STATE_WRITE_RGB
-                     | BGFX_STATE_WRITE_A
-                     | BGFX_STATE_WRITE_Z
-                     | BGFX_STATE_DEPTH_TEST_LESS
-                     | BGFX_STATE_BLEND_ALPHA);
-
-        // 设置圆角参数uniform
-        if (bgfx::isValid(m_roundedParamsUniform)) {
-            float roundedParams[4] = {120.0f, 40.0f, 8.0f, 0.0f};
-            bgfx::setUniform(m_roundedParamsUniform, roundedParams);
-        }
-
-        // 设置连接器配置uniform (暂时使用相同配置测试)
-        if (bgfx::isValid(m_connectorConfigUniform)) {
-            float connectorConfig[4] = {0.0f, 0.0f, 0.0f, 0.0f}; // 无连接器，只有主体
-            bgfx::setUniform(m_connectorConfigUniform, connectorConfig);
-        }
-
-        // 提交凹陷积木
-        if (bgfx::isValid(m_program)) {
-            bgfx::submit(getViewId(), m_program);
-            static bool logged2 = false;
-            if (!logged2) {
-                qDebug() << "BgfxBlockRenderer: Submitted receptor block";
-                logged2 = true;
-            }
-        }
-    }
-}*/
+    // 重新初始化资源
+    initializeResources();
+}

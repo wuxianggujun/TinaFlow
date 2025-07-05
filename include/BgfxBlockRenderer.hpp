@@ -24,6 +24,9 @@ public:
     void createTestBlocks(); // 创建测试用的积木
     void updateBlockPositions(); // 更新积木位置（缩放变化时调用）
 
+    // 重写缩放方法以更新积木位置
+    void setZoom(float zoom) override;
+
 protected:
     // 重写基类的渲染方法
     void render() override;
@@ -31,6 +34,9 @@ protected:
     // 重写基类的资源管理方法
     void initializeResources() override;
     void cleanupResources() override;
+
+    // 处理bgfx重新初始化
+    void onBgfxReset();
 
 private:
 

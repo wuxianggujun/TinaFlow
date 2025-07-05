@@ -29,7 +29,7 @@ public:
     ~BgfxWidget() override;
 
     // 视图控制
-    void setZoom(float zoom);
+    virtual void setZoom(float zoom);
     float getZoom() const { return m_zoom; }
     void setPan(const QPointF& pan);
     QPointF getPan() const { return m_pan; }
@@ -68,6 +68,9 @@ protected:
     // 可选的初始化和清理方法
     virtual void initializeResources() {}
     virtual void cleanupResources() {}
+
+    // 当bgfx重新初始化时调用（可选重写）
+    virtual void onBgfxReset() {}
     
     // 获取bgfx相关信息
     bool isBgfxInitialized() const { return BgfxManager::instance().isInitialized() && m_viewId != UINT16_MAX; }
