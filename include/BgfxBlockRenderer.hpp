@@ -38,4 +38,5 @@ private:
 
     // 圆角着色器的uniform句柄
     bgfx::UniformHandle m_roundedParamsUniform = BGFX_INVALID_HANDLE;
+    bgfx::UniformHandle m_connectorConfigUniform = BGFX_INVALID_HANDLE;
 };

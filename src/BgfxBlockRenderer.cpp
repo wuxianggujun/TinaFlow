@@ -214,6 +214,14 @@ void BgfxBlockRenderer::initializeResources()
         } else {
             qWarning() << "Failed to create rounded params uniform";
         }
+
+        // 创建连接器配置的uniform
+        m_connectorConfigUniform = bgfx::createUniform("u_connectorConfig", bgfx::UniformType::Vec4);
+        if (bgfx::isValid(m_connectorConfigUniform)) {
+            qDebug() << "Created connector config uniform";
+        } else {
+            qWarning() << "Failed to create connector config uniform";
+        }
     } else {
         qWarning() << "Failed to create rounded shader program - falling back to simple shader";
         // 回退到简单着色器
@@ -251,6 +259,11 @@ void BgfxBlockRenderer::cleanupResources()
     if (bgfx::isValid(m_roundedParamsUniform)) {
         bgfx::destroy(m_roundedParamsUniform);
         m_roundedParamsUniform = BGFX_INVALID_HANDLE;
+    }
+
+    if (bgfx::isValid(m_connectorConfigUniform)) {
+        bgfx::destroy(m_connectorConfigUniform);
+        m_connectorConfigUniform = BGFX_INVALID_HANDLE;
     }
 }
 
@@ -318,6 +331,13 @@ void BgfxBlockRenderer::renderTestGeometry()
         // 设置圆角参数：width=120, height=40, cornerRadius=8, unused=0
         float roundedParams[4] = {120.0f, 40.0f, 8.0f, 0.0f};
         bgfx::setUniform(m_roundedParamsUniform, roundedParams);
+    }
+
+    // 设置连接器配置uniform
+    if (bgfx::isValid(m_connectorConfigUniform)) {
+        // 设置连接器配置：top=1, bottom=0, left=0, right=0 (当前只有顶部连接器)
+        float connectorConfig[4] = {1.0f, 0.0f, 0.0f, 0.0f};
+        bgfx::setUniform(m_connectorConfigUniform, connectorConfig);
     }
 
     // 设置渲染状态 (启用透明度混合和深度测试)
