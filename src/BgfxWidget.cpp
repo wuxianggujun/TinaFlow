@@ -326,31 +326,36 @@ void BgfxWidget::mouseReleaseEvent(QMouseEvent* event)
 
 void BgfxWidget::wheelEvent(QWheelEvent* event)
 {
+    // 获取鼠标在当前控件中的位置
     QPointF mousePos = event->position();
 
-    // 1. 获取鼠标在世界坐标系中的位置（缩放前）
-    QPointF worldPosBeforeZoom = screenToWorld(mousePos);
-
-    // 2. 计算新的缩放级别
-    float scaleFactor = 1.0f + (event->angleDelta().y() / 1200.0f);
-    float newZoom = m_zoom * scaleFactor;
-    newZoom = qBound(0.1f, newZoom, 5.0f); // 限制缩放范围
-
-    // 3. 更新缩放级别
-    m_zoom = newZoom;
-
-    // 4. 计算新的平移量，以保持鼠标下的点在屏幕上的位置不变
+    // 获取屏幕中心点
     float centerX = static_cast<float>(realWidth()) * 0.5f;
     float centerY = static_cast<float>(realHeight()) * 0.5f;
+    QPointF centerPos(centerX, centerY);
+
+    // 保存旧的缩放级别
+    float oldZoom = m_zoom;
+
+    // 计算并应用新的缩放级别
+    float scaleFactor = 1.0f + (event->angleDelta().y() / 1200.0f);
+    m_zoom *= scaleFactor;
+    m_zoom = qBound(0.1f, m_zoom, 5.0f); // 限制缩放范围
+
+    // 计算缩放比例
+    float zoomRatio = m_zoom / oldZoom;
+
+    // 这是实现"以鼠标为中心缩放"的核心公式
+    // 它计算出新的屏幕平移量(pan)，以确保鼠标下的点在缩放后位置不变
+    // 公式: new_pan = (mouse_pos - center_pos) * (1 - zoom_ratio) + old_pan * zoom_ratio
+    QPointF mouseRelativeToCenter = mousePos - centerPos;
 
     QPointF newPan;
-    newPan.setX(mousePos.x() - centerX - (worldPosBeforeZoom.x() * m_zoom));
-    newPan.setY(mousePos.y() - centerY - (worldPosBeforeZoom.y() * m_zoom));
-    
-    // 5. 应用新的平移量
+    newPan = mouseRelativeToCenter * (1.0f - zoomRatio) + m_pan * zoomRatio;
+
     m_pan = newPan;
 
-    // 6. 更新矩阵并重绘
+    // 更新矩阵并触发重绘
     updateMatrices();
     update();
 
