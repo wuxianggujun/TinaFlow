@@ -32,8 +32,15 @@ private:
 
     // bgfx资源
     bgfx::ProgramHandle m_program = BGFX_INVALID_HANDLE;
-    bgfx::VertexBufferHandle m_vertexBuffer = BGFX_INVALID_HANDLE;
-    bgfx::IndexBufferHandle m_indexBuffer = BGFX_INVALID_HANDLE;
+
+    // 凸起积木资源
+    bgfx::VertexBufferHandle m_connectorVertexBuffer = BGFX_INVALID_HANDLE;
+    bgfx::IndexBufferHandle m_connectorIndexBuffer = BGFX_INVALID_HANDLE;
+
+    // 凹陷积木资源
+    bgfx::VertexBufferHandle m_receptorVertexBuffer = BGFX_INVALID_HANDLE;
+    bgfx::IndexBufferHandle m_receptorIndexBuffer = BGFX_INVALID_HANDLE;
+
     bgfx::VertexLayout m_vertexLayout;
 
     // 圆角着色器的uniform句柄

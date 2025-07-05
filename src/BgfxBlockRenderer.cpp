@@ -127,8 +127,8 @@ struct PosColorVertex {
 
 bgfx::VertexLayout PosColorVertex::ms_layout;
 
-// 使用着色器实现圆角的简单矩形几何体
-static void createBlockGeometry(bgfx::VertexBufferHandle& vbh, bgfx::IndexBufferHandle& ibh, bgfx::VertexLayout& layout)
+// 创建凸起积木几何体
+static void createConnectorBlockGeometry(bgfx::VertexBufferHandle& vbh, bgfx::IndexBufferHandle& ibh, bgfx::VertexLayout& layout)
 {
     // 初始化顶点布局
     PosColorTexVertex::init();
@@ -187,6 +187,47 @@ static void createBlockGeometry(bgfx::VertexBufferHandle& vbh, bgfx::IndexBuffer
     );
 }
 
+// 创建凹陷积木几何体 - 简化版本，只有主体
+static void createReceptorBlockGeometry(bgfx::VertexBufferHandle& vbh, bgfx::IndexBufferHandle& ibh, bgfx::VertexLayout& layout)
+{
+    // 初始化顶点布局
+    PosColorTexVertex::init();
+    layout = PosColorTexVertex::ms_layout;
+
+    // 积木尺寸定义
+    const float blockWidth = 120.0f;
+    const float blockHeight = 40.0f;
+
+    // 主体颜色 (ABGR格式) - 使用不同的颜色来区分
+    const uint32_t mainColor = 0xff4ae290;      // 绿色主体 (ABGR: FF 4A E2 90)
+
+    // 创建简单的绿色矩形积木 - 先确保主体能正确显示
+    static PosColorTexVertex vertices[] = {
+        // 主体矩形 - 完整的绿色矩形
+        {-blockWidth/2, -blockHeight/2, 0.0f, mainColor, -1.0f, -1.0f}, // 0: 左下
+        { blockWidth/2, -blockHeight/2, 0.0f, mainColor,  1.0f, -1.0f}, // 1: 右下
+        { blockWidth/2,  blockHeight/2, 0.0f, mainColor,  1.0f,  1.0f}, // 2: 右上
+        {-blockWidth/2,  blockHeight/2, 0.0f, mainColor, -1.0f,  1.0f}, // 3: 左上
+    };
+
+    // 创建简单的索引数据 - 只有主体矩形
+    static uint16_t indices[] = {
+        // 主体矩形
+        0, 1, 2,  2, 3, 0,
+    };
+
+    // 创建顶点缓冲区
+    vbh = bgfx::createVertexBuffer(
+        bgfx::makeRef(vertices, sizeof(vertices)),
+        layout
+    );
+
+    // 创建索引缓冲区
+    ibh = bgfx::createIndexBuffer(
+        bgfx::makeRef(indices, sizeof(indices))
+    );
+}
+
 BgfxBlockRenderer::BgfxBlockRenderer(QWidget* parent)
     : BgfxWidget(parent)
 {
@@ -209,17 +250,13 @@ void BgfxBlockRenderer::initializeResources()
 
         // 创建圆角参数的uniform
         m_roundedParamsUniform = bgfx::createUniform("u_roundedParams", bgfx::UniformType::Vec4);
-        if (bgfx::isValid(m_roundedParamsUniform)) {
-            qDebug() << "Created rounded params uniform";
-        } else {
+        if (!bgfx::isValid(m_roundedParamsUniform)) {
             qWarning() << "Failed to create rounded params uniform";
         }
 
         // 创建连接器配置的uniform
         m_connectorConfigUniform = bgfx::createUniform("u_connectorConfig", bgfx::UniformType::Vec4);
-        if (bgfx::isValid(m_connectorConfigUniform)) {
-            qDebug() << "Created connector config uniform";
-        } else {
+        if (!bgfx::isValid(m_connectorConfigUniform)) {
             qWarning() << "Failed to create connector config uniform";
         }
     } else {
@@ -228,13 +265,18 @@ void BgfxBlockRenderer::initializeResources()
         m_program = loadProgram("vs_simple", "fs_simple");
     }
 
-    // 创建积木几何体
-    createBlockGeometry(m_vertexBuffer, m_indexBuffer, m_vertexLayout);
+    // 创建凸起积木几何体
+    createConnectorBlockGeometry(m_connectorVertexBuffer, m_connectorIndexBuffer, m_vertexLayout);
 
-    if (bgfx::isValid(m_vertexBuffer) && bgfx::isValid(m_indexBuffer)) {
-        qDebug() << "Block geometry created successfully";
-    } else {
-        qWarning() << "Failed to create block geometry";
+    if (!bgfx::isValid(m_connectorVertexBuffer) || !bgfx::isValid(m_connectorIndexBuffer)) {
+        qWarning() << "Failed to create connector block geometry";
+    }
+
+    // 创建凹陷积木几何体
+    createReceptorBlockGeometry(m_receptorVertexBuffer, m_receptorIndexBuffer, m_vertexLayout);
+
+    if (!bgfx::isValid(m_receptorVertexBuffer) || !bgfx::isValid(m_receptorIndexBuffer)) {
+        qWarning() << "Failed to create receptor block geometry";
     }
 }
 
@@ -246,14 +288,24 @@ void BgfxBlockRenderer::cleanupResources()
         m_program = BGFX_INVALID_HANDLE;
     }
 
-    if (bgfx::isValid(m_vertexBuffer)) {
-        bgfx::destroy(m_vertexBuffer);
-        m_vertexBuffer = BGFX_INVALID_HANDLE;
+    if (bgfx::isValid(m_connectorVertexBuffer)) {
+        bgfx::destroy(m_connectorVertexBuffer);
+        m_connectorVertexBuffer = BGFX_INVALID_HANDLE;
     }
 
-    if (bgfx::isValid(m_indexBuffer)) {
-        bgfx::destroy(m_indexBuffer);
-        m_indexBuffer = BGFX_INVALID_HANDLE;
+    if (bgfx::isValid(m_connectorIndexBuffer)) {
+        bgfx::destroy(m_connectorIndexBuffer);
+        m_connectorIndexBuffer = BGFX_INVALID_HANDLE;
+    }
+
+    if (bgfx::isValid(m_receptorVertexBuffer)) {
+        bgfx::destroy(m_receptorVertexBuffer);
+        m_receptorVertexBuffer = BGFX_INVALID_HANDLE;
+    }
+
+    if (bgfx::isValid(m_receptorIndexBuffer)) {
+        bgfx::destroy(m_receptorIndexBuffer);
+        m_receptorIndexBuffer = BGFX_INVALID_HANDLE;
     }
 
     if (bgfx::isValid(m_roundedParamsUniform)) {
@@ -269,16 +321,6 @@ void BgfxBlockRenderer::cleanupResources()
 
 void BgfxBlockRenderer::render()
 {
-    static int renderCount = 0;
-    renderCount++;
-
-    if (renderCount % 60 == 1) { // 每秒打印一次
-        qDebug() << "BgfxBlockRenderer::render - frame" << renderCount;
-    }
-
-    // 渲染调试信息
-    renderDebugInfo();
-
     // 渲染测试几何体
     renderTestGeometry();
 }
@@ -287,31 +329,30 @@ void BgfxBlockRenderer::render()
 
 void BgfxBlockRenderer::renderDebugInfo()
 {
-    // 使用bgfx的调试文本系统
-    bgfx::dbgTextClear();
-    bgfx::dbgTextPrintf(0, 1, 0x4f, "=== TinaFlow Block Renderer ===");
-    bgfx::dbgTextPrintf(0, 2, 0x0f, "Widget Size: %dx%d", width(), height());
-    bgfx::dbgTextPrintf(0, 3, 0x0f, "Real Size: %.0fx%.0f", realWidth(), realHeight());
-    bgfx::dbgTextPrintf(0, 4, 0x0f, "DPI Ratio: %.2f", devicePixelRatio());
-    bgfx::dbgTextPrintf(0, 5, 0x0f, "Renderer: %s", bgfx::getRendererName(bgfx::getRendererType()));
-    bgfx::dbgTextPrintf(0, 6, 0x0f, "View ID: %d", getViewId());
-    bgfx::dbgTextPrintf(0, 7, 0x0f, "Initialized: %s", isBgfxInitialized() ? "YES" : "NO");
-    bgfx::dbgTextPrintf(0, 8, 0x0f, "Shader Program: %s", bgfx::isValid(m_program) ? "VALID" : "INVALID");
-    bgfx::dbgTextPrintf(0, 9, 0x0f, "Geometry: %s", (bgfx::isValid(m_vertexBuffer) && bgfx::isValid(m_indexBuffer)) ? "VALID" : "INVALID");
-    bgfx::dbgTextPrintf(0, 10, 0x0f, "Zoom: %.2f", getZoom());
-    bgfx::dbgTextPrintf(0, 11, 0x0f, "Pan: (%.1f, %.1f)", getPan().x(), getPan().y());
-    bgfx::dbgTextPrintf(0, 12, 0x6f, "Middle mouse: Pan | Wheel: Zoom");
+    // 简化的调试信息 - 只在需要时显示
+    // bgfx::dbgTextClear();
+    // bgfx::dbgTextPrintf(0, 1, 0x4f, "TinaFlow Block Renderer");
 }
 
 void BgfxBlockRenderer::renderTestGeometry()
 {
-    // 只有在几何体和着色器都有效时才渲染
-    if (!bgfx::isValid(m_vertexBuffer) || !bgfx::isValid(m_indexBuffer)) {
-        static bool warned = false;
-        if (!warned) {
-            qWarning() << "BgfxBlockRenderer: Invalid geometry buffers!";
-            warned = true;
-        }
+    // 检查资源是否有效 - 分别检查
+    bool connectorValid = bgfx::isValid(m_connectorVertexBuffer) && bgfx::isValid(m_connectorIndexBuffer);
+    bool receptorValid = bgfx::isValid(m_receptorVertexBuffer) && bgfx::isValid(m_receptorIndexBuffer);
+
+    static bool warned = false;
+    if (!warned) {
+        qDebug() << "BgfxBlockRenderer: Connector buffers valid:" << connectorValid;
+        qDebug() << "BgfxBlockRenderer: Receptor buffers valid:" << receptorValid;
+        qDebug() << "BgfxBlockRenderer: Connector VB:" << bgfx::isValid(m_connectorVertexBuffer)
+                 << "IB:" << bgfx::isValid(m_connectorIndexBuffer);
+        qDebug() << "BgfxBlockRenderer: Receptor VB:" << bgfx::isValid(m_receptorVertexBuffer)
+                 << "IB:" << bgfx::isValid(m_receptorIndexBuffer);
+        warned = true;
+    }
+
+    if (!connectorValid && !receptorValid) {
+        qWarning() << "BgfxBlockRenderer: No valid geometry buffers!";
         return;
     }
 
@@ -319,46 +360,101 @@ void BgfxBlockRenderer::renderTestGeometry()
     float transform[16];
     getTransformMatrix(transform);
 
-    // 设置变换矩阵
-    bgfx::setTransform(transform);
+    // 计算合适的间距 - 基于积木宽度和缩放
+    float zoom = getZoom();
+    float blockWidth = 120.0f;
+    float spacing = (blockWidth + 50.0f) * zoom; // 积木宽度 + 50像素间距，随缩放调整
 
-    // 设置顶点和索引缓冲区
-    bgfx::setVertexBuffer(0, m_vertexBuffer);
-    bgfx::setIndexBuffer(m_indexBuffer);
+    // 渲染凸起积木 (左侧) - 只有在资源有效时才渲染
+    if (connectorValid) {
+        // 设置变换矩阵 - 左侧位置
+        float leftTransform[16];
+        getTransformMatrix(leftTransform);
+        // 向左偏移
+        leftTransform[12] -= spacing;
+        bgfx::setTransform(leftTransform);
 
-    // 设置圆角参数uniform
-    if (bgfx::isValid(m_roundedParamsUniform)) {
-        // 设置圆角参数：width=120, height=40, cornerRadius=8, unused=0
-        float roundedParams[4] = {120.0f, 40.0f, 8.0f, 0.0f};
-        bgfx::setUniform(m_roundedParamsUniform, roundedParams);
-    }
+        // 设置顶点和索引缓冲区
+        bgfx::setVertexBuffer(0, m_connectorVertexBuffer);
+        bgfx::setIndexBuffer(m_connectorIndexBuffer);
 
-    // 设置连接器配置uniform
-    if (bgfx::isValid(m_connectorConfigUniform)) {
-        // 设置连接器配置：top=1, bottom=0, left=0, right=0 (当前只有顶部连接器)
-        float connectorConfig[4] = {1.0f, 0.0f, 0.0f, 0.0f};
-        bgfx::setUniform(m_connectorConfigUniform, connectorConfig);
-    }
+        // 设置渲染状态 (每次都重新设置)
+        bgfx::setState(BGFX_STATE_WRITE_RGB
+                     | BGFX_STATE_WRITE_A
+                     | BGFX_STATE_WRITE_Z
+                     | BGFX_STATE_DEPTH_TEST_LESS
+                     | BGFX_STATE_BLEND_ALPHA);
 
-    // 设置渲染状态 (启用透明度混合和深度测试)
-    bgfx::setState(BGFX_STATE_WRITE_RGB
-                 | BGFX_STATE_WRITE_A
-                 | BGFX_STATE_WRITE_Z
-                 | BGFX_STATE_DEPTH_TEST_LESS
-                 | BGFX_STATE_BLEND_ALPHA);
-
-    // 提交绘制调用
-    if (bgfx::isValid(m_program)) {
-        bgfx::submit(getViewId(), m_program);
-
-        static int submitCount = 0;
-        submitCount++;
-        if (submitCount % 60 == 1) {
-            qDebug() << "BgfxBlockRenderer: Submitted geometry with shader, frame" << submitCount;
+        // 设置圆角参数uniform
+        if (bgfx::isValid(m_roundedParamsUniform)) {
+            float roundedParams[4] = {120.0f, 40.0f, 8.0f, 0.0f};
+            bgfx::setUniform(m_roundedParamsUniform, roundedParams);
         }
-    } else {
-        qWarning() << "BgfxBlockRenderer: Invalid shader program!";
-        // 如果没有着色器程序，仍然提交以显示几何体（使用内置着色器）
-        bgfx::submit(getViewId(), BGFX_INVALID_HANDLE);
+
+        // 设置连接器配置uniform (顶部凸起)
+        if (bgfx::isValid(m_connectorConfigUniform)) {
+            float connectorConfig[4] = {1.0f, 0.0f, 0.0f, 0.0f}; // top=1
+            bgfx::setUniform(m_connectorConfigUniform, connectorConfig);
+        }
+
+        // 提交凸起积木
+        if (bgfx::isValid(m_program)) {
+            bgfx::submit(getViewId(), m_program);
+            static bool logged1 = false;
+            if (!logged1) {
+                qDebug() << "BgfxBlockRenderer: Submitted connector block";
+                logged1 = true;
+            }
+        }
     }
+
+    // 渲染凹陷积木 (右侧) - 只有在资源有效时才渲染
+    if (receptorValid) {
+        // 设置变换矩阵 - 右侧位置
+        float rightTransform[16];
+        getTransformMatrix(rightTransform);
+        // 向右偏移
+        rightTransform[12] += spacing;
+        bgfx::setTransform(rightTransform);
+
+        // 设置顶点和索引缓冲区
+        bgfx::setVertexBuffer(0, m_receptorVertexBuffer);
+        bgfx::setIndexBuffer(m_receptorIndexBuffer);
+
+        // 设置渲染状态 (每次都重新设置)
+        bgfx::setState(BGFX_STATE_WRITE_RGB
+                     | BGFX_STATE_WRITE_A
+                     | BGFX_STATE_WRITE_Z
+                     | BGFX_STATE_DEPTH_TEST_LESS
+                     | BGFX_STATE_BLEND_ALPHA);
+
+        // 设置圆角参数uniform
+        if (bgfx::isValid(m_roundedParamsUniform)) {
+            float roundedParams[4] = {120.0f, 40.0f, 8.0f, 0.0f};
+            bgfx::setUniform(m_roundedParamsUniform, roundedParams);
+        }
+
+        // 设置连接器配置uniform (暂时使用相同配置测试)
+        if (bgfx::isValid(m_connectorConfigUniform)) {
+            float connectorConfig[4] = {0.0f, 0.0f, 0.0f, 0.0f}; // 无连接器，只有主体
+            bgfx::setUniform(m_connectorConfigUniform, connectorConfig);
+        }
+
+        // 提交凹陷积木
+        if (bgfx::isValid(m_program)) {
+            bgfx::submit(getViewId(), m_program);
+            static bool logged2 = false;
+            if (!logged2) {
+                qDebug() << "BgfxBlockRenderer: Submitted receptor block";
+                logged2 = true;
+            }
+        }
+    }
+
+    // 减少日志输出 - 只在出错时打印
+    // static int submitCount = 0;
+    // submitCount++;
+    // if (submitCount % 300 == 1) { // 每5秒打印一次
+    //     qDebug() << "BgfxBlockRenderer: Rendering blocks, frame" << submitCount;
+    // }
 }

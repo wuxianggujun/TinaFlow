@@ -198,9 +198,8 @@ void BgfxWidget::showEvent(QShowEvent* event)
 {
     QWidget::showEvent(event);
 
-    qDebug() << "BgfxWidget::showEvent - widget becoming visible";
-    qDebug() << "Current view ID:" << m_viewId << "Timer active:" << m_renderTimer.isActive();
-    qDebug() << "Window ID:" << winId() << "Widget visible:" << isVisible();
+    // 减少日志输出
+    // qDebug() << "BgfxWidget::showEvent - widget becoming visible";
 
     initializeBgfx();
 
@@ -208,18 +207,14 @@ void BgfxWidget::showEvent(QShowEvent* event)
     if (m_viewId != UINT16_MAX) {
         // 重新设置视图清屏状态
         bgfx::setViewClear(m_viewId, BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, m_clearColor, 1.0f, 0);
-        qDebug() << "BgfxWidget: Reset view clear state for view" << m_viewId;
-
         // 更新矩阵
         updateMatrices();
 
         if (!m_renderTimer.isActive()) {
             m_renderTimer.start(16); // 60 FPS
-            qDebug() << "BgfxWidget: Started render timer";
         }
         // 立即触发一次渲染
         update();
-        qDebug() << "BgfxWidget: Triggered immediate update";
     }
 }
 
@@ -231,14 +226,14 @@ void BgfxWidget::paintEvent(QPaintEvent* event)
     paintCount++;
 
     if (m_viewId == UINT16_MAX) {
-        qDebug() << "BgfxWidget::paintEvent - invalid view ID, skipping render";
+        // 静默跳过，避免频繁日志
         return;
     }
 
-    if (paintCount % 60 == 1) { // 每秒打印一次（60 FPS）
-        qDebug() << "BgfxWidget::paintEvent - rendering frame" << paintCount << "view ID:" << m_viewId;
-        qDebug() << "Widget size:" << width() << "x" << height() << "Real size:" << realWidth() << "x" << realHeight();
-    }
+    // 减少日志输出 - 只在需要调试时启用
+    // if (paintCount % 300 == 1) { // 每5秒打印一次
+    //     qDebug() << "BgfxWidget::paintEvent - frame" << paintCount << "view ID:" << m_viewId;
+    // }
 
     // 设置视图矩形
     bgfx::setViewRect(m_viewId, 0, 0, static_cast<uint16_t>(realWidth()), static_cast<uint16_t>(realHeight()));
@@ -276,7 +271,6 @@ void BgfxWidget::hideEvent(QHideEvent* event)
     QWidget::hideEvent(event);
     // 停止渲染定时器以节省资源
     m_renderTimer.stop();
-    qDebug() << "BgfxWidget: Hidden, stopped render timer";
 }
 
 void BgfxWidget::onRenderTimer()

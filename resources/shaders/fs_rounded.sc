@@ -45,15 +45,25 @@ float getConnectorDistance(vec2 pos)
 {
     float minDist = 1000.0;
 
-    // 顶部连接器
-    if (pos.y > 1.0 && abs(pos.x) < 0.5) {
-        vec2 connectorPos = vec2(pos.x * 6.0, (pos.y - 1.25) * 2.0);
-        vec2 connectorSize = vec2(6.0, 2.0);
+    // 顶部连接器/凹陷
+    if (abs(pos.y) > 1.0 && abs(pos.x) < 0.5) {
+        vec2 connectorPos, connectorSize;
+
+        if (pos.y > 1.0) {
+            // 顶部凸起
+            connectorPos = vec2(pos.x * 6.0, (pos.y - 1.25) * 2.0);
+            connectorSize = vec2(6.0, 2.0);
+        } else {
+            // 顶部凹陷 (负Y值)
+            connectorPos = vec2(pos.x * 6.0, (pos.y + 1.25) * 2.0);
+            connectorSize = vec2(6.0, 2.0);
+        }
+
         vec2 d = abs(connectorPos) - connectorSize;
         minDist = min(minDist, max(d.x, d.y));
     }
 
-    // 底部连接器
+    // 底部连接器/凹陷
     if (pos.y < -1.0 && abs(pos.x) < 0.5) {
         vec2 connectorPos = vec2(pos.x * 6.0, (pos.y + 1.25) * 2.0);
         vec2 connectorSize = vec2(6.0, 2.0);
@@ -90,14 +100,14 @@ void main()
 
     float dist;
 
-    // 检查是否在任何连接器附近的区域
+    // 检查是否在凸起连接器区域 (正Y纹理坐标 > 1.0)
+    bool inConnector = (v_position.y > 1.0);
+
+    // 检查是否在连接器附近的区域
     bool nearConnector = isInConnectorArea(v_position, 0.8);
 
-    // 检查是否在连接器区域内
-    bool inConnector = (abs(v_position.x) > 1.0 || abs(v_position.y) > 1.0);
-
     if (inConnector) {
-        // 在连接器区域 - 计算连接器距离场
+        // 凸起连接器区域
         dist = getConnectorDistance(v_position);
     } else if (nearConnector) {
         // 在连接器附近的主体区域 - 使用直边，不使用圆角
