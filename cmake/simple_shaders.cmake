@@ -1,19 +1,22 @@
 
-# 通用的着色器编译函数
-# 参数：
-#   SHADER_DIR - 着色器源文件目录
-#   OUTPUT_DIR - 编译输出目录
-#   TARGET_NAME - 着色器编译目标名称
-#   MAIN_TARGET - 主项目目标名称
-function(compile_all_shaders SHADER_DIR OUTPUT_DIR TARGET_NAME MAIN_TARGET)
-    message(STATUS "=== 着色器编译开始 ===")
-    message(STATUS "源目录: ${SHADER_DIR}")
-    message(STATUS "输出目录: ${OUTPUT_DIR}")
-    
-    # 确保输出目录存在
+# Universal shader compilation function
+# Parameters:
+#   SHADER_DIR - Shader source directory
+#   OUTPUT_DIR - Compilation output directory
+#   MAIN_TARGET - Main project target name
+function(compile_all_shaders SHADER_DIR OUTPUT_DIR MAIN_TARGET)
+    message(STATUS "=== Shader Compilation Started ===")
+    message(STATUS "Source directory: ${SHADER_DIR}")
+    message(STATUS "Output directory: ${OUTPUT_DIR}")
+    message(STATUS "Main target: ${MAIN_TARGET}")
+
+    # Generate shader target name based on main target
+    set(SHADER_TARGET_NAME "${MAIN_TARGET}_shaders")
+
+    # Ensure output directory exists
     file(MAKE_DIRECTORY ${OUTPUT_DIR})
-    
-    # 查找所有着色器文件，排除varying.def.sc
+
+    # Find all shader files, excluding varying.def.sc
     file(GLOB ALL_SC_FILES "${SHADER_DIR}/*.sc")
     set(SHADER_FILES "")
 
@@ -25,11 +28,12 @@ function(compile_all_shaders SHADER_DIR OUTPUT_DIR TARGET_NAME MAIN_TARGET)
     endforeach()
 
     if(NOT SHADER_FILES)
-        message(WARNING "在 ${SHADER_DIR} 中没有找到着色器文件")
+        message(WARNING "No shader files found in ${SHADER_DIR}")
         return()
     endif()
 
-    message(STATUS "找到着色器文件: ${SHADER_FILES}")
+    list(LENGTH SHADER_FILES SHADER_COUNT)
+    message(STATUS "Found ${SHADER_COUNT} shader files")
 
     # 编译每个着色器文件 - 根据文件名判断类型
     foreach(SHADER_FILE ${SHADER_FILES})
@@ -45,10 +49,10 @@ function(compile_all_shaders SHADER_DIR OUTPUT_DIR TARGET_NAME MAIN_TARGET)
                 INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/third_party/bgfx.cmake/bgfx/src
                 AS_HEADERS
             )
-            message(STATUS "编译顶点着色器: ${SHADER_FILE}")
+            message(STATUS "Configuring vertex shader: ${SHADER_FILE}")
 
         elseif(FILENAME MATCHES "^fs_")
-            # 片段着色器
+            # Fragment shader
             bgfx_compile_shaders(
                 TYPE FRAGMENT
                 SHADERS ${SHADER_FILE}
@@ -57,10 +61,10 @@ function(compile_all_shaders SHADER_DIR OUTPUT_DIR TARGET_NAME MAIN_TARGET)
                 INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/third_party/bgfx.cmake/bgfx/src
                 AS_HEADERS
             )
-            message(STATUS "编译片段着色器: ${SHADER_FILE}")
+            message(STATUS "Configuring fragment shader: ${SHADER_FILE}")
 
         else()
-            message(WARNING "未知着色器类型: ${SHADER_FILE} (文件名应以vs_或fs_开头)")
+            message(WARNING "Unknown shader type: ${SHADER_FILE} (filename should start with vs_ or fs_)")
         endif()
     endforeach()
     
@@ -79,43 +83,96 @@ function(compile_all_shaders SHADER_DIR OUTPUT_DIR TARGET_NAME MAIN_TARGET)
     # 按照你的工作代码，添加着色器源文件到目标
     target_sources(${MAIN_TARGET} PRIVATE ${SHADER_FILES})
 
-    # 按照你的工作代码，生成统一头文件
+    # Generate unified header file directly here (no external script needed)
     set(UNIFIED_HEADER ${OUTPUT_DIR}/shaders.h)
 
-    add_custom_command(
-        OUTPUT ${UNIFIED_HEADER}
-        COMMAND ${CMAKE_COMMAND}
-            -DSHADER_SOURCE_DIR=${SHADER_DIR}
-            -DSHADER_OUT_DIR=${OUTPUT_DIR}
-            -DOUTPUT_FILE=${UNIFIED_HEADER}
-            -P ${CMAKE_SOURCE_DIR}/cmake/generate_unified_shader_header.cmake
-        DEPENDS ${SHADER_FILES} ${CMAKE_SOURCE_DIR}/cmake/generate_unified_shader_header.cmake
-        COMMENT "Generating unified shader header"
+    # Write unified header file content
+    file(WRITE ${UNIFIED_HEADER} "// Auto-generated unified shader header\n")
+    file(APPEND ${UNIFIED_HEADER} "#pragma once\n\n")
+    file(APPEND ${UNIFIED_HEADER} "#include <cstdint>\n")
+    file(APPEND ${UNIFIED_HEADER} "#include <unordered_map>\n")
+    file(APPEND ${UNIFIED_HEADER} "#include <string>\n\n")
+
+    # Define platforms
+    set(PLATFORMS dx10 dx11 glsl essl spirv)
+    set(PLATFORM_NAMES "DirectX 10" "DirectX 11" "OpenGL" "OpenGL ES" "Vulkan/SPIR-V")
+
+    list(LENGTH PLATFORMS PLATFORM_COUNT)
+    math(EXPR PLATFORM_COUNT "${PLATFORM_COUNT} - 1")
+
+    # Include platform shader headers
+    foreach(INDEX RANGE ${PLATFORM_COUNT})
+        list(GET PLATFORMS ${INDEX} PLATFORM)
+        list(GET PLATFORM_NAMES ${INDEX} PLATFORM_NAME)
+
+        file(APPEND ${UNIFIED_HEADER} "// ${PLATFORM_NAME} shaders\n")
+
+        foreach(SHADER_FILE ${SHADER_FILES})
+            get_filename_component(SHADER_NAME ${SHADER_FILE} NAME_WE)
+            file(APPEND ${UNIFIED_HEADER} "#include \"${PLATFORM}/${SHADER_NAME}.sc.bin.h\"\n")
+        endforeach()
+
+        file(APPEND ${UNIFIED_HEADER} "\n")
+    endforeach()
+
+    # Generate shader data structure and lookup function
+    file(APPEND ${UNIFIED_HEADER} "struct ShaderData {\n")
+    file(APPEND ${UNIFIED_HEADER} "    const uint8_t* data;\n")
+    file(APPEND ${UNIFIED_HEADER} "    uint32_t size;\n")
+    file(APPEND ${UNIFIED_HEADER} "};\n\n")
+
+    file(APPEND ${UNIFIED_HEADER} "inline ShaderData getShaderData(const std::string& name, const std::string& platform) {\n")
+    file(APPEND ${UNIFIED_HEADER} "    static const std::unordered_map<std::string, ShaderData> shaders = {\n")
+
+    # Generate shader mapping
+    foreach(SHADER_FILE ${SHADER_FILES})
+        get_filename_component(SHADER_NAME ${SHADER_FILE} NAME_WE)
+
+        foreach(PLATFORM ${PLATFORMS})
+            if(PLATFORM STREQUAL "spirv")
+                set(SUFFIX "spv")
+            else()
+                set(SUFFIX ${PLATFORM})
+            endif()
+
+            set(ARRAY_NAME "${SHADER_NAME}_${SUFFIX}")
+            set(KEY "${SHADER_NAME}:${PLATFORM}")
+
+            file(APPEND ${UNIFIED_HEADER} "        {\"${KEY}\", {${ARRAY_NAME}, sizeof(${ARRAY_NAME})}},\n")
+        endforeach()
+    endforeach()
+
+    file(APPEND ${UNIFIED_HEADER} "    };\n")
+    file(APPEND ${UNIFIED_HEADER} "    \n")
+    file(APPEND ${UNIFIED_HEADER} "    auto it = shaders.find(name + \":\" + platform);\n")
+    file(APPEND ${UNIFIED_HEADER} "    return (it != shaders.end()) ? it->second : ShaderData{nullptr, 0};\n")
+    file(APPEND ${UNIFIED_HEADER} "}\n")
+
+    # Create target that depends on shader source files (triggers compilation)
+    add_custom_target(${SHADER_TARGET_NAME}
+        DEPENDS ${SHADER_FILES}
+        COMMENT "Shader compilation complete"
     )
 
-    # 按照你的工作代码，创建目标
-    add_custom_target(${TARGET_NAME}
-        DEPENDS ${UNIFIED_HEADER}
-        COMMENT "Smart shader management"
-    )
+    # Ensure main target depends on shader compilation
+    add_dependencies(${MAIN_TARGET} ${SHADER_TARGET_NAME})
 
-    # 按照你的工作代码，确保主目标依赖于着色器编译
-    add_dependencies(${MAIN_TARGET} ${TARGET_NAME})
-
-    # 设置父作用域变量，供调用者使用
+    # Set parent scope variables for caller use
     set(SHADER_HEADER_FILE ${UNIFIED_HEADER} PARENT_SCOPE)
+    set(SHADER_INCLUDE_DIR ${OUTPUT_DIR} PARENT_SCOPE)
 
-    message(STATUS "=== 着色器编译配置完成 ===")
-    message(STATUS "统一头文件: ${UNIFIED_HEADER}")
-    message(STATUS "目标名称: ${TARGET_NAME}")
-    message(STATUS "主目标: ${MAIN_TARGET}")
+    message(STATUS "=== Shader Compilation Configured ===")
+    message(STATUS "Unified header: ${UNIFIED_HEADER}")
+    message(STATUS "Include directory: ${OUTPUT_DIR}")
+    message(STATUS "Shader target: ${SHADER_TARGET_NAME}")
+    message(STATUS "Main target: ${MAIN_TARGET}")
 endfunction()
 
-# 便捷的清理函数
-function(add_shader_clean TARGET_NAME OUTPUT_DIR)
+# Convenient cleanup function
+function(add_shader_clean_target TARGET_NAME OUTPUT_DIR)
     add_custom_target(${TARGET_NAME}
         COMMAND ${CMAKE_COMMAND} -E remove_directory ${OUTPUT_DIR}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${OUTPUT_DIR}
-        COMMENT "清理所有编译的着色器"
+        COMMENT "Clean all compiled shaders"
     )
 endfunction()

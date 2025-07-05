@@ -75,13 +75,13 @@ qt_add_executable(TinaFlow MANUAL_FINALIZATION
 include(${CMAKE_SOURCE_DIR}/cmake/simple_shaders.cmake)
 
 compile_all_shaders(
-    ${CMAKE_SOURCE_DIR}/resources/shaders          # 着色器源目录
-    ${CMAKE_BINARY_DIR}/include/generated/shaders  # 输出目录
-    my_shaders                                      # 目标名称
-    TinaFlow                                        # 主项目目标名称
+    ${CMAKE_SOURCE_DIR}/resources/shaders          # Shader source directory
+    ${CMAKE_BINARY_DIR}/include/generated/shaders  # Output directory
+    TinaFlow                                        # Main project target name
 )
 
-#add_shader_clean(clean_shaders ${CMAKE_BINARY_DIR}/include/generated/shaders)
+# Add shader clean target
+add_shader_clean_target(clean_shaders ${SHADER_INCLUDE_DIR})
 
 message(STATUS "Shader compilation configured using bgfx_compile_shaders with AS_HEADERS")
 
@@ -90,7 +90,7 @@ target_include_directories(TinaFlow PRIVATE
         ${PROJECT_SOURCE_DIR}/third_party/bgfx.cmake/bgfx/include
         ${PROJECT_SOURCE_DIR}/third_party/bgfx.cmake/bx/include
         ${PROJECT_SOURCE_DIR}/third_party/bgfx.cmake/bimg/include
-        ${CMAKE_BINARY_DIR}/include/generated/shaders
+        ${SHADER_INCLUDE_DIR}  # Use variable returned from compile_all_shaders
 )
 
 if(WIN32 AND QT_VERSION_MAJOR LESS 6)
