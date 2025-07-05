@@ -105,6 +105,6 @@ private:
     // 渲染定时器
     QTimer m_renderTimer;
     
-    // 背景颜色
-    uint32_t m_clearColor = 0x404040ff; // 中等灰色，更容易看到
+    // 背景颜色 (RGBA格式)
+    uint32_t m_clearColor = 0xffffffff; // 白色背景
 };

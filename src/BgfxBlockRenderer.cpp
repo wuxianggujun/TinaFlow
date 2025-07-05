@@ -138,39 +138,41 @@ static void createBlockGeometry(bgfx::VertexBufferHandle& vbh, bgfx::IndexBuffer
     const float blockWidth = 120.0f;
     const float blockHeight = 40.0f;
 
-    // 主体颜色
-    const uint32_t mainColor = 0xff4a90e2ff;      // 蓝色主体
-    const uint32_t connectorColor = 0xff357abdff; // 深蓝色连接器
+    // 主体颜色 (ABGR格式)
+    const uint32_t mainColor = 0xffe2904a;      // 蓝色主体 (ABGR: FF E2 90 4A)
+    const uint32_t connectorColor = mainColor;  // 连接器使用相同颜色
 
-    // 创建简单的矩形几何体，圆角由着色器处理
+    // 创建完整的积木几何体，包含主体和连接器的连续网格
     static PosColorTexVertex vertices[] = {
-        // 主体矩形
-        {-blockWidth/2, -blockHeight/2, 0.0f, mainColor, -1.0f, -1.0f}, // 左下
-        { blockWidth/2, -blockHeight/2, 0.0f, mainColor,  1.0f, -1.0f}, // 右下
-        { blockWidth/2,  blockHeight/2, 0.0f, mainColor,  1.0f,  1.0f}, // 右上
-        {-blockWidth/2,  blockHeight/2, 0.0f, mainColor, -1.0f,  1.0f}, // 左上
+        // 主体矩形的基础部分
+        {-blockWidth/2, -blockHeight/2, 0.0f, mainColor, -1.0f, -1.0f}, // 0: 左下
+        { blockWidth/2, -blockHeight/2, 0.0f, mainColor,  1.0f, -1.0f}, // 1: 右下
+        { blockWidth/2,  blockHeight/2, 0.0f, mainColor,  1.0f,  1.0f}, // 2: 右上
+        {-blockWidth/2,  blockHeight/2, 0.0f, mainColor, -1.0f,  1.0f}, // 3: 左上
 
-        // 顶部连接器 - 左侧
-        {-blockWidth/4 - 6.0f,  blockHeight/2, 0.0f, connectorColor, 0.0f, 0.0f},
-        {-blockWidth/4 + 6.0f,  blockHeight/2, 0.0f, connectorColor, 0.0f, 0.0f},
-        {-blockWidth/4 + 6.0f,  blockHeight/2 + 4.0f, 0.0f, connectorColor, 0.0f, 0.0f},
-        {-blockWidth/4 - 6.0f,  blockHeight/2 + 4.0f, 0.0f, connectorColor, 0.0f, 0.0f},
+        // 左连接器区域的顶点 - 确保与主体无缝连接
+        {-blockWidth/4 - 6.0f,  blockHeight/2, 0.0f, mainColor, -0.2f,  0.95f}, // 4: 左连接器左下
+        {-blockWidth/4 + 6.0f,  blockHeight/2, 0.0f, mainColor,  0.2f,  0.95f}, // 5: 左连接器右下
+        {-blockWidth/4 + 6.0f,  blockHeight/2 + 4.0f, 0.0f, mainColor,  0.2f,  1.5f}, // 6: 左连接器右上
+        {-blockWidth/4 - 6.0f,  blockHeight/2 + 4.0f, 0.0f, mainColor, -0.2f,  1.5f}, // 7: 左连接器左上
 
-        // 顶部连接器 - 右侧
-        { blockWidth/4 - 6.0f,  blockHeight/2, 0.0f, connectorColor, 0.0f, 0.0f},
-        { blockWidth/4 + 6.0f,  blockHeight/2, 0.0f, connectorColor, 0.0f, 0.0f},
-        { blockWidth/4 + 6.0f,  blockHeight/2 + 4.0f, 0.0f, connectorColor, 0.0f, 0.0f},
-        { blockWidth/4 - 6.0f,  blockHeight/2 + 4.0f, 0.0f, connectorColor, 0.0f, 0.0f},
+        // 右连接器区域的顶点 - 确保与主体无缝连接
+        { blockWidth/4 - 6.0f,  blockHeight/2, 0.0f, mainColor, -0.2f,  0.95f}, // 8: 右连接器左下
+        { blockWidth/4 + 6.0f,  blockHeight/2, 0.0f, mainColor,  0.2f,  0.95f}, // 9: 右连接器右下
+        { blockWidth/4 + 6.0f,  blockHeight/2 + 4.0f, 0.0f, mainColor,  0.2f,  1.5f}, // 10: 右连接器右上
+        { blockWidth/4 - 6.0f,  blockHeight/2 + 4.0f, 0.0f, mainColor, -0.2f,  1.5f}, // 11: 右连接器左上
     };
 
-    // 创建简单的索引数据
+    // 创建连续的索引数据，形成完整的积木形状
     static uint16_t indices[] = {
         // 主体矩形
         0, 1, 2,  2, 3, 0,
 
-        // 连接器
-        4, 5, 6,   6, 7, 4,   // 左侧连接器
-        8, 9, 10,  10, 11, 8, // 右侧连接器
+        // 左连接器
+        4, 5, 6,  6, 7, 4,
+
+        // 右连接器
+        8, 9, 10, 10, 11, 8,
     };
 
     // 创建顶点缓冲区
@@ -318,8 +320,12 @@ void BgfxBlockRenderer::renderTestGeometry()
         bgfx::setUniform(m_roundedParamsUniform, roundedParams);
     }
 
-    // 设置渲染状态 (启用深度测试和写入)
-    bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_LESS);
+    // 设置渲染状态 (启用透明度混合和深度测试)
+    bgfx::setState(BGFX_STATE_WRITE_RGB
+                 | BGFX_STATE_WRITE_A
+                 | BGFX_STATE_WRITE_Z
+                 | BGFX_STATE_DEPTH_TEST_LESS
+                 | BGFX_STATE_BLEND_ALPHA);
 
     // 提交绘制调用
     if (bgfx::isValid(m_program)) {
