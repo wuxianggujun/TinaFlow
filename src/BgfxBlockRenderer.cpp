@@ -76,12 +76,11 @@ void BgfxBlockRenderer::createTestBlocks()
     // 清除现有积木
     clearBlocks();
 
-    // 使用与之前相同的逻辑：间距随缩放动态调整
-    float zoom = getZoom();
+    // 使用固定的逻辑坐标 - 不随缩放变化
     float blockWidth = 120.0f;
-    float spacing = (blockWidth + 50.0f) * zoom; // 积木宽度 + 50像素间距，随缩放调整
+    float spacing = blockWidth + 50.0f; // 固定间距：170像素
 
-    // 添加测试积木 - 使用动态间距
+    // 添加测试积木 - 使用固定坐标
     addBlock(-spacing, 0.0f, 1, 0xffe2904a);  // 左侧凸起积木 (蓝色)
     addBlock(spacing, 0.0f, -1, 0xff4ae290);  // 右侧凹陷积木 (绿色)
 
@@ -89,14 +88,14 @@ void BgfxBlockRenderer::createTestBlocks()
     // addBlock(0.0f, spacing, 0, 0xffffff90);   // 中上简单积木 (黄色)
     // addBlock(0.0f, -spacing, 1, 0xffff4a90);  // 中下凸起积木 (紫色)
 
-    // 减少日志输出
-    // qDebug() << "BgfxBlockRenderer: Created test blocks with zoom:" << zoom << "spacing:" << spacing;
+    qDebug() << "BgfxBlockRenderer: Created test blocks with fixed spacing:" << spacing;
+    qDebug() << "Block positions: left(" << -spacing << ", 0) right(" << spacing << ", 0)";
 }
 
 void BgfxBlockRenderer::updateBlockPositions()
 {
-    // 重新创建积木以适应新的缩放级别
-    createTestBlocks();
+    // 不需要重新创建积木 - 使用固定坐标
+    // createTestBlocks();
 }
 
 void BgfxBlockRenderer::setZoom(float zoom)
@@ -104,8 +103,8 @@ void BgfxBlockRenderer::setZoom(float zoom)
     // 调用基类方法
     BgfxWidget::setZoom(zoom);
 
-    // 更新积木位置以适应新的缩放级别
-    updateBlockPositions();
+    // 不需要更新积木位置 - 让变换矩阵处理缩放
+    // updateBlockPositions();
 }
 
 void BgfxBlockRenderer::onBgfxReset()

@@ -129,16 +129,16 @@ void BlockGeometryManager::render(bgfx::ViewId viewId, bgfx::ProgramHandle progr
     // }
 
     for (const auto& block : m_blocks) {
-        // 使用基础变换，但修正积木间距
-        float transform[16];
-        memcpy(transform, baseTransform, sizeof(transform));
+        // 创建积木自身的平移矩阵
+        float blockTransform[16];
+        bx::mtxTranslate(blockTransform, block.x, block.y, block.z);
+    
+        // 正确的组合方式：将视图变换(baseTransform)应用到积木的变换(blockTransform)上
+        float finalTransform[16];
+        bx::mtxMul(finalTransform, blockTransform, baseTransform); // 注意这里的顺序
 
-        // 简单的偏移 - 让基础变换处理所有的缩放和平移
-        transform[12] += block.x; // X偏移
-        transform[13] += block.y; // Y偏移
-        transform[14] += block.z; // Z偏移
-        
-        bgfx::setTransform(transform);
+        // 将最终的组合矩阵设置给bgfx
+        bgfx::setTransform(finalTransform);
         
         // 根据连接器类型选择几何体和配置
         BgfxGeometry* geometry = nullptr;

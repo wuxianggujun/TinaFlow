@@ -134,20 +134,18 @@ void BgfxWidget::updateMatrices()
     // 创建视图矩阵 (单位矩阵)
     bx::mtxIdentity(m_viewMatrix);
     
-    // 创建变换矩阵 (包含缩放和平移)
+    // 创建包含缩放和平移的变换矩阵
     float centerX = static_cast<float>(realWidth()) * 0.5f;
     float centerY = static_cast<float>(realHeight()) * 0.5f;
-    
-    // 组合变换：先缩放，再平移到中心，最后应用用户平移
-    float scale[16], translate[16], userTranslate[16];
+
+    // 先缩放，再平移到屏幕中心
+    float scale[16], translate[16];
     bx::mtxScale(scale, m_zoom, m_zoom, 1.0f);
-    bx::mtxTranslate(translate, centerX, centerY, 0.0f);
-    bx::mtxTranslate(userTranslate, static_cast<float>(m_pan.x()), static_cast<float>(m_pan.y()), 0.0f);
-    
-    // 组合矩阵：userTranslate * translate * scale
-    float temp[16];
-    bx::mtxMul(temp, scale, translate);
-    bx::mtxMul(m_transformMatrix, temp, userTranslate);
+    bx::mtxTranslate(translate, centerX + static_cast<float>(m_pan.x()),
+                     centerY + static_cast<float>(m_pan.y()), 0.0f);
+
+    // 组合矩阵：translate * scale
+    bx::mtxMul(m_transformMatrix, translate, scale);
     
     // 设置视图变换
     bgfx::setViewTransform(m_viewId, m_viewMatrix, m_projMatrix);
@@ -171,14 +169,24 @@ void BgfxWidget::setPan(const QPointF& pan)
 // 坐标变换
 QPointF BgfxWidget::screenToWorld(const QPointF& screenPos) const
 {
-    QPointF worldPos = (screenPos - m_pan) / m_zoom;
-    return worldPos;
+    float centerX = static_cast<float>(realWidth()) * 0.5f;
+    float centerY = static_cast<float>(realHeight()) * 0.5f;
+
+    float wx = (screenPos.x() - (centerX + m_pan.x())) / m_zoom;
+    float wy = (screenPos.y() - (centerY + m_pan.y())) / m_zoom;
+
+    return QPointF(wx, wy);
 }
 
 QPointF BgfxWidget::worldToScreen(const QPointF& worldPos) const
 {
-    QPointF screenPos = worldPos * m_zoom + m_pan;
-    return screenPos;
+    float centerX = static_cast<float>(realWidth()) * 0.5f;
+    float centerY = static_cast<float>(realHeight()) * 0.5f;
+
+    float sx = (worldPos.x() * m_zoom) + centerX + m_pan.x();
+    float sy = (worldPos.y() * m_zoom) + centerY + m_pan.y();
+
+    return QPointF(sx, sy);
 }
 
 // 获取变换矩阵
@@ -233,11 +241,6 @@ void BgfxWidget::paintEvent(QPaintEvent* event)
         // 静默跳过，避免频繁日志
         return;
     }
-
-    // 减少日志输出 - 只在需要调试时启用
-    // if (paintCount % 300 == 1) { // 每5秒打印一次
-    //     qDebug() << "BgfxWidget::paintEvent - frame" << paintCount << "view ID:" << m_viewId;
-    // }
 
     // 设置视图矩形
     bgfx::setViewRect(m_viewId, 0, 0, static_cast<uint16_t>(realWidth()), static_cast<uint16_t>(realHeight()));
@@ -323,8 +326,33 @@ void BgfxWidget::mouseReleaseEvent(QMouseEvent* event)
 
 void BgfxWidget::wheelEvent(QWheelEvent* event)
 {
+    QPointF mousePos = event->position();
+
+    // 1. 获取鼠标在世界坐标系中的位置（缩放前）
+    QPointF worldPosBeforeZoom = screenToWorld(mousePos);
+
+    // 2. 计算新的缩放级别
     float scaleFactor = 1.0f + (event->angleDelta().y() / 1200.0f);
-    setZoom(m_zoom * scaleFactor);
+    float newZoom = m_zoom * scaleFactor;
+    newZoom = qBound(0.1f, newZoom, 5.0f); // 限制缩放范围
+
+    // 3. 更新缩放级别
+    m_zoom = newZoom;
+
+    // 4. 计算新的平移量，以保持鼠标下的点在屏幕上的位置不变
+    float centerX = static_cast<float>(realWidth()) * 0.5f;
+    float centerY = static_cast<float>(realHeight()) * 0.5f;
+
+    QPointF newPan;
+    newPan.setX(mousePos.x() - centerX - (worldPosBeforeZoom.x() * m_zoom));
+    newPan.setY(mousePos.y() - centerY - (worldPosBeforeZoom.y() * m_zoom));
+    
+    // 5. 应用新的平移量
+    m_pan = newPan;
+
+    // 6. 更新矩阵并重绘
+    updateMatrices();
+    update();
 
     QWidget::wheelEvent(event);
 }
