@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BgfxWidget.hpp"
+#include "BgfxGeometry.hpp"
 #include <bgfx/bgfx.h>
 
 /**
@@ -17,6 +18,12 @@ public:
     explicit BgfxBlockRenderer(QWidget* parent = nullptr);
     ~BgfxBlockRenderer() override;
 
+    // 积木管理接口
+    void addBlock(float x, float y, int connectorType = 0, uint32_t color = 0xffffffff);
+    void clearBlocks();
+    void createTestBlocks(); // 创建测试用的积木
+    void updateBlockPositions(); // 更新积木位置（缩放变化时调用）
+
 protected:
     // 重写基类的渲染方法
     void render() override;
@@ -26,24 +33,15 @@ protected:
     void cleanupResources() override;
 
 private:
-    // 渲染方法
-    void renderDebugInfo();
-    void renderTestGeometry();
 
     // bgfx资源
     bgfx::ProgramHandle m_program = BGFX_INVALID_HANDLE;
-
-    // 凸起积木资源
-    bgfx::VertexBufferHandle m_connectorVertexBuffer = BGFX_INVALID_HANDLE;
-    bgfx::IndexBufferHandle m_connectorIndexBuffer = BGFX_INVALID_HANDLE;
-
-    // 凹陷积木资源
-    bgfx::VertexBufferHandle m_receptorVertexBuffer = BGFX_INVALID_HANDLE;
-    bgfx::IndexBufferHandle m_receptorIndexBuffer = BGFX_INVALID_HANDLE;
-
     bgfx::VertexLayout m_vertexLayout;
 
     // 圆角着色器的uniform句柄
     bgfx::UniformHandle m_roundedParamsUniform = BGFX_INVALID_HANDLE;
     bgfx::UniformHandle m_connectorConfigUniform = BGFX_INVALID_HANDLE;
+
+    // 几何体管理器
+    BlockGeometryManager m_geometryManager;
 };

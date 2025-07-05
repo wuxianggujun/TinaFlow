@@ -1,4 +1,5 @@
 #include "BgfxBlockRenderer.hpp"
+#include "BgfxVertexTypes.hpp"
 #include <QDebug>
 #include <QTimer>
 #include <vector>
@@ -11,29 +12,6 @@
 
 // 包含生成的统一着色器头文件
 #include "shaders.h"
-
-// 定义包含纹理坐标的顶点结构
-struct PosColorTexVertex
-{
-    float x, y, z;
-    uint32_t abgr;
-    float u, v;
-
-    static void init()
-    {
-        ms_layout
-            .begin()
-            .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
-            .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
-            .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
-            .end();
-    }
-
-    static bgfx::VertexLayout ms_layout;
-};
-
-// 定义静态成员
-bgfx::VertexLayout PosColorTexVertex::ms_layout;
 
 // 从内嵌数据加载着色器的函数
 static bgfx::ShaderHandle loadShaderFromMemory(const uint8_t* data, uint32_t size)
@@ -109,125 +87,6 @@ static bgfx::ProgramHandle loadProgram(const char* vsName, const char* fsName)
     return bgfx::createProgram(vsh, fsh, true);
 }
 
-// 顶点结构
-struct PosColorVertex {
-    float x, y, z;
-    uint32_t abgr;
-
-    static void init() {
-        ms_layout
-            .begin()
-            .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
-            .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
-            .end();
-    }
-
-    static bgfx::VertexLayout ms_layout;
-};
-
-bgfx::VertexLayout PosColorVertex::ms_layout;
-
-// 创建凸起积木几何体
-static void createConnectorBlockGeometry(bgfx::VertexBufferHandle& vbh, bgfx::IndexBufferHandle& ibh, bgfx::VertexLayout& layout)
-{
-    // 初始化顶点布局
-    PosColorTexVertex::init();
-    layout = PosColorTexVertex::ms_layout;
-
-    // 积木尺寸定义
-    const float blockWidth = 120.0f;
-    const float blockHeight = 40.0f;
-
-    // 主体颜色 (ABGR格式)
-    const uint32_t mainColor = 0xffe2904a;      // 蓝色主体 (ABGR: FF E2 90 4A)
-    const uint32_t connectorColor = mainColor;  // 连接器使用相同颜色
-
-    // 创建完整的积木几何体，包含主体和连接器的连续网格
-    static PosColorTexVertex vertices[] = {
-        // 主体矩形的基础部分
-        {-blockWidth/2, -blockHeight/2, 0.0f, mainColor, -1.0f, -1.0f}, // 0: 左下
-        { blockWidth/2, -blockHeight/2, 0.0f, mainColor,  1.0f, -1.0f}, // 1: 右下
-        { blockWidth/2,  blockHeight/2, 0.0f, mainColor,  1.0f,  1.0f}, // 2: 右上
-        {-blockWidth/2,  blockHeight/2, 0.0f, mainColor, -1.0f,  1.0f}, // 3: 左上
-
-        // 左连接器区域的顶点 - 确保与主体无缝连接
-        {-blockWidth/4 - 6.0f,  blockHeight/2, 0.0f, mainColor, -0.2f,  0.95f}, // 4: 左连接器左下
-        {-blockWidth/4 + 6.0f,  blockHeight/2, 0.0f, mainColor,  0.2f,  0.95f}, // 5: 左连接器右下
-        {-blockWidth/4 + 6.0f,  blockHeight/2 + 4.0f, 0.0f, mainColor,  0.2f,  1.5f}, // 6: 左连接器右上
-        {-blockWidth/4 - 6.0f,  blockHeight/2 + 4.0f, 0.0f, mainColor, -0.2f,  1.5f}, // 7: 左连接器左上
-
-        // 右连接器区域的顶点 - 确保与主体无缝连接
-        { blockWidth/4 - 6.0f,  blockHeight/2, 0.0f, mainColor, -0.2f,  0.95f}, // 8: 右连接器左下
-        { blockWidth/4 + 6.0f,  blockHeight/2, 0.0f, mainColor,  0.2f,  0.95f}, // 9: 右连接器右下
-        { blockWidth/4 + 6.0f,  blockHeight/2 + 4.0f, 0.0f, mainColor,  0.2f,  1.5f}, // 10: 右连接器右上
-        { blockWidth/4 - 6.0f,  blockHeight/2 + 4.0f, 0.0f, mainColor, -0.2f,  1.5f}, // 11: 右连接器左上
-    };
-
-    // 创建连续的索引数据，形成完整的积木形状
-    static uint16_t indices[] = {
-        // 主体矩形
-        0, 1, 2,  2, 3, 0,
-
-        // 左连接器
-        4, 5, 6,  6, 7, 4,
-
-        // 右连接器
-        8, 9, 10, 10, 11, 8,
-    };
-
-    // 创建顶点缓冲区
-    vbh = bgfx::createVertexBuffer(
-        bgfx::makeRef(vertices, sizeof(vertices)),
-        layout
-    );
-
-    // 创建索引缓冲区
-    ibh = bgfx::createIndexBuffer(
-        bgfx::makeRef(indices, sizeof(indices))
-    );
-}
-
-// 创建凹陷积木几何体 - 简化版本，只有主体
-static void createReceptorBlockGeometry(bgfx::VertexBufferHandle& vbh, bgfx::IndexBufferHandle& ibh, bgfx::VertexLayout& layout)
-{
-    // 初始化顶点布局
-    PosColorTexVertex::init();
-    layout = PosColorTexVertex::ms_layout;
-
-    // 积木尺寸定义
-    const float blockWidth = 120.0f;
-    const float blockHeight = 40.0f;
-
-    // 主体颜色 (ABGR格式) - 使用不同的颜色来区分
-    const uint32_t mainColor = 0xff4ae290;      // 绿色主体 (ABGR: FF 4A E2 90)
-
-    // 创建简单的绿色矩形积木 - 先确保主体能正确显示
-    static PosColorTexVertex vertices[] = {
-        // 主体矩形 - 完整的绿色矩形
-        {-blockWidth/2, -blockHeight/2, 0.0f, mainColor, -1.0f, -1.0f}, // 0: 左下
-        { blockWidth/2, -blockHeight/2, 0.0f, mainColor,  1.0f, -1.0f}, // 1: 右下
-        { blockWidth/2,  blockHeight/2, 0.0f, mainColor,  1.0f,  1.0f}, // 2: 右上
-        {-blockWidth/2,  blockHeight/2, 0.0f, mainColor, -1.0f,  1.0f}, // 3: 左上
-    };
-
-    // 创建简单的索引数据 - 只有主体矩形
-    static uint16_t indices[] = {
-        // 主体矩形
-        0, 1, 2,  2, 3, 0,
-    };
-
-    // 创建顶点缓冲区
-    vbh = bgfx::createVertexBuffer(
-        bgfx::makeRef(vertices, sizeof(vertices)),
-        layout
-    );
-
-    // 创建索引缓冲区
-    ibh = bgfx::createIndexBuffer(
-        bgfx::makeRef(indices, sizeof(indices))
-    );
-}
-
 BgfxBlockRenderer::BgfxBlockRenderer(QWidget* parent)
     : BgfxWidget(parent)
 {
@@ -265,19 +124,18 @@ void BgfxBlockRenderer::initializeResources()
         m_program = loadProgram("vs_simple", "fs_simple");
     }
 
-    // 创建凸起积木几何体
-    createConnectorBlockGeometry(m_connectorVertexBuffer, m_connectorIndexBuffer, m_vertexLayout);
+    // 初始化顶点布局
+    PosColorTexVertex::init();
+    m_vertexLayout = PosColorTexVertex::ms_layout;
 
-    if (!bgfx::isValid(m_connectorVertexBuffer) || !bgfx::isValid(m_connectorIndexBuffer)) {
-        qWarning() << "Failed to create connector block geometry";
+    // 初始化几何体管理器
+    if (!m_geometryManager.initialize(m_vertexLayout)) {
+        qWarning() << "Failed to initialize geometry manager";
+        return;
     }
 
-    // 创建凹陷积木几何体
-    createReceptorBlockGeometry(m_receptorVertexBuffer, m_receptorIndexBuffer, m_vertexLayout);
-
-    if (!bgfx::isValid(m_receptorVertexBuffer) || !bgfx::isValid(m_receptorIndexBuffer)) {
-        qWarning() << "Failed to create receptor block geometry";
-    }
+    // 创建测试积木
+    createTestBlocks();
 }
 
 void BgfxBlockRenderer::cleanupResources()
@@ -288,25 +146,7 @@ void BgfxBlockRenderer::cleanupResources()
         m_program = BGFX_INVALID_HANDLE;
     }
 
-    if (bgfx::isValid(m_connectorVertexBuffer)) {
-        bgfx::destroy(m_connectorVertexBuffer);
-        m_connectorVertexBuffer = BGFX_INVALID_HANDLE;
-    }
-
-    if (bgfx::isValid(m_connectorIndexBuffer)) {
-        bgfx::destroy(m_connectorIndexBuffer);
-        m_connectorIndexBuffer = BGFX_INVALID_HANDLE;
-    }
-
-    if (bgfx::isValid(m_receptorVertexBuffer)) {
-        bgfx::destroy(m_receptorVertexBuffer);
-        m_receptorVertexBuffer = BGFX_INVALID_HANDLE;
-    }
-
-    if (bgfx::isValid(m_receptorIndexBuffer)) {
-        bgfx::destroy(m_receptorIndexBuffer);
-        m_receptorIndexBuffer = BGFX_INVALID_HANDLE;
-    }
+    // 几何体管理器会自动清理资源
 
     if (bgfx::isValid(m_roundedParamsUniform)) {
         bgfx::destroy(m_roundedParamsUniform);
@@ -321,20 +161,63 @@ void BgfxBlockRenderer::cleanupResources()
 
 void BgfxBlockRenderer::render()
 {
-    // 渲染测试几何体
-    renderTestGeometry();
+    // 检查缩放是否变化，如果变化则更新积木位置
+    static float lastZoom = -1.0f;
+    float currentZoom = getZoom();
+    if (abs(currentZoom - lastZoom) > 0.001f) {
+        lastZoom = currentZoom;
+        updateBlockPositions();
+    }
+
+    // 获取基础变换矩阵
+    float baseTransform[16];
+    getTransformMatrix(baseTransform);
+
+    // 使用几何体管理器渲染所有积木
+    m_geometryManager.render(getViewId(), m_program,
+                           m_roundedParamsUniform, m_connectorConfigUniform,
+                           baseTransform);
 }
 
-
-
-void BgfxBlockRenderer::renderDebugInfo()
+void BgfxBlockRenderer::addBlock(float x, float y, int connectorType, uint32_t color)
 {
-    // 简化的调试信息 - 只在需要时显示
-    // bgfx::dbgTextClear();
-    // bgfx::dbgTextPrintf(0, 1, 0x4f, "TinaFlow Block Renderer");
+    BlockInstance instance(x, y, 0.0f, color, connectorType);
+    m_geometryManager.addBlock(instance);
 }
 
-void BgfxBlockRenderer::renderTestGeometry()
+void BgfxBlockRenderer::clearBlocks()
+{
+    m_geometryManager.clearBlocks();
+}
+
+void BgfxBlockRenderer::createTestBlocks()
+{
+    // 清除现有积木
+    clearBlocks();
+
+    // 使用与之前相同的逻辑：间距随缩放动态调整
+    float zoom = getZoom();
+    float blockWidth = 120.0f;
+    float spacing = (blockWidth + 50.0f) * zoom; // 积木宽度 + 50像素间距，随缩放调整
+
+    // 添加测试积木 - 使用动态间距
+    addBlock(-spacing, 0.0f, 1, 0xffe2904a);  // 左侧凸起积木 (蓝色)
+    addBlock(spacing, 0.0f, -1, 0xff4ae290);  // 右侧凹陷积木 (绿色)
+
+    // 可以添加更多积木进行测试
+    // addBlock(0.0f, spacing, 0, 0xffffff90);   // 中上简单积木 (黄色)
+    // addBlock(0.0f, -spacing, 1, 0xffff4a90);  // 中下凸起积木 (紫色)
+
+    qDebug() << "BgfxBlockRenderer: Created test blocks with zoom:" << zoom << "spacing:" << spacing;
+}
+
+void BgfxBlockRenderer::updateBlockPositions()
+{
+    // 重新创建积木以适应新的缩放级别
+    createTestBlocks();
+}
+
+/*void BgfxBlockRenderer::renderTestGeometry()
 {
     // 检查资源是否有效 - 分别检查
     bool connectorValid = bgfx::isValid(m_connectorVertexBuffer) && bgfx::isValid(m_connectorIndexBuffer);
@@ -450,11 +333,4 @@ void BgfxBlockRenderer::renderTestGeometry()
             }
         }
     }
-
-    // 减少日志输出 - 只在出错时打印
-    // static int submitCount = 0;
-    // submitCount++;
-    // if (submitCount % 300 == 1) { // 每5秒打印一次
-    //     qDebug() << "BgfxBlockRenderer: Rendering blocks, frame" << submitCount;
-    // }
-}
+}*/
